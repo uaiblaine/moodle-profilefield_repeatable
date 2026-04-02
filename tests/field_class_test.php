@@ -27,10 +27,22 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
- * @copyright  2026
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class field_class_test extends \advanced_testcase {
+    /** @var string Sub-items: name and role. */
+    private const SUBITEMS_NAME_ROLE = "name\nrole";
+
+    /** @var string Sub-items: diretoria, escola, turma, disciplina. */
+    private const SUBITEMS_DIR_ESC_TUR_DISC = "diretoria\nescola\nturma\ndisciplina";
+
+    /** @var string Sub-items: codigo_turma, codigo_diretoria, codigo_escola. */
+    private const SUBITEMS_COD_TUR_DIR_ESC = "codigo_turma\ncodigo_diretoria\ncodigo_escola";
+
+    /** @var string Script path for profile page. */
+    private const SCRIPT_PROFILE = '/user/profile.php';
+
     /**
      * Create repeatable profile field instance.
      *
@@ -45,7 +57,7 @@ final class field_class_test extends \advanced_testcase {
             'required' => 0,
             'forceunique' => 0,
             'defaultdata' => '{}',
-            'param1' => "name\nrole",
+            'param1' => self::SUBITEMS_NAME_ROLE,
         ], $extradata));
 
         return new \profile_field_repeatable(0, 0, $fielddata);
@@ -108,5 +120,579 @@ final class field_class_test extends \advanced_testcase {
             '{"@@ID#1":{"name":"Alice","role":"Manager"},"@@ID#2":{"name":"Bob","role":""}}',
             $processed
         );
+    }
+
+    /**
+     * Ensure preprocessing fills missing sub-items with empty strings.
+     */
+    public function test_edit_save_data_preprocess_fills_missing_subitems_with_empty_string(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_DIR_ESC_TUR_DISC,
+        ]);
+
+        $processed = $field->edit_save_data_preprocess(
+            '{"@@ID#1":{"diretoria":"16154","escola":"45","turma":"3"}}',
+            new \stdClass()
+        );
+
+        $this->assertSame(
+            '{"@@ID#1":{"diretoria":"16154","escola":"45","turma":"3","disciplina":""}}',
+            $processed
+        );
+    }
+
+    /**
+     * Ensure preprocessing ignores unknown sub-items.
+     */
+    public function test_edit_save_data_preprocess_ignores_unknown_subitems(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_DIR_ESC_TUR_DISC,
+        ]);
+
+        $processed = $field->edit_save_data_preprocess(
+            '{"@@ID#1":{"diretoria":"16154","escola":"45","turma":"3","disciplina":"654","extra":"ignored"}}',
+            new \stdClass()
+        );
+
+        $this->assertSame(
+            '{"@@ID#1":{"diretoria":"16154","escola":"45","turma":"3","disciplina":"654"}}',
+            $processed
+        );
+    }
+
+    /**
+     * Ensure normalisation removes empty sets after completing missing sub-items.
+     */
+    public function test_normalise_payload_discards_empty_sets_after_completion(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_DIR_ESC_TUR_DISC,
+        ]);
+
+        $method = new \ReflectionMethod(\profile_field_repeatable::class, 'normalise_payload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke(
+            $field,
+            '{"@@ID#10":{"diretoria":"","escola":"","turma":"","disciplina":""},' .
+            '"@@ID#20":{"diretoria":"16154","escola":"45","turma":"3"}}'
+        );
+
+        $this->assertSame([
+            '@@ID#1' => [
+                'diretoria' => '16154',
+                'escola' => '45',
+                'turma' => '3',
+                'disciplina' => '',
+            ],
+        ], $payload);
+    }
+
+    /**
+     * Ensure locked field ignores tampered save attempts by users without update capability.
+     */
+    public function test_edit_save_data_locked_user_ignores_changes(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddata = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable',
+            'name' => 'Locked repeatable test',
+            'shortname' => 'repeatable_locked',
+            'required' => 0,
+            'forceunique' => 0,
+            'locked' => 1,
+            'defaultdata' => '{}',
+            'param1' => self::SUBITEMS_NAME_ROLE,
+        ]);
+        $user = $this->getDataGenerator()->create_user();
+
+        $DB->insert_record('user_info_data', (object) [
+            'userid' => $user->id,
+            'fieldid' => $fielddata->id,
+            'data' => '{"@@ID#1":{"name":"Original","role":"Teacher"}}',
+            'dataformat' => 0,
+        ]);
+
+        $field = new \profile_field_repeatable(0, $user->id, $fielddata);
+        $inputname = $field->inputname;
+
+        $this->setUser($user);
+        $field->edit_save_data((object) [
+            'id' => $user->id,
+            $inputname => '{"@@ID#1":{"name":"Changed","role":"Manager"}}',
+        ]);
+
+        $saved = $DB->get_record('user_info_data', [
+            'userid' => $user->id,
+            'fieldid' => $fielddata->id,
+        ], '*', MUST_EXIST);
+
+        $this->assertSame('{"@@ID#1":{"name":"Original","role":"Teacher"}}', $saved->data);
+    }
+
+    /**
+     * Ensure save performs upsert semantics and removes orphaned sets.
+     */
+    public function test_edit_save_data_upserts_sets_and_removes_orphans(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_NAME_ROLE,
+        ]);
+        $user = $this->getDataGenerator()->create_user();
+        $inputname = $field->inputname;
+
+        $field->edit_save_data((object) [
+            'id' => $user->id,
+            $inputname => '{"@@ID#1":{"name":"Alice","role":"Manager"},"@@ID#2":{"name":"Bob","role":"Teacher"}}',
+        ]);
+
+        $fieldrecord = $DB->get_record('user_info_field', ['shortname' => 'repeatable_test'], 'id', MUST_EXIST);
+        $dataid = (int)$DB->get_field('user_info_data', 'id', [
+            'userid' => $user->id,
+            'fieldid' => $fieldrecord->id,
+        ]);
+        $this->assertGreaterThan(0, $dataid);
+
+        $rows = $DB->get_records('profilefield_repeatable_data', ['dataid' => $dataid], 'set_id ASC');
+        $this->assertCount(2, $rows);
+
+        $firstrow = reset($rows);
+        $originaltimecreated = (int)$firstrow->timecreated;
+        $this->assertGreaterThan(0, $originaltimecreated);
+        $this->assertSame($originaltimecreated, (int)$firstrow->timemodified);
+
+        $DB->set_field('profilefield_repeatable_data', 'timemodified', 1, ['id' => $firstrow->id]);
+
+        $field->edit_save_data((object) [
+            'id' => $user->id,
+            $inputname => '{"@@ID#1":{"name":"Alice Updated","role":"Lead"}}',
+        ]);
+
+        $rows = $DB->get_records('profilefield_repeatable_data', ['dataid' => $dataid], 'set_id ASC');
+        $this->assertCount(1, $rows);
+        $updatedrow = reset($rows);
+        $this->assertSame(1, (int)$updatedrow->set_id);
+        $this->assertSame($originaltimecreated, (int)$updatedrow->timecreated);
+        $this->assertGreaterThan(1, (int)$updatedrow->timemodified);
+
+        $decoded = json_decode((string)$updatedrow->data, true);
+        $this->assertSame([
+            'name' => 'Alice Updated',
+            'role' => 'Lead',
+        ], $decoded);
+    }
+
+    /**
+     * Ensure non-profile pages keep the legacy plain display format.
+     */
+    public function test_display_data_non_profile_context_keeps_plain_format(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_turma":"101-A","codigo_diretoria":"DIR","codigo_escola":"EE"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('profilefield-repeatable-display', $output);
+        $this->assertStringNotContainsString('profilefield-repeatable-display-accordion', $output);
+        $this->assertStringContainsString(get_string('repeatableset', 'profilefield_repeatable', 1), $output);
+    }
+
+    /**
+     * Ensure profile pages render accordion and include sync timestamp from storage.
+     */
+    public function test_display_data_profile_context_renders_accordion_with_sync_timestamp(): void {
+        global $DB, $SCRIPT;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddata = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable',
+            'name' => 'Repeatable display test',
+            'shortname' => 'repeatable_display_test',
+            'required' => 0,
+            'forceunique' => 0,
+            'defaultdata' => '{}',
+            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+        ]);
+        $user = $this->getDataGenerator()->create_user();
+
+        $fallbackjson = '{"@@ID#1":{"codigo_turma":"101-A","codigo_diretoria":"DIR-SP","codigo_escola":"EE Alpha"}}';
+        $dataid = (int)$DB->insert_record('user_info_data', (object)[
+            'userid' => $user->id,
+            'fieldid' => $fielddata->id,
+            'data' => $fallbackjson,
+            'dataformat' => 0,
+        ]);
+        $timemodified = time();
+        $DB->insert_record('profilefield_repeatable_data', (object)[
+            'dataid' => $dataid,
+            'fieldid' => $fielddata->id,
+            'userid' => $user->id,
+            'set_id' => 1,
+            'data' => '{"codigo_turma":"101-A","codigo_diretoria":"DIR-SP","codigo_escola":"EE Alpha"}',
+            'timecreated' => $timemodified,
+            'timemodified' => $timemodified,
+        ]);
+
+        $field = new \profile_field_repeatable(0, $user->id, $fielddata);
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = self::SCRIPT_PROFILE;
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
+        $this->assertStringContainsString('accordion-collapse collapse show', $output);
+        $this->assertStringContainsString('101-A', $output);
+        $this->assertStringContainsString(userdate($timemodified, '%d/%m/%y - %H:%M'), $output);
+
+        $firstlabel = format_string('codigo_turma', true, ['context' => \context_system::instance()]);
+        $this->assertSame(1, substr_count($output, $firstlabel));
+    }
+
+    /**
+     * Ensure profile accordion hides sync footer when timestamp is unavailable.
+     */
+    public function test_display_data_profile_context_hides_sync_footer_without_timestamp(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_turma":"101-A","codigo_diretoria":"DIR","codigo_escola":"EE"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/view.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
+        $this->assertStringNotContainsString('profilefield-repeatable-display-sync', $output);
+    }
+
+    /**
+     * Ensure profile accordion title falls back to "Set N" when first sub-item is empty.
+     */
+    public function test_display_data_profile_context_falls_back_to_set_title_when_first_subitem_empty(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_turma":"","codigo_diretoria":"DIR","codigo_escola":"EE"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = self::SCRIPT_PROFILE;
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString(get_string('repeatableset', 'profilefield_repeatable', 1), $output);
+    }
+
+    /**
+     * Ensure subitem/domain mapping parser keeps only valid canonical entries.
+     */
+    public function test_parse_subitem_domain_map_normalises_valid_entries(): void {
+        $this->resetAfterTest();
+
+        $renderer = new \profilefield_repeatable\output\display_renderer(
+            (object) [
+                'id' => 1,
+                'shortname' => 'test',
+                'param1' => "Codigo_Diretoria\nCodigo_Escola",
+                'param3' => '',
+            ],
+            0,
+            '',
+            fn() => false
+        );
+
+            $method = new \ReflectionMethod(\profilefield_repeatable\output\display_renderer::class, 'parse_subitem_domain_map');
+            $method->setAccessible(true);
+
+            $mapping = $method->invoke(
+                $renderer,
+                "codigo_diretoria|Diretorias\ninvalidline\ncodigo_escola|escolas\ncodigo_diretoria|duplicado\nnaoexiste|abc",
+                ['Codigo_Diretoria', 'Codigo_Escola']
+            );
+
+        $this->assertSame([
+            'Codigo_Diretoria' => 'diretorias',
+            'Codigo_Escola' => 'escolas',
+        ], $mapping);
+    }
+
+    /**
+     * Ensure profile display falls back to code when reference label is unavailable.
+     */
+    public function test_display_data_profile_context_keeps_code_when_reference_not_found(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => "codigo_diretoria\ncodigo_escola",
+            'param3' => "codigo_diretoria|diretoria",
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = self::SCRIPT_PROFILE;
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('16', $output);
+    }
+
+    /**
+     * Ensure profile display resolves label when local reference dictionary has the code.
+     */
+    public function test_display_data_profile_context_resolves_reference_label(): void {
+        global $DB, $SCRIPT;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
+            $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
+        }
+
+        if (
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_domain')) ||
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_item'))
+        ) {
+            $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
+        }
+
+        $manager = new \local_profilefield_repeatable\local\manager();
+        $manager->upsert_domain('diretoria', 'Diretoria');
+        $manager->upsert_items('diretoria', [[
+            'code' => '16',
+            'label' => 'Sao Paulo',
+        ]]);
+
+        $field = $this->create_field([
+            'param1' => "codigo_diretoria\ncodigo_escola",
+            'param3' => "codigo_diretoria|diretoria",
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = self::SCRIPT_PROFILE;
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('Sao Paulo', $output);
+    }
+
+    /**
+     * Ensure non-profile (plain) display resolves reference labels when local dictionary is available.
+     */
+    public function test_display_data_non_profile_context_resolves_reference_label(): void {
+        global $DB, $SCRIPT;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
+            $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
+        }
+
+        if (
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_domain')) ||
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_item'))
+        ) {
+            $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
+        }
+
+        $manager = new \local_profilefield_repeatable\local\manager();
+        $manager->upsert_domain('diretoria', 'Diretoria');
+        $manager->upsert_items('diretoria', [[
+            'code' => '16',
+            'label' => 'Sao Paulo',
+        ]]);
+
+        $field = $this->create_field([
+            'param1' => "codigo_diretoria\ncodigo_escola",
+            'param3' => "codigo_diretoria|diretoria",
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('Sao Paulo', $output);
+        $this->assertStringNotContainsString('>16<', $output);
+    }
+
+    /**
+     * Ensure non-profile (plain) display falls back to raw code when reference label is unavailable.
+     */
+    public function test_display_data_non_profile_context_keeps_code_when_reference_not_found(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => "codigo_diretoria\ncodigo_escola",
+            'param3' => "codigo_diretoria|diretoria",
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('16', $output);
+    }
+
+    /**
+     * Ensure plain display respects subitem ordering from param1 rather than payload key order.
+     */
+    public function test_display_data_non_profile_context_respects_subitem_order(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'param1' => "codigo_turma\ncodigo_diretoria\ncodigo_escola",
+        ]);
+        $field->data = '{"@@ID#1":{"codigo_escola":"EE","codigo_diretoria":"DIR","codigo_turma":"101"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $posturma = strpos($output, '101');
+        $posdiretoria = strpos($output, 'DIR');
+        $posescola = strpos($output, 'EE');
+        $this->assertNotFalse($posturma);
+        $this->assertNotFalse($posdiretoria);
+        $this->assertNotFalse($posescola);
+        $this->assertLessThan($posdiretoria, $posturma);
+        $this->assertLessThan($posescola, $posdiretoria);
+    }
+
+    /**
+     * Ensure accordion resolves reference labels when field is configured via define_save_preprocess.
+     */
+    public function test_display_data_profile_resolves_reference_with_preprocessed_param3(): void {
+        global $DB, $SCRIPT;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
+            $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
+        }
+
+        if (
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_domain')) ||
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_item'))
+        ) {
+            $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
+        }
+
+        $manager = new \local_profilefield_repeatable\local\manager();
+        $manager->upsert_domain('diretorias', 'Diretorias');
+        $manager->upsert_items('diretorias', [[
+            'code' => '16',
+            'label' => 'Sao Paulo',
+        ]]);
+        $manager->upsert_domain('escolas', 'Escolas');
+        $manager->upsert_items('escolas', [[
+            'code' => '45',
+            'label' => 'EE Alpha',
+        ]]);
+
+        // Simulate define_save_preprocess to canonicalise param3.
+        $define = new \profile_define_repeatable();
+        $preprocessed = $define->define_save_preprocess((object) [
+            'param1' => "Codigo_Diretoria\nCodigo_Escola",
+            'param2' => '',
+            'param3' => "codigo_diretoria|Diretorias\ncodigo_escola|ESCOLAS",
+        ]);
+
+        $fielddata = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable',
+            'name' => 'Preprocessed test',
+            'shortname' => 'repeatable_preproc_test',
+            'required' => 0,
+            'forceunique' => 0,
+            'defaultdata' => '{}',
+            'param1' => $preprocessed->param1,
+            'param3' => $preprocessed->param3,
+        ]);
+
+        $field = new \profile_field_repeatable(0, 0, $fielddata);
+        $field->data = '{"@@ID#1":{"Codigo_Diretoria":"16","Codigo_Escola":"45"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = self::SCRIPT_PROFILE;
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
+        $this->assertStringContainsString('Sao Paulo', $output);
+        $this->assertStringContainsString('EE Alpha', $output);
     }
 }

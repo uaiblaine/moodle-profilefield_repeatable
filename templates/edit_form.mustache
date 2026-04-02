@@ -1,0 +1,54 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template profilefield_repeatable/edit_form
+    @copyright 2026 Anderson Blaine (anderson@blaine.com.br)
+
+    Repeatable profile field edit form table.
+
+    Example context (json):
+    {
+        "fieldlabel": "Repeatable test",
+        "wrapperid": "profilefield-repeatable-1-0-repeatable_test",
+        "setcolumn": "SET",
+        "actioncolumn": "ACTION",
+        "addnewset": "Add new set",
+        "subitems": [
+            {"name": "Name"},
+            {"name": "Role"}
+        ]
+    }
+}}
+<label class="d-block mb-2">{{fieldlabel}}</label>
+<div id="{{wrapperid}}" class="profilefield-repeatable-wrapper" data-region="repeatable-wrapper">
+    <div class="profilefield-repeatable-table-wrapper border rounded" data-region="table-wrapper">
+        <table class="table table-striped table-hover mb-0">
+            <thead>
+                <tr>
+                    <th scope="col" class="position-sticky top-0 bg-body">{{setcolumn}}</th>
+                    {{#subitems}}
+                        <th scope="col" class="position-sticky top-0 bg-body">{{name}}</th>
+                    {{/subitems}}
+                    <th scope="col" class="position-sticky top-0 bg-body text-center">{{actioncolumn}}</th>
+                </tr>
+            </thead>
+            <tbody data-region="sets" class="profilefield-repeatable-sets">
+            </tbody>
+        </table>
+    </div>
+    <button type="button" class="btn btn-secondary mt-2" data-action="addset">{{addnewset}}</button>
+</div>

@@ -18,9 +18,11 @@
  * Repeatable profile field definition.
  *
  * @package    profilefield_repeatable
- * @copyright  2026
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+
+defined('MOODLE_INTERNAL') || die();
 
 /**
  * Class profile_define_repeatable.
@@ -28,6 +30,12 @@
  * @package    profilefield_repeatable
  */
 class profile_define_repeatable extends profile_define_base {
+    /** @var int Maximum number of indexed sub-items allowed per field. */
+    private const MAX_INDEXED_SUBITEMS = 3;
+
+    /** @var string Domain shortname pattern for reference mapping. */
+    private const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
+
     /**
      * Add elements for creating/editing a repeatable profile field.
      *
@@ -41,6 +49,20 @@ class profile_define_repeatable extends profile_define_base {
         $form->setType('param1', PARAM_TEXT);
         $form->addHelpButton('param1', 'subitems', 'profilefield_repeatable');
 
+        $form->addElement('textarea', 'param2', get_string('indexedsubitems', 'profilefield_repeatable'), [
+            'rows' => 5,
+            'cols' => 60,
+        ]);
+        $form->setType('param2', PARAM_TEXT);
+        $form->addHelpButton('param2', 'indexedsubitems', 'profilefield_repeatable');
+
+        $form->addElement('textarea', 'param3', get_string('referencesubitemdomains', 'profilefield_repeatable'), [
+            'rows' => 5,
+            'cols' => 60,
+        ]);
+        $form->setType('param3', PARAM_TEXT);
+        $form->addHelpButton('param3', 'referencesubitemdomains', 'profilefield_repeatable');
+
         $form->addElement('hidden', 'defaultdata', '{}');
         $form->setType('defaultdata', PARAM_RAW_TRIMMED);
     }
@@ -53,22 +75,121 @@ class profile_define_repeatable extends profile_define_base {
      * @return array
      */
     public function define_validate_specific($data, $files) {
-        $errors = [];
+        $result = $this->validate_subitems_config($data);
+        if (!empty($result['errors'])) {
+            return $result['errors'];
+        }
 
-        $subitems = $this->parse_subitems((string)($data->param1 ?? ''));
-        if (empty($subitems)) {
-            $errors['param1'] = get_string('errorsubitemsrequired', 'profilefield_repeatable');
+        $errors = $this->validate_indexed_subitems_config((string)($data->param2 ?? ''), $result['subitems']);
+        if (!empty($errors)) {
             return $errors;
+        }
+
+        return $this->validate_reference_mappings_config((string)($data->param3 ?? ''), $result['subitems']);
+    }
+
+    /**
+     * Validate sub-items configuration (param1).
+     *
+     * @param stdClass|object $data
+     * @return array{subitems: string[], errors: array}
+     */
+    private function validate_subitems_config(object $data): array {
+        $subitems = \profilefield_repeatable\helper::parse_subitems((string)($data->param1 ?? ''));
+        if (empty($subitems)) {
+            return [
+                'subitems' => [],
+                'errors' => ['param1' => get_string('errorsubitemsrequired', 'profilefield_repeatable')],
+            ];
         }
 
         $seen = [];
         foreach ($subitems as $subitem) {
             $normalised = core_text::strtolower($subitem);
             if (isset($seen[$normalised])) {
-                $errors['param1'] = get_string('errorsubitemsduplicate', 'profilefield_repeatable');
-                break;
+                return [
+                    'subitems' => $subitems,
+                    'errors' => ['param1' => get_string('errorsubitemsduplicate', 'profilefield_repeatable')],
+                ];
             }
             $seen[$normalised] = true;
+        }
+
+        return ['subitems' => $subitems, 'errors' => []];
+    }
+
+    /**
+     * Validate indexed sub-items configuration (param2).
+     *
+     * @param string $raw
+     * @param string[] $subitems
+     * @return array
+     */
+    private function validate_indexed_subitems_config(string $raw, array $subitems): array {
+        $errors = [];
+        $unknown = [];
+        $indexedsubitems = $this->parse_indexed_subitems($raw, $subitems, $unknown);
+
+        if (!empty($unknown)) {
+            $errors['param2'] = get_string('errorindexedsubitemunknown', 'profilefield_repeatable', implode(', ', $unknown));
+        } else if (count($indexedsubitems) > self::MAX_INDEXED_SUBITEMS) {
+            $errors['param2'] = get_string('errorindexedsubitemlimit', 'profilefield_repeatable', self::MAX_INDEXED_SUBITEMS);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate reference domain mappings configuration (param3).
+     *
+     * @param string $raw
+     * @param string[] $subitems
+     * @return array
+     */
+    private function validate_reference_mappings_config(string $raw, array $subitems): array {
+        $errors = [];
+        $unknownsubitems = [];
+        $invaliddomains = [];
+        $duplicatesubitems = [];
+        $formaterrors = [];
+        $referencemappings = $this->parse_reference_mappings(
+            $raw,
+            $subitems,
+            $unknownsubitems,
+            $invaliddomains,
+            $duplicatesubitems,
+            $formaterrors
+        );
+
+        if (!empty($formaterrors)) {
+            $errors['param3'] = get_string('errordomainmapformat', 'profilefield_repeatable', implode(', ', $formaterrors));
+        } else if (!empty($unknownsubitems)) {
+            $errors['param3'] = get_string(
+                'errordomainmapunknownsubitem',
+                'profilefield_repeatable',
+                implode(', ', array_values(array_unique($unknownsubitems)))
+            );
+        } else if (!empty($duplicatesubitems)) {
+            $errors['param3'] = get_string(
+                'errordomainmapduplicatesubitem',
+                'profilefield_repeatable',
+                implode(', ', array_values(array_unique($duplicatesubitems)))
+            );
+        } else if (!empty($invaliddomains)) {
+            $errors['param3'] = get_string(
+                'errordomainmapinvaliddomain',
+                'profilefield_repeatable',
+                implode(', ', array_values(array_unique($invaliddomains)))
+            );
+        } else if (!empty($referencemappings) && $this->is_local_reference_plugin_available()) {
+            $missingdomains = $this->get_missing_reference_domains(array_values($referencemappings));
+            if (!empty($missingdomains)) {
+                $errors['param3'] = get_string(
+                    'errordomainmapmissingdomain',
+                    'profilefield_repeatable',
+                    implode(', ', $missingdomains)
+                );
+            }
         }
 
         return $errors;
@@ -81,31 +202,263 @@ class profile_define_repeatable extends profile_define_base {
      * @return array|stdClass
      */
     public function define_save_preprocess($data) {
-        $subitems = $this->parse_subitems((string)($data->param1 ?? ''));
+        $subitems = \profilefield_repeatable\helper::parse_subitems((string)($data->param1 ?? ''));
         $data->param1 = implode("\n", $subitems);
+        $indexedsubitems = $this->parse_indexed_subitems((string)($data->param2 ?? ''), $subitems);
+        $data->param2 = implode("\n", array_slice($indexedsubitems, 0, self::MAX_INDEXED_SUBITEMS));
+        $referencemappings = $this->parse_reference_mappings((string)($data->param3 ?? ''), $subitems);
+        $data->param3 = $this->encode_reference_mappings($referencemappings, $subitems);
         $data->defaultdata = '{}';
 
         return $data;
     }
 
     /**
-     * Parse textarea content with one sub-item per line.
+     * Save repeatable field configuration and enqueue index reconciliation.
      *
-     * @param string $rawsubitems
-     * @return string[]
+     * @param array|stdClass $data
      */
-    private function parse_subitems(string $rawsubitems): array {
-        $lines = preg_split('/\R/u', $rawsubitems) ?: [];
-        $subitems = [];
+    public function define_save($data) {
+        global $DB;
 
-        foreach ($lines as $line) {
-            $subitem = trim($line);
-            if ($subitem === '') {
-                continue;
-            }
-            $subitems[] = $subitem;
+        parent::define_save($data);
+        if ($DB->get_dbfamily() !== 'postgres' || empty($data->id)) {
+            return;
         }
 
-        return $subitems;
+        \profilefield_repeatable\task\reconcile_indexes::schedule_for_field((int)$data->id);
+    }
+
+    /**
+     * Clean up PostgreSQL indexes after a repeatable field is deleted.
+     *
+     * Standard Moodle does not call this automatically. The sweep in
+     * {@see \profilefield_repeatable\task\reconcile_indexes::execute()} provides
+     * resilient cleanup; call this method for immediate removal when integrating
+     * with custom deletion workflows.
+     *
+     * @param int $fieldid
+     */
+    public static function define_after_delete(int $fieldid): void {
+        \profilefield_repeatable\task\reconcile_indexes::drop_all_for_field($fieldid);
+    }
+
+    /**
+     * Parse indexed sub-items and return canonical labels from param1.
+     *
+     * @param string $rawindexedsubitems
+     * @param string[] $subitems
+     * @param array $unknown
+     * @return string[]
+     */
+    private function parse_indexed_subitems(string $rawindexedsubitems, array $subitems, array &$unknown = []): array {
+        $unknown = [];
+        if (empty($subitems)) {
+            return [];
+        }
+
+        $canonicalmap = [];
+        foreach ($subitems as $subitem) {
+            $canonicalmap[core_text::strtolower($subitem)] = $subitem;
+        }
+
+        $indexedsubitems = [];
+        $seen = [];
+        $lines = preg_split('/\R/u', $rawindexedsubitems) ?: [];
+
+        foreach ($lines as $line) {
+            $candidate = trim($line);
+            if ($candidate === '') {
+                continue;
+            }
+
+            $normalised = core_text::strtolower($candidate);
+            if (isset($seen[$normalised])) {
+                continue;
+            }
+            $seen[$normalised] = true;
+
+            if (!isset($canonicalmap[$normalised])) {
+                $unknown[] = $candidate;
+                continue;
+            }
+
+            $indexedsubitems[] = $canonicalmap[$normalised];
+        }
+
+        return $indexedsubitems;
+    }
+
+    /**
+     * Parse sub-item/domain mapping definitions (subitem|domain).
+     *
+     * @param string $rawmappings
+     * @param string[] $subitems
+     * @param array $unknownsubitems
+     * @param array $invaliddomains
+     * @param array $duplicatesubitems
+     * @param array $formaterrors
+     * @return array
+     */
+    private function parse_reference_mappings(
+        string $rawmappings,
+        array $subitems,
+        array &$unknownsubitems = [],
+        array &$invaliddomains = [],
+        array &$duplicatesubitems = [],
+        array &$formaterrors = []
+    ): array {
+        $unknownsubitems = [];
+        $invaliddomains = [];
+        $duplicatesubitems = [];
+        $formaterrors = [];
+
+        if (empty($subitems)) {
+            return [];
+        }
+
+        $canonicalmap = [];
+        foreach ($subitems as $subitem) {
+            $canonicalmap[core_text::strtolower($subitem)] = $subitem;
+        }
+
+        $mappings = [];
+        $lines = preg_split('/\R/u', $rawmappings) ?: [];
+        foreach ($lines as $line) {
+            $error = $this->parse_single_mapping_line($line, $canonicalmap, $mappings);
+            if ($error === null) {
+                continue;
+            }
+
+            switch ($error['category']) {
+                case 'format':
+                    $formaterrors[] = $error['value'];
+                    break;
+                case 'unknown':
+                    $unknownsubitems[] = $error['value'];
+                    break;
+                case 'duplicate':
+                    $duplicatesubitems[] = $error['value'];
+                    break;
+                case 'invalid':
+                    $invaliddomains[] = $error['value'];
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return $mappings;
+    }
+
+    /**
+     * Parse a single mapping line and either add to mappings or return an error descriptor.
+     *
+     * @param string $line
+     * @param array $canonicalmap
+     * @param array $mappings
+     * @return array|null Null on success or skip, error descriptor on failure.
+     */
+    private function parse_single_mapping_line(string $line, array $canonicalmap, array &$mappings): ?array {
+        $line = trim($line);
+        if ($line === '') {
+            return null;
+        }
+
+        $validformat = (substr_count($line, '|') === 1);
+        if ($validformat) {
+            [$rawsubitem, $rawdomain] = array_map('trim', explode('|', $line, 2));
+            $validformat = ($rawsubitem !== '' && $rawdomain !== '');
+        }
+        if (!$validformat) {
+            return ['category' => 'format', 'value' => $line];
+        }
+
+        $normalisedsubitem = core_text::strtolower($rawsubitem);
+        $canonicalsubitem = $canonicalmap[$normalisedsubitem] ?? null;
+        $domain = core_text::strtolower($rawdomain);
+
+        $error = null;
+        if ($canonicalsubitem === null) {
+            $error = ['category' => 'unknown', 'value' => $rawsubitem];
+        } else if (isset($mappings[$canonicalsubitem])) {
+            $error = ['category' => 'duplicate', 'value' => $canonicalsubitem];
+        } else if (!preg_match(self::DOMAIN_PATTERN, $domain)) {
+            $error = ['category' => 'invalid', 'value' => $rawdomain];
+        } else {
+            $mappings[$canonicalsubitem] = $domain;
+        }
+
+        return $error;
+    }
+
+    /**
+     * Encode mappings preserving sub-item declaration order.
+     *
+     * @param array $mappings
+     * @param string[] $subitems
+     * @return string
+     */
+    private function encode_reference_mappings(array $mappings, array $subitems): string {
+        if (empty($mappings) || empty($subitems)) {
+            return '';
+        }
+
+        $lines = [];
+        foreach ($subitems as $subitem) {
+            if (!isset($mappings[$subitem])) {
+                continue;
+            }
+            $lines[] = $subitem . '|' . $mappings[$subitem];
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Return whether local reference plugin is present.
+     *
+     * @return bool
+     */
+    private function is_local_reference_plugin_available(): bool {
+        global $DB;
+
+        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+            return false;
+        }
+
+        return $DB->get_manager()->table_exists(new xmldb_table('local_pfr_domain'));
+    }
+
+    /**
+     * Return missing domain shortnames for current mapping.
+     *
+     * @param string[] $domains
+     * @return string[]
+     */
+    private function get_missing_reference_domains(array $domains): array {
+        global $DB;
+
+        $domains = array_values(array_unique(array_map(
+            static fn(string $domain): string => core_text::strtolower(trim($domain)),
+            $domains
+        )));
+        if (empty($domains)) {
+            return [];
+        }
+
+        if (!$DB->get_manager()->table_exists(new xmldb_table('local_pfr_domain'))) {
+            return $domains;
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($domains, SQL_PARAMS_NAMED, 'domain');
+        $existing = $DB->get_fieldset_select('local_pfr_domain', 'shortname', "shortname $insql", $params);
+
+        $existing = array_values(array_unique(array_map(
+            static fn(string $domain): string => core_text::strtolower(trim($domain)),
+            $existing
+        )));
+
+        return array_values(array_diff($domains, $existing));
     }
 }

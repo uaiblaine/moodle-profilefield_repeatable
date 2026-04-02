@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# Node
+node_modules/
+
+# Moodle AMD build artifacts are tracked, source maps are optional
+# amd/build/*.map

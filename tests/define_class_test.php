@@ -27,10 +27,13 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_define_repeatable
- * @copyright  2026
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class define_class_test extends \advanced_testcase {
+    /** @var string Sub-items: diretoria, escola. */
+    private const SUBITEMS_DIR_ESC = "diretoria\nescola";
+
     /**
      * Validate empty sub-item configuration.
      */
@@ -57,5 +60,131 @@ final class define_class_test extends \advanced_testcase {
 
         $this->assertArrayHasKey('param1', $errors);
         $this->assertEquals(get_string('errorsubitemsduplicate', 'profilefield_repeatable'), $errors['param1']);
+    }
+
+    /**
+     * Validate indexed sub-items must exist in the configured sub-items list.
+     */
+    public function test_define_validate_specific_rejects_unknown_indexed_subitems(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "diretoria\nescola\nturma",
+            'param2' => "escola\nnaoexiste",
+        ], []);
+
+        $this->assertArrayHasKey('param2', $errors);
+        $this->assertEquals(
+            get_string('errorindexedsubitemunknown', 'profilefield_repeatable', 'naoexiste'),
+            $errors['param2']
+        );
+    }
+
+    /**
+     * Validate indexed sub-items max limit.
+     */
+    public function test_define_validate_specific_rejects_indexed_subitems_limit(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "a\nb\nc\nd",
+            'param2' => "a\nb\nc\nd",
+        ], []);
+
+        $this->assertArrayHasKey('param2', $errors);
+        $this->assertEquals(
+            get_string('errorindexedsubitemlimit', 'profilefield_repeatable', 3),
+            $errors['param2']
+        );
+    }
+
+    /**
+     * Ensure save preprocess canonicalises and deduplicates indexed sub-items.
+     */
+    public function test_define_save_preprocess_normalises_indexed_subitems(): void {
+        $define = new \profile_define_repeatable();
+
+        $processed = $define->define_save_preprocess((object) [
+            'param1' => "Diretoria\nEscola\nTurma\nDisciplina",
+            'param2' => "escola\nDIRETORIA\nescola\nturma\ndisciplina",
+        ]);
+
+        $this->assertEquals("Diretoria\nEscola\nTurma\nDisciplina", $processed->param1);
+        $this->assertEquals("Escola\nDiretoria\nTurma", $processed->param2);
+    }
+
+    /**
+     * Validate reference mapping format.
+     */
+    public function test_define_validate_specific_rejects_invalid_reference_mapping_format(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param3' => "diretoria-diretoria",
+        ], []);
+
+        $this->assertArrayHasKey('param3', $errors);
+        $this->assertStringContainsString('diretoria-diretoria', $errors['param3']);
+    }
+
+    /**
+     * Validate reference mapping sub-item must exist in param1.
+     */
+    public function test_define_validate_specific_rejects_unknown_reference_mapping_subitem(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param3' => "turma|diretoria",
+        ], []);
+
+        $this->assertArrayHasKey('param3', $errors);
+        $this->assertStringContainsString('turma', $errors['param3']);
+    }
+
+    /**
+     * Validate reference mapping does not allow duplicate sub-item entries.
+     */
+    public function test_define_validate_specific_rejects_duplicate_reference_mapping_subitem(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param3' => "diretoria|dom_a\ndiretoria|dom_b",
+        ], []);
+
+        $this->assertArrayHasKey('param3', $errors);
+        $this->assertStringContainsString('diretoria', $errors['param3']);
+    }
+
+    /**
+     * Validate reference mapping domain syntax.
+     */
+    public function test_define_validate_specific_rejects_invalid_reference_mapping_domain(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param3' => "diretoria|Dominio-Invalido",
+        ], []);
+
+        $this->assertArrayHasKey('param3', $errors);
+        $this->assertStringContainsString('Dominio-Invalido', $errors['param3']);
+    }
+
+    /**
+     * Ensure save preprocess canonicalises reference mappings.
+     */
+    public function test_define_save_preprocess_normalises_reference_mappings(): void {
+        $define = new \profile_define_repeatable();
+
+        $processed = $define->define_save_preprocess((object) [
+            'param1' => "Diretoria\nEscola\nTurma",
+            'param3' => "escola|ESCOLAS\ndiretoria|Diretorias\ndiretoria|duplicado",
+        ]);
+
+        $this->assertEquals("Diretoria\nEscola\nTurma", $processed->param1);
+        $this->assertEquals("Diretoria|diretorias\nEscola|escolas", $processed->param3);
     }
 }

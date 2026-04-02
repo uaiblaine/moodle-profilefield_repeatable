@@ -18,9 +18,11 @@
  * Repeatable profile field.
  *
  * @package    profilefield_repeatable
- * @copyright  2026
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+
+defined('MOODLE_INTERNAL') || die();
 
 /**
  * Class profile_field_repeatable.
@@ -28,10 +30,10 @@
  * @package    profilefield_repeatable
  */
 class profile_field_repeatable extends profile_field_base {
-    /** @var string wrapper identifier used by AMD init. */
+    /** @var string Wrapper identifier used by AMD init. */
     protected $wrapperid = '';
 
-    /** @var string hidden element identifier used by AMD init. */
+    /** @var string Hidden element identifier used by AMD init. */
     protected $hiddenid = '';
 
     /**
@@ -40,28 +42,26 @@ class profile_field_repeatable extends profile_field_base {
      * @param moodleform $mform
      */
     public function edit_field_add($mform) {
+        global $OUTPUT;
+
         $mform->addElement('hidden', $this->inputname, '', ['id' => $this->get_hidden_id()]);
         $mform->setType($this->inputname, PARAM_RAW_TRIMMED);
 
-        $html = html_writer::tag('label', format_string($this->field->name), [
-            'class' => 'd-block mb-2',
-        ]);
+        $context = \core\context\system::instance();
+        $subitems = $this->get_subitems();
+        $subitemdata = [];
+        foreach ($subitems as $subitem) {
+            $subitemdata[] = ['name' => format_string($subitem, true, ['context' => $context])];
+        }
 
-        $html .= html_writer::start_tag('div', [
-            'id' => $this->get_wrapper_id(),
-            'class' => 'profilefield-repeatable-wrapper',
-            'data-region' => 'repeatable-wrapper',
+        $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
+            'fieldlabel' => format_string($this->field->name),
+            'wrapperid' => $this->get_wrapper_id(),
+            'subitems' => $subitemdata,
+            'setcolumn' => get_string('setcolumn', 'profilefield_repeatable'),
+            'actioncolumn' => get_string('actioncolumn', 'profilefield_repeatable'),
+            'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
         ]);
-        $html .= html_writer::tag('div', '', [
-            'class' => 'profilefield-repeatable-sets',
-            'data-region' => 'sets',
-        ]);
-        $html .= html_writer::tag('button', get_string('addnewset', 'profilefield_repeatable'), [
-            'type' => 'button',
-            'class' => 'btn btn-secondary mt-2',
-            'data-action' => 'addset',
-        ]);
-        $html .= html_writer::end_tag('div');
 
         $mform->addElement('html', $html);
     }
@@ -69,10 +69,17 @@ class profile_field_repeatable extends profile_field_base {
     /**
      * Load user data for this profile field, ready for editing.
      *
+     * Source of truth: profilefield_repeatable_data; fallback: user_info_data.data.
+     *
      * @param stdClass $user
      */
     public function edit_load_user_data($user) {
-        $user->{$this->inputname} = $this->encode_payload($this->normalise_payload($this->data));
+        $payload = $this->get_payload_from_storage();
+        if (empty($payload)) {
+            $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
+        }
+
+        $user->{$this->inputname} = \profilefield_repeatable\helper::encode_payload($payload);
     }
 
     /**
@@ -96,6 +103,7 @@ class profile_field_repeatable extends profile_field_base {
             'wrapperid' => $this->get_wrapper_id(),
             'hiddenid' => $this->get_hidden_id(),
             'subitems' => $this->get_subitems(),
+            'readonly' => $this->is_locked() && !has_capability('moodle/user:update', \core\context\system::instance()),
             'strings' => [
                 'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
                 'removeset' => get_string('removeset', 'profilefield_repeatable'),
@@ -109,15 +117,68 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Process the data before it gets saved in database.
+     * Saves data coming from form and synchronises JSON-per-set rows.
+     *
+     * @param stdClass $usernew
+     */
+    public function edit_save_data($usernew) {
+        global $DB;
+
+        if (!isset($usernew->{$this->inputname})) {
+            // Field not present in form, probably locked and invisible - skip it.
+            return;
+        }
+        if ($this->is_locked() && !has_capability('moodle/user:update', \core\context\system::instance())) {
+            // Defensive guard: ignore tampered submissions for locked fields.
+            return;
+        }
+
+        $data = new stdClass();
+        $processed = $this->edit_save_data_preprocess($usernew->{$this->inputname}, $data);
+        if (!isset($processed)) {
+            $processed = $this->field->defaultdata ?? '{}';
+        }
+
+        $payload = \profilefield_repeatable\helper::normalise_payload($processed, $this->get_subitems());
+        $fallbackjson = \profilefield_repeatable\helper::encode_payload($payload);
+
+        $data->userid = (int)$usernew->id;
+        $data->fieldid = (int)$this->field->id;
+        $data->data = $fallbackjson;
+
+        $transaction = $DB->start_delegated_transaction();
+
+        $existingid = $DB->get_field('user_info_data', 'id', [
+            'userid' => $data->userid,
+            'fieldid' => $data->fieldid,
+        ]);
+
+        if ($existingid) {
+            $data->id = (int)$existingid;
+            $DB->update_record('user_info_data', $data);
+            $dataid = (int)$existingid;
+        } else {
+            $dataid = (int)$DB->insert_record('user_info_data', $data);
+        }
+
+        $this->sync_repeat_data($dataid, (int)$data->userid, $payload);
+
+        $transaction->allow_commit();
+
+        // Keep local instance data consistent for callers in same request.
+        $this->data = $fallbackjson;
+    }
+
+    /**
+     * Process incoming data before save.
      *
      * @param string|null $data
      * @param stdClass $datarecord
      * @return string
      */
     public function edit_save_data_preprocess($data, $datarecord) {
-        $payload = $this->normalise_payload($data);
-        return $this->encode_payload($payload);
+        $payload = \profilefield_repeatable\helper::normalise_payload($data, $this->get_subitems());
+        return \profilefield_repeatable\helper::encode_payload($payload);
     }
 
     /**
@@ -142,14 +203,29 @@ class profile_field_repeatable extends profile_field_base {
             }
         }
 
-        $payload = $this->normalise_payload($rawpayload);
+        $payload = \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
         if ($this->is_required() && empty($payload)) {
             return [$this->inputname => get_string('required')];
         }
 
-        $usernew->{$this->inputname} = empty($payload) ? '' : $this->encode_payload($payload);
+        // Keep parent uniqueness check semantics.
+        $usernew->{$this->inputname} = empty($payload) ? '' : \profilefield_repeatable\helper::encode_payload($payload);
 
         return parent::edit_validate_field($usernew);
+    }
+
+    /**
+     * Check if the field data is considered empty.
+     *
+     * @return bool
+     */
+    public function is_empty() {
+        $payload = $this->get_payload_from_storage();
+        if (empty($payload)) {
+            $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
+        }
+
+        return empty($payload);
     }
 
     /**
@@ -158,44 +234,13 @@ class profile_field_repeatable extends profile_field_base {
      * @return string
      */
     public function display_data() {
-        $payload = $this->normalise_payload($this->data);
-        if (empty($payload)) {
-            return '';
-        }
-
-        $sets = [];
-        $setnumber = 1;
-
-        foreach ($payload as $set) {
-            $parts = [];
-            foreach ($set as $subitem => $value) {
-                if (trim($value) === '') {
-                    continue;
-                }
-
-                $parts[] = html_writer::span(
-                    format_string($subitem, true, ['context' => context_system::instance()]) . ': ',
-                    'profilefield-repeatable-display-key'
-                ) . html_writer::span(s($value), 'profilefield-repeatable-display-value');
-            }
-
-            if (empty($parts)) {
-                continue;
-            }
-
-            $label = html_writer::span(
-                s(get_string('repeatableset', 'profilefield_repeatable', $setnumber)) . ': ',
-                'profilefield-repeatable-display-set'
-            );
-            $sets[] = html_writer::tag('li', $label . implode(' | ', $parts));
-            $setnumber++;
-        }
-
-        if (empty($sets)) {
-            return '';
-        }
-
-        return html_writer::tag('ul', implode('', $sets), ['class' => 'profilefield-repeatable-display']);
+        $renderer = new \profilefield_repeatable\output\display_renderer(
+            $this->field,
+            (int)($this->userid ?? 0),
+            (string)$this->data,
+            fn(): bool => $this->has_storage_table()
+        );
+        return $renderer->render();
     }
 
     /**
@@ -208,71 +253,176 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Parse and normalise repeatable payload.
+     * Resolve payload from storage table for the current user.
      *
-     * @param mixed $rawpayload
      * @return array
      */
-    protected function normalise_payload($rawpayload): array {
-        if (is_string($rawpayload)) {
-            $rawpayload = trim($rawpayload);
-            if ($rawpayload === '') {
-                return [];
-            }
+    protected function get_payload_from_storage(): array {
+        global $DB;
 
-            $rawdecoded = json_decode($rawpayload);
-            if (json_last_error() !== JSON_ERROR_NONE || !is_object($rawdecoded)) {
-                return [];
-            }
-            $decoded = json_decode($rawpayload, true);
-        } else if (is_object($rawpayload)) {
-            $decoded = json_decode(json_encode($rawpayload), true);
-        } else if (is_array($rawpayload)) {
-            $decoded = $rawpayload;
-        } else {
+        if (!$this->has_storage_table() || empty($this->userid) || empty($this->field) || empty($this->field->id)) {
             return [];
         }
 
-        if (!is_array($decoded)) {
+        $dataid = $DB->get_field('user_info_data', 'id', [
+            'userid' => (int)$this->userid,
+            'fieldid' => (int)$this->field->id,
+        ]);
+
+        return $dataid ? $this->get_payload_from_dataid((int)$dataid) : [];
+    }
+
+    /**
+     * Resolve payload from storage table by data id.
+     *
+     * @param int $dataid
+     * @return array
+     */
+    protected function get_payload_from_dataid(int $dataid): array {
+        global $DB;
+
+        $records = $DB->get_records(
+            'profilefield_repeatable_data',
+            ['dataid' => $dataid],
+            'set_id ASC, id ASC',
+            'id, set_id, data'
+        );
+
+        if (empty($records)) {
             return [];
         }
 
-        $subitems = $this->get_subitems();
-        if (empty($subitems)) {
-            return [];
-        }
+        $allowedsubitems = array_fill_keys($this->get_subitems(), true);
+        $rawsets = [];
 
-        $normalised = [];
-        $counter = 1;
-        foreach ($decoded as $setdata) {
-            if (is_object($setdata)) {
-                $setdata = json_decode(json_encode($setdata), true);
-            }
-            if (!is_array($setdata)) {
+        foreach ($records as $record) {
+            $setid = (int)$record->set_id;
+            if ($setid <= 0) {
                 continue;
             }
 
-            $set = [];
-            $hasvalue = false;
-            foreach ($subitems as $subitem) {
-                $value = $setdata[$subitem] ?? '';
-                if (!is_scalar($value) && $value !== null) {
-                    $value = '';
-                }
-                $value = (string)$value;
-                if (trim($value) !== '') {
-                    $hasvalue = true;
-                }
-                $set[$subitem] = $value;
+            $decoded = json_decode((string)$record->data, true);
+            if (!is_array($decoded)) {
+                continue;
             }
 
-            if ($hasvalue) {
-                $normalised['@@ID#' . $counter] = $set;
-                $counter++;
+            if (!empty($allowedsubitems)) {
+                $decoded = array_intersect_key($decoded, $allowedsubitems);
             }
+
+            $rawsets[$setid] = $decoded;
         }
 
-        return $normalised;
+        if (empty($rawsets)) {
+            return [];
+        }
+
+        ksort($rawsets);
+        return \profilefield_repeatable\helper::normalise_payload($rawsets, $this->get_subitems());
+    }
+
+    /**
+     * Synchronise JSON-per-set rows for one user_info_data.id.
+     *
+     * @param int $dataid
+     * @param int $userid
+     * @param array $payload
+     */
+    protected function sync_repeat_data(int $dataid, int $userid, array $payload): void {
+        global $DB;
+
+        if (!$this->has_storage_table()) {
+            return;
+        }
+
+        $fieldid = (int)$this->field->id;
+        $now = time();
+        $persistedsetids = [];
+        $setid = 1;
+
+        foreach ($payload as $setdata) {
+            if (!is_array($setdata)) {
+                $setid++;
+                continue;
+            }
+
+            $jsonset = json_encode($setdata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($jsonset === false) {
+                $setid++;
+                continue;
+            }
+
+            $this->upsert_set_row($dataid, $fieldid, $userid, $setid, $jsonset, $now);
+            $persistedsetids[] = $setid;
+            $setid++;
+        }
+
+        if (empty($persistedsetids)) {
+            $DB->delete_records('profilefield_repeatable_data', ['dataid' => $dataid]);
+            return;
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($persistedsetids, SQL_PARAMS_NAMED, 'setid', false);
+        $params['dataid'] = $dataid;
+        $DB->delete_records_select('profilefield_repeatable_data', "dataid = :dataid AND set_id $insql", $params);
+    }
+
+    /**
+     * Insert or update one set row, preserving timecreated on update.
+     *
+     * @param int $dataid
+     * @param int $fieldid
+     * @param int $userid
+     * @param int $setid
+     * @param string $jsonset
+     * @param int $now
+     */
+    protected function upsert_set_row(
+        int $dataid,
+        int $fieldid,
+        int $userid,
+        int $setid,
+        string $jsonset,
+        int $now
+    ): void {
+        global $DB;
+
+        $sql = "INSERT INTO {profilefield_repeatable_data}
+                    (dataid, fieldid, userid, set_id, data, timecreated, timemodified)
+                VALUES
+                    (:dataid, :fieldid, :userid, :setid, :data, :timecreated, :timemodified)
+                ON CONFLICT (dataid, set_id)
+                DO UPDATE SET
+                    fieldid = EXCLUDED.fieldid,
+                    userid = EXCLUDED.userid,
+                    data = EXCLUDED.data,
+                    timemodified = EXCLUDED.timemodified";
+
+        $DB->execute($sql, [
+            'dataid' => $dataid,
+            'fieldid' => $fieldid,
+            'userid' => $userid,
+            'setid' => $setid,
+            'data' => $jsonset,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ]);
+    }
+
+    /**
+     * Check if the storage table is available.
+     *
+     * @return bool
+     */
+    protected function has_storage_table(): bool {
+        static $hastable = null;
+
+        if ($hastable === null) {
+            global $DB;
+            $hastable = $DB->get_manager()->table_exists(new xmldb_table('profilefield_repeatable_data'));
+        }
+
+        return $hastable;
     }
 
     /**
@@ -282,55 +432,7 @@ class profile_field_repeatable extends profile_field_base {
      */
     protected function get_subitems(): array {
         $rawsubitems = (string)($this->field->param1 ?? '');
-        return $this->parse_subitems($rawsubitems);
-    }
-
-    /**
-     * Parse textarea content into unique, non-empty sub-item labels.
-     *
-     * @param string $rawsubitems
-     * @return string[]
-     */
-    protected function parse_subitems(string $rawsubitems): array {
-        $lines = preg_split('/\R/u', $rawsubitems) ?: [];
-        $subitems = [];
-        $seen = [];
-
-        foreach ($lines as $line) {
-            $subitem = trim($line);
-            if ($subitem === '') {
-                continue;
-            }
-
-            $normalised = core_text::strtolower($subitem);
-            if (isset($seen[$normalised])) {
-                continue;
-            }
-
-            $seen[$normalised] = true;
-            $subitems[] = $subitem;
-        }
-
-        return $subitems;
-    }
-
-    /**
-     * Encode payload as strict JSON object.
-     *
-     * @param array $payload
-     * @return string
-     */
-    protected function encode_payload(array $payload): string {
-        if (empty($payload)) {
-            return '{}';
-        }
-
-        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            return '{}';
-        }
-
-        return $json;
+        return \profilefield_repeatable\helper::parse_subitems($rawsubitems);
     }
 
     /**

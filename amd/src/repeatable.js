@@ -17,7 +17,7 @@
  * Repeatable profilefield UI.
  *
  * @module     profilefield_repeatable/repeatable
- * @copyright  2026
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -40,62 +40,69 @@ const SELECTORS = {
 const renderSetTitle = (template, index) => template.replace('{no}', String(index));
 
 /**
- * Build one empty set node to be used as cloning template.
+ * Build one empty set row node to be used as cloning template.
  *
  * @param {Array} subitems
  * @param {Object} strings
  * @returns {HTMLElement}
  */
 const createSetTemplate = (subitems, strings) => {
-    const set = document.createElement('div');
-    set.className = 'card p-3 mb-2 profilefield-repeatable-set';
-    set.dataset.region = 'set';
+    const row = document.createElement('tr');
+    row.dataset.region = 'set';
+    row.className = 'profilefield-repeatable-set';
 
-    const head = document.createElement('div');
-    head.className = 'd-flex justify-content-between align-items-center mb-2';
+    const titlecell = document.createElement('th');
+    titlecell.scope = 'row';
+    titlecell.className = 'align-middle text-nowrap';
 
-    const title = document.createElement('strong');
+    const title = document.createElement('span');
     title.dataset.region = 'set-title';
-    head.appendChild(title);
-
-    const removebutton = document.createElement('button');
-    removebutton.type = 'button';
-    removebutton.className = 'btn btn-link text-danger p-0';
-    removebutton.dataset.action = 'removeset';
-    removebutton.textContent = strings.removeset;
-    head.appendChild(removebutton);
-
-    set.appendChild(head);
-
-    const body = document.createElement('div');
-    body.className = 'profilefield-repeatable-fields';
+    title.className = 'fw-semibold';
+    titlecell.appendChild(title);
+    row.appendChild(titlecell);
 
     subitems.forEach((subitem) => {
-        const row = document.createElement('div');
-        row.className = 'mb-2 profilefield-repeatable-field';
+        const cell = document.createElement('td');
+        cell.className = 'align-middle';
 
         const label = document.createElement('label');
-        label.className = 'form-label';
-        label.textContent = subitem;
+        label.className = 'accesshide';
         label.dataset.region = 'subitem-label';
+        label.textContent = subitem;
 
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'form-control';
         input.dataset.subitem = subitem;
 
-        row.appendChild(label);
-        row.appendChild(input);
-        body.appendChild(row);
+        cell.appendChild(label);
+        cell.appendChild(input);
+        row.appendChild(cell);
     });
 
-    set.appendChild(body);
+    const actioncell = document.createElement('td');
+    actioncell.className = 'align-middle text-center';
 
-    return set;
+    const removebutton = document.createElement('button');
+    removebutton.type = 'button';
+    removebutton.className = 'btn btn-link text-danger p-0';
+    removebutton.dataset.action = 'removeset';
+    removebutton.setAttribute('aria-label', strings.removeset);
+    removebutton.setAttribute('title', strings.removeset);
+
+    const icon = document.createElement('i');
+    icon.className = 'icon fa fa-trash fa-fw';
+    icon.setAttribute('aria-hidden', 'true');
+    removebutton.appendChild(icon);
+
+    actioncell.appendChild(removebutton);
+    row.appendChild(actioncell);
+
+    return row;
 };
 
 /**
- * Update titles, ids and label-for attributes after add/remove actions.
+ * Update titles, ids and accessibility metadata after add/remove actions.
  *
  * @param {HTMLElement} wrapper
  * @param {String} hiddenid
@@ -103,22 +110,28 @@ const createSetTemplate = (subitems, strings) => {
  */
 const updateSetMetadata = (wrapper, hiddenid, titletemplate) => {
     const sets = Array.from(wrapper.querySelectorAll(SELECTORS.set));
+
     sets.forEach((set, setindex) => {
         const number = setindex + 1;
         const title = set.querySelector(SELECTORS.setTitle);
+        const renderedtitle = renderSetTitle(titletemplate, number);
+
         if (title) {
-            title.textContent = renderSetTitle(titletemplate, number);
+            title.textContent = renderedtitle;
         }
 
         const inputs = Array.from(set.querySelectorAll(SELECTORS.input));
         inputs.forEach((input, fieldindex) => {
             const id = `${hiddenid}_${number}_${fieldindex + 1}`;
             input.id = id;
-            const parent = input.closest('.profilefield-repeatable-field');
-            const label = parent ? parent.querySelector('label') : null;
+
+            const parentcell = input.closest('td');
+            const label = parentcell ? parentcell.querySelector('[data-region="subitem-label"]') : null;
             if (label) {
                 label.setAttribute('for', id);
             }
+
+            input.setAttribute('aria-label', `${String(input.dataset.subitem)} (${renderedtitle})`);
         });
     });
 };
@@ -133,10 +146,12 @@ const updateSetMetadata = (wrapper, hiddenid, titletemplate) => {
 const cloneSetFromTemplate = (template, values = {}) => {
     const node = template.cloneNode(true);
     const inputs = Array.from(node.querySelectorAll(SELECTORS.input));
+
     inputs.forEach((input) => {
         const key = input.dataset.subitem;
         input.value = Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : '';
     });
+
     return node;
 };
 
@@ -205,6 +220,7 @@ const buildPayloadFromDom = (wrapper, subitems) => {
     sets.forEach((set) => {
         const setvalues = {};
         const valuesbykey = {};
+
         Array.from(set.querySelectorAll(SELECTORS.input)).forEach((input) => {
             valuesbykey[input.dataset.subitem] = String(input.value);
         });
@@ -245,6 +261,29 @@ const ensureOneEmptySet = (wrapper, template, hiddenid, titletemplate) => {
 };
 
 /**
+ * Apply read-only mode in locked field scenarios.
+ *
+ * @param {HTMLElement} wrapper
+ */
+const applyReadonlyState = (wrapper) => {
+    const addbutton = wrapper.querySelector(SELECTORS.addSet);
+    if (addbutton) {
+        addbutton.disabled = true;
+        addbutton.classList.add('d-none');
+    }
+
+    Array.from(wrapper.querySelectorAll(SELECTORS.removeSet)).forEach((button) => {
+        button.disabled = true;
+        button.classList.add('d-none');
+    });
+
+    Array.from(wrapper.querySelectorAll(SELECTORS.input)).forEach((input) => {
+        input.readOnly = true;
+        input.disabled = true;
+    });
+};
+
+/**
  * Initialise repeatable field UI.
  *
  * @param {Object} config
@@ -269,6 +308,7 @@ export const init = (config) => {
         return;
     }
 
+    const readonly = !!config.readonly;
     const strings = {
         addnewset: config.strings && config.strings.addnewset ? config.strings.addnewset : 'Add new set',
         removeset: config.strings && config.strings.removeset ? config.strings.removeset : 'Remove set',
@@ -283,11 +323,17 @@ export const init = (config) => {
         existingsets.forEach((setvalues) => {
             setscontainer.appendChild(cloneSetFromTemplate(settemplate, setvalues));
         });
-    } else {
+    } else if (!readonly) {
         setscontainer.appendChild(cloneSetFromTemplate(settemplate));
     }
 
     updateSetMetadata(wrapper, config.hiddenid, strings.repeatableset);
+
+    if (readonly) {
+        applyReadonlyState(wrapper);
+        wrapper.dataset.repeatableInitialised = '1';
+        return;
+    }
 
     wrapper.addEventListener('click', (event) => {
         const addbutton = event.target.closest(SELECTORS.addSet);

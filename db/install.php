@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Repeatable profile field version information.
+ * Install logic for profilefield_repeatable.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
@@ -24,9 +24,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026030600;
-$plugin->requires  = 2024100100;
-$plugin->component = 'profilefield_repeatable';
-$plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = 'v1.0.0';
-$plugin->supported = [405, 501];
+require_once(__DIR__ . '/lib.php');
+
+/**
+ * Plugin install hook.
+ */
+function xmldb_profilefield_repeatable_install(): void {
+    global $DB;
+
+    profilefield_repeatable_ensure_postgres_jsonb_support($DB);
+}

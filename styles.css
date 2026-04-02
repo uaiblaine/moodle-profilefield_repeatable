@@ -1,0 +1,164 @@
+/**
+ * Styles for profilefield_repeatable.
+ *
+ * @package    profilefield_repeatable
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+.path-user .profilefield-repeatable-display-accordion {
+    margin-top: 0.5rem;
+}
+
+.path-user .profilefield-repeatable-table-wrapper {
+    max-height: 28rem;
+    overflow: auto;
+}
+
+.path-user .profilefield-repeatable-display-item {
+    background-color: #fff;
+    border: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+}
+
+.path-user .profilefield-repeatable-display-item:last-child {
+    margin-bottom: 0;
+}
+
+.path-user .profilefield-repeatable-display-header {
+    margin: 0;
+}
+
+.path-user .profilefield-repeatable-accordion-button {
+    -webkit-appearance: none;
+    align-items: flex-start;
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font-size: 1.125rem;
+    font-weight: 600;
+    justify-content: flex-start;
+    line-height: 1.35;
+    min-height: 3rem;
+    padding: 0.85rem 1rem;
+    text-align: left;
+    width: 100%;
+}
+
+.path-user .profilefield-repeatable-accordion-button:hover {
+    background-color: rgba(148, 163, 184, 0.08);
+}
+
+.path-user .profilefield-repeatable-accordion-button:focus {
+    box-shadow: none;
+    outline: 2px solid #0f6cbf;
+    outline-offset: -2px;
+}
+
+.path-user .profilefield-repeatable-titletext {
+    align-items: baseline;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.path-user .profilefield-repeatable-accordion-button::after {
+    background-image: none;
+    border-bottom: 0.14rem solid #64748b;
+    border-right: 0.14rem solid #64748b;
+    content: '';
+    display: inline-block;
+    flex-shrink: 0;
+    height: 0.55rem;
+    margin-left: auto;
+    margin-top: 0.45rem;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+    width: 0.55rem;
+}
+
+.path-user .profilefield-repeatable-accordion-button.collapsed::after {
+    transform: rotate(-45deg);
+}
+
+.path-user .profilefield-repeatable-display-key {
+    color: #334155;
+    font-weight: 600;
+}
+
+.path-user .profilefield-repeatable-display-value {
+    color: #111827;
+    font-weight: 600;
+}
+
+.path-user .profilefield-repeatable-accordion-collapse {
+    border-top: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
+    display: none;
+}
+
+.path-user .profilefield-repeatable-accordion-collapse.show {
+    display: block;
+}
+
+.path-user .profilefield-repeatable-accordion-body {
+    padding: 0.9rem 1rem;
+}
+
+.path-user .profilefield-repeatable-display-table-wrap {
+    border: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
+    border-radius: 0.55rem;
+    overflow: hidden;
+}
+
+.path-user .profilefield-repeatable-display-table {
+    margin-bottom: 0;
+}
+
+.path-user .profilefield-repeatable-display-table thead th {
+    background-color: #f3f5f8;
+    border-bottom: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
+    color: #334155;
+    font-size: 0.98rem;
+    font-weight: 600;
+    padding: 0.7rem 0.8rem;
+}
+
+.path-user .profilefield-repeatable-display-table td {
+    font-size: 0.98rem;
+    padding: 0.7rem 0.8rem;
+    vertical-align: middle;
+}
+
+.path-user .profilefield-repeatable-display-sync {
+    margin-top: 0.6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .path-user .profilefield-repeatable-accordion-button::after {
+        transition: none;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .path-user .profilefield-repeatable-accordion-button {
+        font-size: 1rem;
+        min-height: 2.75rem;
+        padding: 0.75rem 0.85rem;
+    }
+
+    .path-user .profilefield-repeatable-accordion-body {
+        padding: 0.75rem;
+    }
+
+    .path-user .profilefield-repeatable-display-table thead th,
+    .path-user .profilefield-repeatable-display-table td {
+        font-size: 0.92rem;
+        padding: 0.62rem 0.65rem;
+    }
+}

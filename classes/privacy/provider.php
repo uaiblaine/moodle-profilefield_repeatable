@@ -18,7 +18,7 @@
  * Privacy class for requesting user data.
  *
  * @package    profilefield_repeatable
- * @copyright  2026
+ * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -41,7 +41,6 @@ class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\core_userlist_provider,
     \core_privacy\local\request\plugin\provider {
-
     /**
      * Returns metadata about this plugin.
      *
@@ -49,12 +48,22 @@ class provider implements
      * @return collection
      */
     public static function get_metadata(collection $collection): collection {
-        return $collection->add_database_table('user_info_data', [
+        $collection->add_database_table('user_info_data', [
             'userid' => 'privacy:metadata:profilefield_repeatable:userid',
             'fieldid' => 'privacy:metadata:profilefield_repeatable:fieldid',
             'data' => 'privacy:metadata:profilefield_repeatable:data',
             'dataformat' => 'privacy:metadata:profilefield_repeatable:dataformat',
         ], 'privacy:metadata:profilefield_repeatable:tableexplanation');
+
+        return $collection->add_database_table('profilefield_repeatable_data', [
+            'dataid' => 'privacy:metadata:profilefield_repeatable_data:dataid',
+            'fieldid' => 'privacy:metadata:profilefield_repeatable_data:fieldid',
+            'userid' => 'privacy:metadata:profilefield_repeatable_data:userid',
+            'set_id' => 'privacy:metadata:profilefield_repeatable_data:set_id',
+            'data' => 'privacy:metadata:profilefield_repeatable_data:data',
+            'timecreated' => 'privacy:metadata:profilefield_repeatable_data:timecreated',
+            'timemodified' => 'privacy:metadata:profilefield_repeatable_data:timemodified',
+        ], 'privacy:metadata:profilefield_repeatable_data:tableexplanation');
     }
 
     /**
@@ -91,7 +100,7 @@ class provider implements
      */
     public static function get_users_in_context(userlist $userlist): void {
         $context = $userlist->get_context();
-        if (!$context instanceof \context_user) {
+        if (!$context instanceof \core\context\user) {
             return;
         }
 
@@ -155,7 +164,7 @@ class provider implements
     public static function delete_data_for_users(approved_userlist $userlist): void {
         $context = $userlist->get_context();
 
-        if ($context instanceof \context_user) {
+        if ($context instanceof \core\context\user) {
             static::delete_data($context->instanceid);
         }
     }
@@ -183,6 +192,35 @@ class provider implements
     protected static function delete_data(int $userid): void {
         global $DB;
 
+        if (!self::has_storage_table()) {
+            $params = [
+                'userid' => $userid,
+                'datatype' => 'repeatable',
+            ];
+
+            $DB->delete_records_select('user_info_data', "fieldid IN (
+                    SELECT id FROM {user_info_field} WHERE datatype = :datatype)
+                    AND userid = :userid", $params);
+            return;
+        }
+
+        $dataids = $DB->get_fieldset_sql(
+            "SELECT uda.id
+               FROM {user_info_data} uda
+               JOIN {user_info_field} uif ON uif.id = uda.fieldid
+              WHERE uda.userid = :userid
+                AND uif.datatype = :datatype",
+            [
+                'userid' => $userid,
+                'datatype' => 'repeatable',
+            ]
+        );
+
+        if (!empty($dataids)) {
+            [$insql, $inparams] = $DB->get_in_or_equal($dataids, SQL_PARAMS_NAMED, 'dataid');
+            $DB->delete_records_select('profilefield_repeatable_data', "dataid $insql", $inparams);
+        }
+
         $params = [
             'userid' => $userid,
             'datatype' => 'repeatable',
@@ -191,6 +229,22 @@ class provider implements
         $DB->delete_records_select('user_info_data', "fieldid IN (
                 SELECT id FROM {user_info_field} WHERE datatype = :datatype)
                 AND userid = :userid", $params);
+    }
+
+    /**
+     * Check if the storage table is available.
+     *
+     * @return bool
+     */
+    protected static function has_storage_table(): bool {
+        static $hastable = null;
+
+        if ($hastable === null) {
+            global $DB;
+            $hastable = $DB->get_manager()->table_exists(new \xmldb_table('profilefield_repeatable_data'));
+        }
+
+        return $hastable;
     }
 
     /**
