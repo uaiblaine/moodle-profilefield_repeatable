@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2026-04-02
+
+### Changed
+- Documentation now reflects Moodle 4.5+ database baseline (PostgreSQL 13+ / MySQL 8.0+)
+- Updated PostgreSQL indexing examples and troubleshooting guidance
+- Added PostgreSQL version matrix (13/14/15/17) with compatibility notes
+
+### Notes
+- Advanced PostgreSQL features for 14+/15+/17+ remain optional and are documented as roadmap opportunities
+
 ## [1.0.0] - 2026-04-01
 
 ### Added
@@ -14,7 +24,7 @@ All notable changes to this project will be documented in this file.
 - Async index reconciliation via adhoc task for PostgreSQL index management
 - Comprehensive PHPUnit test suite (600+ LOC) covering field definition, storage, display, migrations, and privacy
 - Mustache templates for edit form, accordion display (profile pages), and plain list display (other contexts)
-- Support for Moodle 4.05+ with PostgreSQL fallback to MySQL/MariaDB JSON storage
+- Support for Moodle 4.5+ with PostgreSQL fallback to MySQL/MariaDB JSON storage
 
 ### Fixed
 - Backward compatibility layer ensuring migrations and install steps work without autoloading

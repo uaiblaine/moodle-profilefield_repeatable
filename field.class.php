@@ -348,6 +348,11 @@ class profile_field_repeatable extends profile_field_base {
 
             $jsonset = json_encode($setdata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($jsonset === false) {
+                debugging(
+                    'profilefield_repeatable: JSON encode failed for field ' . $fieldid .
+                    ', user ' . $userid . ', set ' . $setid . ': ' . json_last_error_msg(),
+                    DEBUG_DEVELOPER
+                );
                 $setid++;
                 continue;
             }

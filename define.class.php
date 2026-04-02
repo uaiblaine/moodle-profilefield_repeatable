@@ -91,8 +91,8 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Validate sub-items configuration (param1).
      *
-     * @param stdClass|object $data
-     * @return array{subitems: string[], errors: array}
+     * @param object $data
+     * @return array
      */
     private function validate_subitems_config(object $data): array {
         $subitems = \profilefield_repeatable\helper::parse_subitems((string)($data->param1 ?? ''));

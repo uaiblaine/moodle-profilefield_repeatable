@@ -24,6 +24,12 @@ namespace profilefield_repeatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class helper {
+    /** PostgreSQL feature flag: SQL/JSON path operators. */
+    public const POSTGRES_FEATURE_JSONPATH = 'jsonpath';
+
+    /** PostgreSQL feature flag: GIN deduplication parameter. */
+    public const POSTGRES_FEATURE_GIN_DEDUP = 'gin_dedup';
+
     /**
      * Check if the active DB family is PostgreSQL.
      *
@@ -189,6 +195,7 @@ class helper {
         }
 
         $indexname = 'pfrd_' . substr(sha1($rawtablename), 0, 8) . '_gin_ix';
+        $created = false;
         if (!static::postgres_index_exists($db, $rawtablename, $indexname)) {
             $quotedindex = static::quote_identifier($indexname);
             $db->execute(
@@ -196,6 +203,11 @@ class helper {
                    ON $tablename
                 USING gin ($columnname jsonb_path_ops)"
             );
+            $created = true;
+        }
+
+        if ($created) {
+            static::maybe_optimize_gin_deduplication($db, $indexname);
         }
     }
 
@@ -222,6 +234,80 @@ class helper {
             'tablename' => $tablename,
             'indexname' => $indexname,
         ]);
+    }
+
+    /**
+     * Return PostgreSQL major version number or null when unavailable.
+     *
+     * @param \moodle_database $db
+     * @return int|null
+     */
+    public static function postgres_major_version(\moodle_database $db): ?int {
+        if (!static::is_postgres($db)) {
+            return null;
+        }
+
+        $version = $db->get_field_sql('SHOW server_version_num');
+        if (!is_numeric($version)) {
+            return null;
+        }
+
+        $versionnum = (int)$version;
+        if ($versionnum <= 0) {
+            return null;
+        }
+
+        return (int)floor($versionnum / 10000);
+    }
+
+    /**
+     * Check support for a PostgreSQL feature by server major version.
+     *
+     * @param \moodle_database $db
+     * @param string $feature
+     * @return bool
+     */
+    public static function postgres_supports_feature(\moodle_database $db, string $feature): bool {
+        $major = static::postgres_major_version($db);
+        if ($major === null) {
+            return false;
+        }
+
+        switch ($feature) {
+            case self::POSTGRES_FEATURE_JSONPATH:
+                return $major >= 12;
+            case self::POSTGRES_FEATURE_GIN_DEDUP:
+                return $major >= 14;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Apply PostgreSQL 14+ GIN deduplication optimization to an index.
+     *
+     * PostgreSQL 14+ includes improved GIN posting list/storage behavior.
+     * Reindexing after creation helps ensure the index is built with the
+     * best available implementation for the running server version.
+     *
+     * @param \moodle_database $db
+     * @param string $indexname
+     */
+    public static function maybe_optimize_gin_deduplication(\moodle_database $db, string $indexname): void {
+        if (!static::postgres_supports_feature($db, self::POSTGRES_FEATURE_GIN_DEDUP)) {
+            return;
+        }
+
+        $quotedindex = static::quote_identifier($indexname);
+        try {
+            $db->execute("REINDEX INDEX $quotedindex");
+        } catch (\Throwable $e) {
+            debugging(
+                'profilefield_repeatable: could not optimize GIN deduplication for index ' .
+                $indexname . ': ' . $e->getMessage(),
+                DEBUG_DEVELOPER
+            );
+        }
     }
 
     /**

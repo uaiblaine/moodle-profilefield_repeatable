@@ -56,6 +56,11 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
+        $pgmajor = helper::postgres_major_version($DB);
+        if ($pgmajor !== null) {
+            debugging('profilefield_repeatable: reconcile indexes running on PostgreSQL ' . $pgmajor, DEBUG_DEVELOPER);
+        }
+
         $desired = $this->get_desired_index_map((int)$fieldid);
         $existing = $this->get_existing_indexes((int)$fieldid);
 
@@ -235,10 +240,18 @@ class reconcile_indexes extends adhoc_task {
                WHERE fieldid = $fieldid
                  AND jsonb_exists(data, $literal)";
 
+        // Current baseline keeps expression indexes compatible with PostgreSQL 13+.
+        // Optional PostgreSQL 14+ features (for example GIN deduplication tuning) are
+        // intentionally documented but not activated automatically in this release.
+
         try {
             $DB->execute($sql);
         } catch (\Throwable $e) {
-            debugging('Could not create repeatable index ' . $indexname . ': ' . $e->getMessage(), DEBUG_DEVELOPER);
+            debugging(
+                'Could not create repeatable index ' . $indexname .
+                ' for field ' . $fieldid . ' and subitem "' . $subitem . '": ' . $e->getMessage(),
+                DEBUG_DEVELOPER
+            );
         }
     }
 

@@ -9,9 +9,14 @@ A Moodle user profile field plugin that stores repeatable field data as sets of 
 Requirements
 ------------
 
-This plugin requires Moodle 4.05+
+This plugin requires Moodle 4.5+
 
-**Recommended**: PostgreSQL database for optimized JSONB storage and indexing. Supports fallback JSON storage on MySQL/MariaDB.
+Database baseline follows Moodle requirements:
+
+- PostgreSQL 13+
+- MySQL 8.0+ / MariaDB (supported fallback mode)
+
+Recommended for best performance: PostgreSQL 13+.
 
 
 Motivation for this plugin
@@ -86,15 +91,34 @@ Advanced Features
 
 ### PostgreSQL Expression Indexes
 
-On PostgreSQL, the plugin automatically creates GIN expression indexes on indexed sub-items:
+On PostgreSQL, the plugin automatically creates expression indexes on indexed sub-items (up to 3 per field):
 
 ```sql
 CREATE INDEX CONCURRENTLY pfrd_f{fieldid}_{subitem_hash}
-ON customfield_repeat_data USING GIN ((data ->> '{subitem}'))
+ON mdl_profilefield_repeatable_data (fieldid, ((data ->> '{subitem}')))
 WHERE fieldid = {fieldid}
+  AND jsonb_exists(data, '{subitem}')
+```
+
+The plugin also ensures a base JSONB GIN index for generic JSONB lookups:
+
+```sql
+CREATE INDEX pfrd_{tablehash}_gin_ix
+ON mdl_profilefield_repeatable_data USING GIN (data jsonb_path_ops)
 ```
 
 Indexes are managed automatically via an adhoc task when field configuration changes.
+
+### PostgreSQL Version Matrix
+
+| PostgreSQL Version | Status | Notes |
+|--------------------|--------|-------|
+| 13+ | Active baseline | Fully supported by Moodle 4.5+ and by this plugin |
+| 14+ | Optional enhancements | SQL/JSON path queries can be used in custom reporting |
+| 15+ | Optional enhancements | Additional SQL features available, no plugin requirement change |
+| 17+ | Optional enhancements | Recommended for newest planner/runtime improvements |
+
+This release keeps compatibility with the Moodle baseline while documenting newer PostgreSQL opportunities.
 
 ### Reference Resolution
 
@@ -105,7 +129,7 @@ Language|iso639              → resolve('en', 'iso639') → 'English'
 Proficiency|cefrframework    → resolve('B2', 'cefrframework') → 'Upper-Intermediate'
 ```
 
-Domain plugins implement `\local_profilefield_repeatable\resolver`.
+Domain plugins implement `\local_profilefield_repeatable\Resolver`.
 
 
 API
@@ -124,10 +148,14 @@ Troubleshooting
 ---------------
 
 #### Data appears empty after upgrade
-Ensure the `customfield_repeat_data` table was created. Check upgrade logs in Site Administration > Logs.
+Ensure the `profilefield_repeatable_data` table was created. Check upgrade logs in Site Administration > Logs.
 
 #### Indexes not created on PostgreSQL
-Check Site Administration > Scheduled tasks > profilefield_repeatable > Reconcile indexes for recent runs. Verify PostgreSQL version ≥ 9.4 (JSONB required).
+Check Site Administration > Scheduled tasks > profilefield_repeatable > Reconcile indexes for recent runs.
+Ensure the field has configured "Indexed sub-items" values and verify PostgreSQL 13+ connectivity.
+
+#### MySQL/MariaDB behavior
+On MySQL/MariaDB, the plugin keeps compatibility using JSON storage in `user_info_data` and does not create PostgreSQL-specific indexes.
 
 #### Reference resolution not working
 1. Verify `moodle-local_profilefield_repeatable` is installed
