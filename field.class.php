@@ -402,6 +402,37 @@ class profile_field_repeatable extends profile_field_base {
     ): void {
         global $DB;
 
+        if (!\profilefield_repeatable\helper::is_postgres($DB)) {
+            $existing = $DB->get_record(
+                'profilefield_repeatable_data',
+                ['dataid' => $dataid, 'set_id' => $setid],
+                'id',
+                IGNORE_MISSING
+            );
+
+            if ($existing) {
+                $DB->update_record('profilefield_repeatable_data', (object) [
+                    'id' => (int)$existing->id,
+                    'fieldid' => $fieldid,
+                    'userid' => $userid,
+                    'data' => $jsonset,
+                    'timemodified' => $now,
+                ]);
+                return;
+            }
+
+            $DB->insert_record('profilefield_repeatable_data', (object) [
+                'dataid' => $dataid,
+                'fieldid' => $fieldid,
+                'userid' => $userid,
+                'set_id' => $setid,
+                'data' => $jsonset,
+                'timecreated' => $now,
+                'timemodified' => $now,
+            ]);
+            return;
+        }
+
         $sql = "INSERT INTO {profilefield_repeatable_data}
                     (dataid, fieldid, userid, set_id, data, timecreated, timemodified)
                 VALUES
