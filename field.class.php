@@ -322,6 +322,16 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
+     * Normalise payload for the current field configuration.
+     *
+     * @param mixed $rawpayload
+     * @return array
+     */
+    private function normalise_payload($rawpayload): array {
+        return \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
+    }
+
+    /**
      * Synchronise JSON-per-set rows for one user_info_data.id.
      *
      * @param int $dataid

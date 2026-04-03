@@ -482,13 +482,13 @@ class display_renderer {
             return $this->resolveddisplaycache[$cachekey];
         }
 
-        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+        if (!class_exists('\local_profilefield_repeatable\Resolver')) {
             $this->resolveddisplaycache[$cachekey] = null;
             return null;
         }
 
         try {
-            $label = \local_profilefield_repeatable\resolver::resolve($domain, $code);
+            $label = \local_profilefield_repeatable\Resolver::resolve($domain, $code);
         } catch (\Throwable $e) {
             $label = null;
         }
@@ -548,12 +548,17 @@ class display_renderer {
                 continue;
             }
 
+            $canonicalsubitem = $canonicalsubitems[$subitemkey];
+            if (isset($mappings[$canonicalsubitem])) {
+                continue;
+            }
+
             $domain = \core_text::strtolower($rawdomain);
             if (!preg_match(self::DOMAIN_PATTERN, $domain)) {
                 continue;
             }
 
-            $mappings[$canonicalsubitems[$subitemkey]] = $domain;
+            $mappings[$canonicalsubitem] = $domain;
         }
 
         return $mappings;

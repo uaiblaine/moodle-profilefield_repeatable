@@ -95,16 +95,16 @@ class profile_define_repeatable extends profile_define_base {
      * @return array
      */
     private function validate_subitems_config(object $data): array {
-        $subitems = \profilefield_repeatable\helper::parse_subitems((string)($data->param1 ?? ''));
-        if (empty($subitems)) {
-            return [
-                'subitems' => [],
-                'errors' => ['param1' => get_string('errorsubitemsrequired', 'profilefield_repeatable')],
-            ];
-        }
-
+        $lines = preg_split('/\R/u', (string)($data->param1 ?? '')) ?: [];
+        $subitems = [];
         $seen = [];
-        foreach ($subitems as $subitem) {
+
+        foreach ($lines as $line) {
+            $subitem = trim($line);
+            if ($subitem === '') {
+                continue;
+            }
+
             $normalised = core_text::strtolower($subitem);
             if (isset($seen[$normalised])) {
                 return [
@@ -112,7 +112,16 @@ class profile_define_repeatable extends profile_define_base {
                     'errors' => ['param1' => get_string('errorsubitemsduplicate', 'profilefield_repeatable')],
                 ];
             }
+
             $seen[$normalised] = true;
+            $subitems[] = $subitem;
+        }
+
+        if (empty($subitems)) {
+            return [
+                'subitems' => [],
+                'errors' => ['param1' => get_string('errorsubitemsrequired', 'profilefield_repeatable')],
+            ];
         }
 
         return ['subitems' => $subitems, 'errors' => []];
@@ -423,11 +432,11 @@ class profile_define_repeatable extends profile_define_base {
     private function is_local_reference_plugin_available(): bool {
         global $DB;
 
-        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+        if (!class_exists('\local_profilefield_repeatable\Resolver')) {
             return false;
         }
 
-        return $DB->get_manager()->table_exists(new xmldb_table('local_pfr_domain'));
+        return $DB->get_manager()->table_exists(new xmldb_table('local_profilefield_repeatable_domain'));
     }
 
     /**
@@ -447,12 +456,17 @@ class profile_define_repeatable extends profile_define_base {
             return [];
         }
 
-        if (!$DB->get_manager()->table_exists(new xmldb_table('local_pfr_domain'))) {
+        if (!$DB->get_manager()->table_exists(new xmldb_table('local_profilefield_repeatable_domain'))) {
             return $domains;
         }
 
         [$insql, $params] = $DB->get_in_or_equal($domains, SQL_PARAMS_NAMED, 'domain');
-        $existing = $DB->get_fieldset_select('local_pfr_domain', 'shortname', "shortname $insql", $params);
+        $existing = $DB->get_fieldset_select(
+            'local_profilefield_repeatable_domain',
+            'shortname',
+            "shortname $insql",
+            $params
+        );
 
         $existing = array_values(array_unique(array_map(
             static fn(string $domain): string => core_text::strtolower(trim($domain)),

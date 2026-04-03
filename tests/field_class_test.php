@@ -498,13 +498,13 @@ final class field_class_test extends \advanced_testcase {
         }
 
         if (
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_domain')) ||
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_item'))
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_domain')) ||
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_item'))
         ) {
             $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
         }
 
-        $manager = new \local_profilefield_repeatable\local\manager();
+        $manager = new \local_profilefield_repeatable\local\Manager();
         $manager->upsert_domain('diretoria', 'Diretoria');
         $manager->upsert_items('diretoria', [[
             'code' => '16',
@@ -537,18 +537,18 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
+        if (!class_exists('\\local_profilefield_repeatable\\local\\Manager')) {
             $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
         }
 
         if (
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_domain')) ||
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_item'))
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_domain')) ||
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_item'))
         ) {
             $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
         }
 
-        $manager = new \local_profilefield_repeatable\local\manager();
+        $manager = new \local_profilefield_repeatable\local\Manager();
         $manager->upsert_domain('diretoria', 'Diretoria');
         $manager->upsert_items('diretoria', [[
             'code' => '16',
@@ -638,18 +638,18 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
+        if (!class_exists('\\local_profilefield_repeatable\\local\\Manager')) {
             $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
         }
 
         if (
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_domain')) ||
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_pfr_item'))
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_domain')) ||
+            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_item'))
         ) {
             $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
         }
 
-        $manager = new \local_profilefield_repeatable\local\manager();
+        $manager = new \local_profilefield_repeatable\local\Manager();
         $manager->upsert_domain('diretorias', 'Diretorias');
         $manager->upsert_items('diretorias', [[
             'code' => '16',
