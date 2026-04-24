@@ -32,5 +32,7 @@ require_once(__DIR__ . '/lib.php');
 function xmldb_profilefield_repeatable_install(): void {
     global $DB;
 
+    $dbman = $DB->get_manager();
+    profilefield_repeatable_upgrade_ensure_storage_table($dbman);
     profilefield_repeatable_ensure_postgres_jsonb_support($DB);
 }

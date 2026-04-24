@@ -22,49 +22,57 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+$string['actioncolumn'] = 'AÇÃO';
 $string['addnewset'] = 'Adicionar novo conjunto';
-$string['errorinvalidjson'] = 'Payload repetível inválido; esperado um objeto JSON.';
-$string['errorindexedsubitemlimit'] = 'Você pode indexar no máximo {$a} subitens para este campo.';
-$string['errorindexedsubitemunknown'] = 'Subiten(s) indexado(s) não encontrado(s) em Subitens: {$a}.';
-$string['errordomainmapformat'] = 'Formato de mapeamento de referência inválido: {$a}. Use "subitem|domínio" (um por linha).';
-$string['errordomainmapunknownsubitem'] = 'Subiten(s) de mapeamento de referência não encontrado(s) em Subitens: {$a}.';
-$string['errordomainmapduplicatesubitem'] = 'Mapeamento de referência duplicado para subiten(s): {$a}.';
-$string['errordomainmapinvaliddomain'] = 'Nomes de domínio inválidos: {$a}. Padrão permitido: letras minúsculas, números, sublinhado.';
-$string['errordomainmapmissingdomain'] = 'Domínio(s) de referência não encontrado(s) em local_profilefield_repeatable: {$a}.';
-$string['errorsubitemsduplicate'] = 'Os subitens devem ser únicos (sem distinção entre maiúsculas e minúsculas).';
-$string['errorsubitemsrequired'] = 'Informe pelo menos um subitem, um por linha.';
 $string['displaytableinfo'] = 'Informação';
 $string['displaytablevalue'] = 'Valor';
+$string['errordomainmapduplicatesubitem'] = 'Mapeamento de referência duplicado para subiten(s): {$a}.';
+$string['errordomainmapformat'] = 'Formato de mapeamento de referência inválido: {$a}. Use "subitem|domínio" (um por linha).';
+$string['errordomainmapinvaliddomain'] = 'Nomes de domínio inválidos: {$a}. Padrão permitido: letras minúsculas, números, sublinhado.';
+$string['errordomainmapmissingdomain'] = 'Domínio(s) de referência não encontrado(s) em local_profilefield_repeatable: {$a}.';
+$string['errordomainmapunknownsubitem'] = 'Subiten(s) de mapeamento de referência não encontrado(s) em Subitens: {$a}.';
+$string['errorindexedsubitemlimit'] = 'Você pode indexar no máximo {$a} subitens para este campo.';
+$string['errorindexedsubitemunknown'] = 'Subiten(s) indexado(s) não encontrado(s) em Subitens: {$a}.';
+$string['errorinvalidjson'] = 'Payload repetível inválido; esperado um objeto JSON.';
+$string['errorsubitemsduplicate'] = 'Os subitens devem ser únicos (sem distinção entre maiúsculas e minúsculas).';
+$string['errorsubitemsrequired'] = 'Informe pelo menos um subitem, um por linha.';
+$string['errorsublineincludesprimary'] = 'A linha auxiliar não pode incluir o subitem do título ({$a}); ele já é usado como cabeçalho.';
+$string['errorsublinesubitemduplicate'] = 'Subiten(s) da linha auxiliar duplicado(s): {$a}.';
+$string['errorsublinesubitemlimit'] = 'Você pode incluir no máximo {$a} subitens na linha auxiliar.';
+$string['errorsublinesubitemunknown'] = 'Subiten(s) da linha auxiliar não encontrado(s) em Subitens: {$a}.';
 $string['indexedsubitems'] = 'Subitens indexados (um por linha)';
 $string['indexedsubitems_help'] =
     'Opcionalmente liste subitens que devem receber índices PostgreSQL dedicados. Cada linha deve corresponder exatamente a um subitem.';
-$string['referencesubitemdomains'] = 'Mapeamento de referência (subitem|domínio, um por linha)';
-$string['referencesubitemdomains_help'] =
-    'Mapeamento opcional para resolver valores codificados em rótulos na exibição do perfil. Formate cada linha como "subitem|domínio", onde domínio é um nome curto de local_profilefield_repeatable.';
 $string['pluginname'] = 'Conjunto repetível';
-$string['setcolumn'] = 'CONJUNTO';
-$string['actioncolumn'] = 'AÇÃO';
-$string['privacy:metadata:profilefield_repeatable:userid'] =
-    'O ID do usuário cujos dados são armazenados pelo campo de perfil de conjunto repetível';
-$string['privacy:metadata:profilefield_repeatable:fieldid'] = 'O ID do campo de perfil';
 $string['privacy:metadata:profilefield_repeatable:data'] = 'Dados do usuário do campo de perfil de conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:dataformat'] =
     'O formato dos dados do campo de perfil de conjunto repetível';
+$string['privacy:metadata:profilefield_repeatable:fieldid'] = 'O ID do campo de perfil';
 $string['privacy:metadata:profilefield_repeatable:tableexplanation'] = 'Dados adicionais de perfil';
+$string['privacy:metadata:profilefield_repeatable:userid'] =
+    'O ID do usuário cujos dados são armazenados pelo campo de perfil de conjunto repetível';
+$string['privacy:metadata:profilefield_repeatable_data:data'] = 'Payload JSON para um conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable_data:dataid'] =
     'Chave estrangeira para a linha em user_info_data que armazena esta instância do campo repetível';
 $string['privacy:metadata:profilefield_repeatable_data:fieldid'] = 'O ID do campo de perfil';
-$string['privacy:metadata:profilefield_repeatable_data:userid'] = 'O ID do usuário proprietário dos dados deste campo repetível';
 $string['privacy:metadata:profilefield_repeatable_data:set_id'] = 'O número do conjunto repetível';
-$string['privacy:metadata:profilefield_repeatable_data:data'] = 'Payload JSON para um conjunto repetível';
-$string['privacy:metadata:profilefield_repeatable_data:timecreated'] = 'A data em que a linha do conjunto foi criada';
-$string['privacy:metadata:profilefield_repeatable_data:timemodified'] = 'A data da última modificação da linha do conjunto';
 $string['privacy:metadata:profilefield_repeatable_data:tableexplanation'] =
     'Conjuntos de campos de perfil repetíveis armazenados como payloads JSON';
+$string['privacy:metadata:profilefield_repeatable_data:timecreated'] = 'A data em que a linha do conjunto foi criada';
+$string['privacy:metadata:profilefield_repeatable_data:timemodified'] = 'A data da última modificação da linha do conjunto';
+$string['privacy:metadata:profilefield_repeatable_data:userid'] = 'O ID do usuário proprietário dos dados deste campo repetível';
+$string['profilewidgettitle'] = 'Campos repetíveis';
+$string['referencesubitemdomains'] = 'Mapeamento de referência (subitem|domínio, um por linha)';
+$string['referencesubitemdomains_help'] =
+    'Mapeamento opcional para resolver valores codificados em rótulos na exibição do perfil. Formate cada linha como "subitem|domínio", onde domínio é um nome curto de local_profilefield_repeatable.';
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
+$string['setcolumn'] = 'CONJUNTO';
 $string['subitems'] = 'Subitens (um por linha)';
 $string['subitems_help'] =
     'Defina cada rótulo de subitem em uma nova linha. Esses rótulos se tornarão campos de texto dentro de cada conjunto repetível.';
+$string['sublinesubitems'] = 'Subitens da linha auxiliar (um por linha)';
+$string['sublinesubitems_help'] =
+    'Opcionalmente liste subitens a exibir como linha secundária sob o título quando o conjunto estiver fechado (por exemplo, "Disciplina · Escola"). Cada linha deve corresponder exatamente a um subitem. O primeiro subitem é reservado para o título e não pode ser usado aqui. Máximo de 3 entradas. Deixe em branco para ocultar a linha auxiliar.';
 $string['synchronisedat'] = 'Sincronizado em: {$a}';
 $string['taskreconcileindexes'] = 'Reconciliar índices JSON do campo de perfil repetível';

@@ -229,6 +229,19 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
+     * Prevent core from rendering this field inline in the "contact" category.
+     *
+     * Repeatable fields are rendered as a dedicated widget via
+     * {@see profilefield_repeatable_myprofile_navigation()} instead.
+     *
+     * @param \context|null $context
+     * @return bool Always false.
+     */
+    public function show_field_content(?\context $context = null): bool {
+        return false;
+    }
+
+    /**
      * Display the data for this field.
      *
      * @return string
@@ -237,8 +250,7 @@ class profile_field_repeatable extends profile_field_base {
         $renderer = new \profilefield_repeatable\output\display_renderer(
             $this->field,
             (int)($this->userid ?? 0),
-            (string)$this->data,
-            fn(): bool => $this->has_storage_table()
+            (string)$this->data
         );
         return $renderer->render();
     }
@@ -260,7 +272,7 @@ class profile_field_repeatable extends profile_field_base {
     protected function get_payload_from_storage(): array {
         global $DB;
 
-        if (!$this->has_storage_table() || empty($this->userid) || empty($this->field) || empty($this->field->id)) {
+            if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
             return [];
         }
 
@@ -340,10 +352,6 @@ class profile_field_repeatable extends profile_field_base {
      */
     protected function sync_repeat_data(int $dataid, int $userid, array $payload): void {
         global $DB;
-
-        if (!$this->has_storage_table()) {
-            return;
-        }
 
         $fieldid = (int)$this->field->id;
         $now = time();
@@ -453,22 +461,6 @@ class profile_field_repeatable extends profile_field_base {
             'timecreated' => $now,
             'timemodified' => $now,
         ]);
-    }
-
-    /**
-     * Check if the storage table is available.
-     *
-     * @return bool
-     */
-    protected function has_storage_table(): bool {
-        static $hastable = null;
-
-        if ($hastable === null) {
-            global $DB;
-            $hastable = $DB->get_manager()->table_exists(new xmldb_table('profilefield_repeatable_data'));
-        }
-
-        return $hastable;
     }
 
     /**

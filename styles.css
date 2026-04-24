@@ -6,159 +6,188 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-.path-user .profilefield-repeatable-display-accordion {
+.profilefield-repeatable-display-accordion {
+    --pfr-text: #1f2937;
+    --pfr-text-muted: #6b7280;
+    --pfr-text-dim: #9ca3af;
+    --pfr-border: #e5e7eb;
+    --pfr-border-strong: #d1d5db;
+    --pfr-bg: #ffffff;
+    --pfr-bg-soft: #f9fafb;
+    --pfr-bg-hover: #f3f4f6;
+    --pfr-accent: #1d4ed8;
+    --pfr-radius: 10px;
+    --pfr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    color: var(--pfr-text);
     margin-top: 0.5rem;
 }
 
-.path-user .profilefield-repeatable-table-wrapper {
-    max-height: 28rem;
-    overflow: auto;
-}
-
-.path-user .profilefield-repeatable-display-item {
-    background-color: #fff;
-    border: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-    margin-bottom: 0.75rem;
+.profilefield-repeatable-item {
+    background-color: var(--pfr-bg);
+    border: 1px solid var(--pfr-border);
+    border-radius: var(--pfr-radius);
+    margin-bottom: 10px;
     overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.path-user .profilefield-repeatable-display-item:last-child {
+.profilefield-repeatable-item:last-child {
     margin-bottom: 0;
 }
 
-.path-user .profilefield-repeatable-display-header {
-    margin: 0;
+.profilefield-repeatable-item:hover {
+    border-color: var(--pfr-border-strong);
 }
 
-.path-user .profilefield-repeatable-accordion-button {
-    -webkit-appearance: none;
-    align-items: flex-start;
-    appearance: none;
-    background: transparent;
-    border: 0;
-    color: inherit;
+.profilefield-repeatable-item[open] {
+    box-shadow: var(--pfr-shadow-sm);
+}
+
+.profilefield-repeatable-summary {
     cursor: pointer;
-    display: flex;
-    font-size: 1.125rem;
-    font-weight: 600;
-    justify-content: flex-start;
-    line-height: 1.35;
-    min-height: 3rem;
-    padding: 0.85rem 1rem;
-    text-align: left;
-    width: 100%;
+    list-style: none;
+    padding: 14px 44px 14px 16px;
+    position: relative;
+    transition: background-color 0.12s ease;
+    user-select: none;
 }
 
-.path-user .profilefield-repeatable-accordion-button:hover {
-    background-color: rgba(148, 163, 184, 0.08);
-}
-
-.path-user .profilefield-repeatable-accordion-button:focus {
-    box-shadow: none;
-    outline: 2px solid #0f6cbf;
-    outline-offset: -2px;
-}
-
-.path-user .profilefield-repeatable-titletext {
-    align-items: baseline;
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-}
-
-.path-user .profilefield-repeatable-accordion-button::after {
-    background-image: none;
-    border-bottom: 0.14rem solid #64748b;
-    border-right: 0.14rem solid #64748b;
-    content: '';
-    display: inline-block;
-    flex-shrink: 0;
-    height: 0.55rem;
-    margin-left: auto;
-    margin-top: 0.45rem;
-    transform: rotate(45deg);
-    transition: transform 0.2s ease;
-    width: 0.55rem;
-}
-
-.path-user .profilefield-repeatable-accordion-button.collapsed::after {
-    transform: rotate(-45deg);
-}
-
-.path-user .profilefield-repeatable-display-key {
-    color: #334155;
-    font-weight: 600;
-}
-
-.path-user .profilefield-repeatable-display-value {
-    color: #111827;
-    font-weight: 600;
-}
-
-.path-user .profilefield-repeatable-accordion-collapse {
-    border-top: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
+.profilefield-repeatable-summary::-webkit-details-marker {
     display: none;
 }
 
-.path-user .profilefield-repeatable-accordion-collapse.show {
-    display: block;
+.profilefield-repeatable-summary:hover {
+    background-color: var(--pfr-bg-hover);
 }
 
-.path-user .profilefield-repeatable-accordion-body {
-    padding: 0.9rem 1rem;
+.profilefield-repeatable-summary:focus-visible {
+    border-radius: var(--pfr-radius);
+    outline: 2px solid var(--pfr-accent);
+    outline-offset: -2px;
 }
 
-.path-user .profilefield-repeatable-display-table-wrap {
-    border: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
-    border-radius: 0.55rem;
-    overflow: hidden;
+/* Chevron */
+.profilefield-repeatable-summary::after {
+    border-bottom: 2px solid var(--pfr-text-muted);
+    border-right: 2px solid var(--pfr-text-muted);
+    content: '';
+    height: 8px;
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-75%) rotate(45deg);
+    transition: transform 0.2s ease;
+    width: 8px;
 }
 
-.path-user .profilefield-repeatable-display-table {
-    margin-bottom: 0;
+.profilefield-repeatable-item[open] > .profilefield-repeatable-summary::after {
+    transform: translateY(-25%) rotate(-135deg);
 }
 
-.path-user .profilefield-repeatable-display-table thead th {
-    background-color: #f3f5f8;
-    border-bottom: 1px solid var(--profilefield-repeatable-border-color, #d6deea);
-    color: #334155;
-    font-size: 0.98rem;
+.profilefield-repeatable-title {
+    color: var(--pfr-text);
+    font-size: 15.5px;
     font-weight: 600;
-    padding: 0.7rem 0.8rem;
+    line-height: 1.35;
+    margin: 0;
 }
 
-.path-user .profilefield-repeatable-display-table td {
-    font-size: 0.98rem;
-    padding: 0.7rem 0.8rem;
-    vertical-align: middle;
+.profilefield-repeatable-title-divider {
+    background: none;
+    border: 0;
+    border-top: 1px dashed var(--pfr-border);
+    margin: 10px 0 8px;
+    padding: 0;
+    opacity: 1;
 }
 
-.path-user .profilefield-repeatable-display-sync {
-    margin-top: 0.6rem;
+.profilefield-repeatable-subline {
+    align-items: baseline;
+    color: var(--pfr-text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 13px;
+    gap: 4px 8px;
+    line-height: 1.4;
+}
+
+.profilefield-repeatable-subline-primary {
+    color: var(--pfr-text);
+    font-weight: 500;
+}
+
+.profilefield-repeatable-subline-dot {
+    color: var(--pfr-text-dim);
+}
+
+/* When expanded, header subline + divider hide; the data appears in <dl> below. */
+.profilefield-repeatable-item[open] > .profilefield-repeatable-summary .profilefield-repeatable-title-divider,
+.profilefield-repeatable-item[open] > .profilefield-repeatable-summary .profilefield-repeatable-subline {
+    display: none;
+}
+
+.profilefield-repeatable-body {
+    background: var(--pfr-bg-soft);
+    border-top: 1px solid var(--pfr-border);
+    padding: 14px 16px 16px;
+}
+
+.profilefield-repeatable-dl {
+    column-gap: 16px;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    margin: 0;
+    row-gap: 8px;
+}
+
+.profilefield-repeatable-dl dt {
+    color: var(--pfr-text-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.profilefield-repeatable-dl dd {
+    color: var(--pfr-text);
+    font-size: 13.5px;
+    margin: 0;
+    word-break: break-word;
+}
+
+.profilefield-repeatable-sync {
+    color: var(--pfr-text-dim);
+    font-size: 12px;
+    margin: 12px 0 0;
+    text-align: right;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .path-user .profilefield-repeatable-accordion-button::after {
+    .profilefield-repeatable-item,
+    .profilefield-repeatable-summary,
+    .profilefield-repeatable-summary::after {
         transition: none;
     }
 }
 
-@media (max-width: 767.98px) {
-    .path-user .profilefield-repeatable-accordion-button {
-        font-size: 1rem;
-        min-height: 2.75rem;
-        padding: 0.75rem 0.85rem;
+@media (max-width: 520px) {
+    .profilefield-repeatable-summary {
+        padding: 12px 40px 12px 14px;
     }
 
-    .path-user .profilefield-repeatable-accordion-body {
-        padding: 0.75rem;
+    .profilefield-repeatable-body {
+        padding: 12px 14px 14px;
     }
 
-    .path-user .profilefield-repeatable-display-table thead th,
-    .path-user .profilefield-repeatable-display-table td {
-        font-size: 0.92rem;
-        padding: 0.62rem 0.65rem;
+    .profilefield-repeatable-dl {
+        grid-template-columns: 1fr;
+        row-gap: 2px;
+    }
+
+    .profilefield-repeatable-dl dt {
+        margin-top: 6px;
+    }
+
+    .profilefield-repeatable-dl dt:first-child {
+        margin-top: 0;
     }
 }

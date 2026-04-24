@@ -18,27 +18,29 @@
     @template profilefield_repeatable/display_accordion
     @copyright 2026 Anderson Blaine (anderson@blaine.com.br)
 
-    Repeatable profile field display as accordion for profile pages.
+    Repeatable profile field display as native <details>/<summary> accordion
+    with semantic <dl> body, optional collapsed-only subline and sync footer.
 
     Example context (json):
     {
         "accordionid": "profilefield-repeatable-display-1-2-field",
-        "tableinfo": "Information",
-        "tablevalue": "Value",
+        "fieldname": "Atribuições",
+        "hasfieldname": true,
         "items": [
             {
-                "headingid": "heading-1",
-                "collapseid": "collapse-1",
-                "ariaexpanded": "true",
+                "bodyid": "profilefield-repeatable-display-1-2-field-body-1",
                 "isopen": true,
-                "isclosed": false,
                 "hasprimaryvalue": true,
-                "titlelabel": "Turma",
-                "titlevalue": "101-A",
-                "settitle": "Set 1",
-                "hastable": true,
+                "titlevalue": "Administraçao - 3ª serie A integral",
+                "hassubline": true,
+                "parts": [
+                    {"value": "Gestão de Operações", "isfirst": true},
+                    {"value": "Martha Calixto Cazagrande", "isfirst": false}
+                ],
+                "hasrows": true,
                 "rows": [
-                    {"label": "Diretoria", "value": "DIR-SP-Centro"}
+                    {"label": "Disciplina", "value": "Gestão de Operações"},
+                    {"label": "Escola", "value": "Martha Calixto Cazagrande"}
                 ],
                 "hassync": true,
                 "syncvalue": "Synchronised at: 15/10/23 - 08:30"
@@ -46,60 +48,38 @@
         ]
     }
 }}
-<div class="accordion profilefield-repeatable-display-accordion" id="{{accordionid}}">
+<section
+    class="profilefield-repeatable-display-accordion"
+    id="{{accordionid}}"
+    {{#hasfieldname}}aria-label="{{fieldname}}"{{/hasfieldname}}
+>
     {{#items}}
-        <section class="accordion-item profilefield-repeatable-display-item">
-            <h3 class="accordion-header profilefield-repeatable-display-header" id="{{headingid}}">
-                <button
-                    class="accordion-button profilefield-repeatable-accordion-button{{#isclosed}} collapsed{{/isclosed}}"
-                    type="button"
-                    aria-expanded="{{ariaexpanded}}"
-                    aria-controls="{{collapseid}}"
-                >
-                    <span class="profilefield-repeatable-titletext">
-                        {{#hasprimaryvalue}}
-                            <span class="profilefield-repeatable-display-key">{{titlelabel}}:</span>
-                            <span class="profilefield-repeatable-display-value">{{titlevalue}}</span>
-                        {{/hasprimaryvalue}}
-                        {{^hasprimaryvalue}}
-                            <span class="profilefield-repeatable-display-value">{{settitle}}</span>
-                        {{/hasprimaryvalue}}
-                    </span>
-                </button>
-            </h3>
-            <div
-                id="{{collapseid}}"
-                class="accordion-collapse collapse{{#isopen}} show{{/isopen}} profilefield-repeatable-accordion-collapse"
-                aria-labelledby="{{headingid}}"
-                role="region"
-                {{#isclosed}}hidden{{/isclosed}}
-            >
-                <div class="accordion-body profilefield-repeatable-accordion-body">
-                    {{#hastable}}
-                        <div class="table-responsive profilefield-repeatable-display-table-wrap">
-                            <table class="table table-striped table-hover mb-3 profilefield-repeatable-display-table">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">{{tableinfo}}</th>
-                                        <th scope="col">{{tablevalue}}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {{#rows}}
-                                        <tr>
-                                            <td>{{label}}</td>
-                                            <td>{{value}}</td>
-                                        </tr>
-                                    {{/rows}}
-                                </tbody>
-                            </table>
-                        </div>
-                    {{/hastable}}
-                    {{#hassync}}
-                        <div class="text-end text-muted small profilefield-repeatable-display-sync">{{syncvalue}}</div>
-                    {{/hassync}}
-                </div>
+        <details class="profilefield-repeatable-item"{{#isopen}} open{{/isopen}}>
+            <summary class="profilefield-repeatable-summary" aria-controls="{{bodyid}}">
+                <h3 class="profilefield-repeatable-title">{{titlevalue}}</h3>
+                {{#hassubline}}
+                    <hr class="profilefield-repeatable-title-divider" aria-hidden="true">
+                    <div class="profilefield-repeatable-subline">
+                        {{#parts}}
+                            {{^isfirst}}<span class="profilefield-repeatable-subline-dot" aria-hidden="true">·</span>{{/isfirst}}
+                            <span class="profilefield-repeatable-subline-item{{#isfirst}} profilefield-repeatable-subline-primary{{/isfirst}}">{{value}}</span>
+                        {{/parts}}
+                    </div>
+                {{/hassubline}}
+            </summary>
+            <div class="profilefield-repeatable-body" id="{{bodyid}}">
+                {{#hasrows}}
+                    <dl class="profilefield-repeatable-dl">
+                        {{#rows}}
+                            <dt>{{label}}</dt>
+                            <dd>{{value}}</dd>
+                        {{/rows}}
+                    </dl>
+                {{/hasrows}}
+                {{#hassync}}
+                    <p class="profilefield-repeatable-sync">{{syncvalue}}</p>
+                {{/hassync}}
             </div>
-        </section>
+        </details>
     {{/items}}
-</div>
+</section>

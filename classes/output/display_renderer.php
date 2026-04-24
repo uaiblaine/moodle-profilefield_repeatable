@@ -38,9 +38,6 @@ class display_renderer {
     /** @var string Raw field data. */
     private string $data;
 
-    /** @var \Closure Callback to check storage table availability. */
-    private \Closure $hasstoragetablefn;
-
     /** @var array|null Cached subitem/domain mapping. */
     private ?array $subitemdomainmap = null;
 
@@ -59,7 +56,6 @@ class display_renderer {
      * @param object $field Field configuration object.
      * @param int $userid User ID.
      * @param string $data Raw field data.
-     * @param \Closure $hasstoragetablefn Callback to check storage table availability.
      * @param \core_renderer|null $output Core renderer (optional, uses global if null).
      * @param \moodle_page|null $page Moodle page (optional, uses global if null).
      */
@@ -67,14 +63,12 @@ class display_renderer {
         object $field,
         int $userid,
         string $data,
-        \Closure $hasstoragetablefn,
         $output = null,
         $page = null
     ) {
         $this->field = $field;
         $this->userid = $userid;
         $this->data = $data;
-        $this->hasstoragetablefn = $hasstoragetablefn;
         $this->output = $output ?? ($GLOBALS['OUTPUT'] ?? null);
         $this->page = $page ?? ($GLOBALS['PAGE'] ?? null);
     }
@@ -191,17 +185,40 @@ class display_renderer {
         if ($primaryvalue === '') {
             return [
                 'hasprimaryvalue' => false,
-                'settitle' => get_string('repeatableset', 'profilefield_repeatable', $setnumber),
-                'titlelabel' => '',
-                'titlevalue' => '',
+                'titlevalue' => get_string('repeatableset', 'profilefield_repeatable', $setnumber),
             ];
         }
 
         return [
             'hasprimaryvalue' => true,
-            'settitle' => '',
-            'titlelabel' => format_string($primarysubitem, true, ['context' => \core\context\system::instance()]),
             'titlevalue' => $primaryvalue,
+        ];
+    }
+
+    /**
+     * Build subline parts (collapsed-only secondary line).
+     *
+     * @param string[] $sublinesubitems
+     * @param array $values
+     * @return array{hassubline: bool, parts: array}
+     */
+    private function build_accordion_subline(array $sublinesubitems, array $values): array {
+        $parts = [];
+        foreach ($sublinesubitems as $subitem) {
+            $value = $this->resolve_reference_display_value($subitem, (string)($values[$subitem] ?? ''));
+            $value = trim($value);
+            if ($value === '') {
+                continue;
+            }
+            $parts[] = [
+                'value' => $value,
+                'isfirst' => empty($parts),
+            ];
+        }
+
+        return [
+            'hassubline' => !empty($parts),
+            'parts' => $parts,
         ];
     }
 
@@ -238,6 +255,7 @@ class display_renderer {
 
         $primarysubitem = $subitems[0];
         $othersubitems = array_slice($subitems, 1);
+        $sublinesubitems = $this->get_subline_subitems();
         $accordionid = $this->get_display_accordion_id();
         $items = [];
 
@@ -250,24 +268,21 @@ class display_renderer {
                 continue;
             }
 
-            $headingid = $accordionid . '-heading-' . $setnumber;
-            $collapseid = $accordionid . '-collapse-' . $setnumber;
+            $bodyid = $accordionid . '-body-' . $setnumber;
             $isopen = ($index === 0);
             $titledata = $this->build_accordion_title_data($setnumber, $primarysubitem, $values);
+            $sublinedata = $this->build_accordion_subline($sublinesubitems, $values);
             $rows = $this->build_accordion_rows($othersubitems, $values);
 
             $item = [
                 'setnumber' => $setnumber,
-                'headingid' => $headingid,
-                'collapseid' => $collapseid,
+                'bodyid' => $bodyid,
                 'isopen' => $isopen,
-                'isclosed' => !$isopen,
-                'ariaexpanded' => $isopen ? 'true' : 'false',
                 'rows' => $rows,
-                'hastable' => !empty($rows),
+                'hasrows' => !empty($rows),
                 'hassync' => !empty($timemodified),
                 'syncvalue' => null,
-            ] + $titledata;
+            ] + $titledata + $sublinedata;
 
             if (!empty($timemodified)) {
                 $formatted = userdate((int)$timemodified, '%d/%m/%y - %H:%M');
@@ -277,11 +292,17 @@ class display_renderer {
             $items[] = $item;
         }
 
+        $fieldname = format_string(
+            (string)($this->field->name ?? ''),
+            true,
+            ['context' => \core\context\system::instance()]
+        );
+
         return [
             'accordionid' => $accordionid,
+            'fieldname' => $fieldname,
+            'hasfieldname' => $fieldname !== '',
             'items' => $items,
-            'tableinfo' => get_string('displaytableinfo', 'profilefield_repeatable'),
-            'tablevalue' => get_string('displaytablevalue', 'profilefield_repeatable'),
         ];
     }
 
@@ -308,7 +329,7 @@ class display_renderer {
     private function get_display_sets_from_storage(): array {
         global $DB;
 
-        if (!$this->has_storage_table() || empty($this->userid) || empty($this->field) || empty($this->field->id)) {
+            if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
             return [];
         }
 
@@ -574,11 +595,52 @@ class display_renderer {
     }
 
     /**
+     * Get configured subline sub-items (param4), filtered against current subitems and primary.
+     *
+     * @return string[]
+     */
+    private function get_subline_subitems(): array {
+        $rawsubline = (string)($this->field->param4 ?? '');
+        if (trim($rawsubline) === '') {
+            return [];
+        }
+
+        $subitems = $this->get_subitems();
+        if (empty($subitems)) {
+            return [];
+        }
+
+        $canonicalmap = [];
+        foreach ($subitems as $subitem) {
+            $canonicalmap[\core_text::strtolower($subitem)] = $subitem;
+        }
+
+        $primarynormalised = \core_text::strtolower($subitems[0]);
+        $sublinesubitems = [];
+        $seen = [];
+        $lines = preg_split('/\R/u', $rawsubline) ?: [];
+        foreach ($lines as $line) {
+            $candidate = trim($line);
+            if ($candidate === '') {
+                continue;
+            }
+            $normalised = \core_text::strtolower($candidate);
+            if ($normalised === $primarynormalised || isset($seen[$normalised]) || !isset($canonicalmap[$normalised])) {
+                continue;
+            }
+            $seen[$normalised] = true;
+            $sublinesubitems[] = $canonicalmap[$normalised];
+            if (count($sublinesubitems) >= 3) {
+                break;
+            }
+        }
+
+        return $sublinesubitems;
+    }
+
+    /**
      * Check if the storage table is available.
      *
      * @return bool
      */
-    private function has_storage_table(): bool {
-        return ($this->hasstoragetablefn)();
-    }
 }

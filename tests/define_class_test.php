@@ -187,4 +187,92 @@ final class define_class_test extends \advanced_testcase {
         $this->assertEquals("Diretoria\nEscola\nTurma", $processed->param1);
         $this->assertEquals("Diretoria|diretorias\nEscola|escolas", $processed->param3);
     }
+
+    /**
+     * Validate subline sub-items must exist in param1.
+     */
+    public function test_define_validate_specific_rejects_unknown_subline_subitem(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "diretoria\nescola\nturma",
+            'param4' => "escola\ninexistente",
+        ], []);
+
+        $this->assertArrayHasKey('param4', $errors);
+        $this->assertStringContainsString('inexistente', $errors['param4']);
+    }
+
+    /**
+     * Validate subline sub-items reject duplicates.
+     */
+    public function test_define_validate_specific_rejects_duplicate_subline_subitem(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "diretoria\nescola\nturma",
+            'param4' => "escola\nESCOLA",
+        ], []);
+
+        $this->assertArrayHasKey('param4', $errors);
+        $this->assertStringContainsString('escola', $errors['param4']);
+    }
+
+    /**
+     * Validate subline cannot include the primary (title) sub-item.
+     */
+    public function test_define_validate_specific_rejects_primary_in_subline(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "diretoria\nescola\nturma",
+            'param4' => "Diretoria",
+        ], []);
+
+        $this->assertArrayHasKey('param4', $errors);
+        $this->assertStringContainsString('diretoria', $errors['param4']);
+    }
+
+    /**
+     * Validate subline subitems max limit.
+     */
+    public function test_define_validate_specific_rejects_subline_subitems_limit(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "a\nb\nc\nd\ne",
+            'param4' => "b\nc\nd\ne",
+        ], []);
+
+        $this->assertArrayHasKey('param4', $errors);
+        $this->assertStringContainsString('3', $errors['param4']);
+    }
+
+    /**
+     * Subline empty configuration is allowed.
+     */
+    public function test_define_validate_specific_allows_empty_subline(): void {
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param4' => "\n  \n",
+        ], []);
+
+        $this->assertArrayNotHasKey('param4', $errors);
+    }
+
+    /**
+     * Save preprocess canonicalises subline sub-items.
+     */
+    public function test_define_save_preprocess_normalises_subline_subitems(): void {
+        $define = new \profile_define_repeatable();
+
+        $processed = $define->define_save_preprocess((object) [
+            'param1' => "Diretoria\nEscola\nTurma\nDisciplina",
+            'param4' => "escola\nTURMA\nescola",
+        ]);
+
+        $this->assertEquals("Escola\nTurma", $processed->param4);
+    }
 }

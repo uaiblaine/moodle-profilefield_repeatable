@@ -72,6 +72,35 @@ function profilefield_repeatable_encode_payload(array $payload): string {
 }
 
 /**
+ * Ensure storage table exists with required columns and indexes.
+ * Called from install.php during plugin installation.
+ *
+ * @param database_manager $dbman
+ */
+function profilefield_repeatable_upgrade_ensure_storage_table(database_manager $dbman): void {
+    $table = new xmldb_table('profilefield_repeatable_data');
+
+    if (!$dbman->table_exists($table)) {
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('dataid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('fieldid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('set_id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('data', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('dataid_fk', XMLDB_KEY_FOREIGN, ['dataid'], 'user_info_data', ['id']);
+
+        $table->add_index('dataid_setid_uix', XMLDB_INDEX_UNIQUE, ['dataid', 'set_id']);
+        $table->add_index('fieldid_userid_ix', XMLDB_INDEX_NOTUNIQUE, ['fieldid', 'userid']);
+
+        $dbman->create_table($table);
+    }
+}
+
+/**
  * Ensure PostgreSQL JSONB type and base GIN index exist for storage table.
  *
  * @param moodle_database $db

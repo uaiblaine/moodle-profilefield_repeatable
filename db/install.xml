@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="user/profile/field/repeatable/db" VERSION="2026030502"
+<XMLDB PATH="user/profile/field/repeatable/db" VERSION="2026040100"
     COMMENT="XMLDB file for profilefield_repeatable – copyright 2026 Anderson Blaine (anderson@blaine.com.br)"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../../../lib/xmldb/xmldb.xsd"

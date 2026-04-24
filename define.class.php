@@ -33,6 +33,9 @@ class profile_define_repeatable extends profile_define_base {
     /** @var int Maximum number of indexed sub-items allowed per field. */
     private const MAX_INDEXED_SUBITEMS = 3;
 
+    /** @var int Maximum number of sub-items allowed in the collapsed subline. */
+    private const MAX_SUBLINE_SUBITEMS = 3;
+
     /** @var string Domain shortname pattern for reference mapping. */
     private const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
 
@@ -63,6 +66,13 @@ class profile_define_repeatable extends profile_define_base {
         $form->setType('param3', PARAM_TEXT);
         $form->addHelpButton('param3', 'referencesubitemdomains', 'profilefield_repeatable');
 
+        $form->addElement('textarea', 'param4', get_string('sublinesubitems', 'profilefield_repeatable'), [
+            'rows' => 4,
+            'cols' => 60,
+        ]);
+        $form->setType('param4', PARAM_TEXT);
+        $form->addHelpButton('param4', 'sublinesubitems', 'profilefield_repeatable');
+
         $form->addElement('hidden', 'defaultdata', '{}');
         $form->setType('defaultdata', PARAM_RAW_TRIMMED);
     }
@@ -85,7 +95,12 @@ class profile_define_repeatable extends profile_define_base {
             return $errors;
         }
 
-        return $this->validate_reference_mappings_config((string)($data->param3 ?? ''), $result['subitems']);
+        $errors = $this->validate_reference_mappings_config((string)($data->param3 ?? ''), $result['subitems']);
+        if (!empty($errors)) {
+            return $errors;
+        }
+
+        return $this->validate_subline_subitems_config((string)($data->param4 ?? ''), $result['subitems']);
     }
 
     /**
@@ -143,6 +158,62 @@ class profile_define_repeatable extends profile_define_base {
             $errors['param2'] = get_string('errorindexedsubitemunknown', 'profilefield_repeatable', implode(', ', $unknown));
         } else if (count($indexedsubitems) > self::MAX_INDEXED_SUBITEMS) {
             $errors['param2'] = get_string('errorindexedsubitemlimit', 'profilefield_repeatable', self::MAX_INDEXED_SUBITEMS);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate subline sub-items configuration (param4).
+     *
+     * @param string $raw
+     * @param string[] $subitems
+     * @return array
+     */
+    private function validate_subline_subitems_config(string $raw, array $subitems): array {
+        $errors = [];
+        $unknown = [];
+        $duplicates = [];
+        $sublinesubitems = $this->parse_subline_subitems($raw, $subitems, $unknown, $duplicates);
+
+        if (!empty($unknown)) {
+            $errors['param4'] = get_string(
+                'errorsublinesubitemunknown',
+                'profilefield_repeatable',
+                implode(', ', array_values(array_unique($unknown)))
+            );
+            return $errors;
+        }
+
+        if (!empty($duplicates)) {
+            $errors['param4'] = get_string(
+                'errorsublinesubitemduplicate',
+                'profilefield_repeatable',
+                implode(', ', array_values(array_unique($duplicates)))
+            );
+            return $errors;
+        }
+
+        if (!empty($sublinesubitems) && !empty($subitems)) {
+            $primarynormalised = \core_text::strtolower($subitems[0]);
+            foreach ($sublinesubitems as $candidate) {
+                if (\core_text::strtolower($candidate) === $primarynormalised) {
+                    $errors['param4'] = get_string(
+                        'errorsublineincludesprimary',
+                        'profilefield_repeatable',
+                        $subitems[0]
+                    );
+                    return $errors;
+                }
+            }
+        }
+
+        if (count($sublinesubitems) > self::MAX_SUBLINE_SUBITEMS) {
+            $errors['param4'] = get_string(
+                'errorsublinesubitemlimit',
+                'profilefield_repeatable',
+                self::MAX_SUBLINE_SUBITEMS
+            );
         }
 
         return $errors;
@@ -217,6 +288,8 @@ class profile_define_repeatable extends profile_define_base {
         $data->param2 = implode("\n", array_slice($indexedsubitems, 0, self::MAX_INDEXED_SUBITEMS));
         $referencemappings = $this->parse_reference_mappings((string)($data->param3 ?? ''), $subitems);
         $data->param3 = $this->encode_reference_mappings($referencemappings, $subitems);
+        $sublinesubitems = $this->parse_subline_subitems((string)($data->param4 ?? ''), $subitems);
+        $data->param4 = implode("\n", array_slice($sublinesubitems, 0, self::MAX_SUBLINE_SUBITEMS));
         $data->defaultdata = '{}';
 
         return $data;
@@ -296,6 +369,61 @@ class profile_define_repeatable extends profile_define_base {
         }
 
         return $indexedsubitems;
+    }
+
+    /**
+     * Parse subline sub-items (param4) into canonical labels from param1.
+     *
+     * @param string $rawsublinesubitems
+     * @param string[] $subitems
+     * @param array $unknown
+     * @param array $duplicates
+     * @return string[]
+     */
+    private function parse_subline_subitems(
+        string $rawsublinesubitems,
+        array $subitems,
+        array &$unknown = [],
+        array &$duplicates = []
+    ): array {
+        $unknown = [];
+        $duplicates = [];
+        if (empty($subitems)) {
+            return [];
+        }
+
+        $canonicalmap = [];
+        foreach ($subitems as $subitem) {
+            $canonicalmap[\core_text::strtolower($subitem)] = $subitem;
+        }
+
+        $sublinesubitems = [];
+        $seen = [];
+        $lines = preg_split('/\R/u', $rawsublinesubitems) ?: [];
+
+        foreach ($lines as $line) {
+            $candidate = trim($line);
+            if ($candidate === '') {
+                continue;
+            }
+
+            $normalised = \core_text::strtolower($candidate);
+            if (!isset($canonicalmap[$normalised])) {
+                $unknown[] = $candidate;
+                continue;
+            }
+
+            $canonical = $canonicalmap[$normalised];
+            if (isset($seen[$normalised])) {
+                $duplicates[] = $canonical;
+                continue;
+            }
+            $seen[$normalised] = true;
+
+            $sublinesubitems[] = $canonical;
+        }
+
+        return $sublinesubitems;
     }
 
     /**
