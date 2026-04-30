@@ -84,6 +84,9 @@ class display_renderer {
             return '';
         }
 
+        // Pre-resolve all reference labels in one bulk call per domain to avoid N+1 queries.
+        $this->prefetch_reference_labels($displaysets);
+
         if ($this->is_profile_page_context()) {
             $output = $this->render_display_data_accordion($displaysets);
             if ($output !== '') {
@@ -499,17 +502,17 @@ class display_renderer {
      */
     private function try_resolve_from_domain(string $domain, string $code): ?string {
         $cachekey = $domain . "\n" . $code;
-        if (isset($this->resolveddisplaycache[$cachekey])) {
+        if (array_key_exists($cachekey, $this->resolveddisplaycache)) {
             return $this->resolveddisplaycache[$cachekey];
         }
 
-        if (!class_exists('\local_profilefield_repeatable\Resolver')) {
+        if (!class_exists('\local_profilefield_repeatable\resolver')) {
             $this->resolveddisplaycache[$cachekey] = null;
             return null;
         }
 
         try {
-            $label = \local_profilefield_repeatable\Resolver::resolve($domain, $code);
+            $label = \local_profilefield_repeatable\resolver::resolve($domain, $code);
         } catch (\Throwable $e) {
             $label = null;
         }
@@ -517,6 +520,55 @@ class display_renderer {
         $resolved = (is_string($label) && trim($label) !== '') ? $label : null;
         $this->resolveddisplaycache[$cachekey] = $resolved;
         return $resolved;
+    }
+
+    /**
+     * Pre-resolve labels for every (domain, code) pair used by the current display sets.
+     *
+     * Issues one bulk query per distinct domain instead of one query per code,
+     * and seeds the per-instance resolution cache used by try_resolve_from_domain().
+     *
+     * @param array $displaysets
+     */
+    private function prefetch_reference_labels(array $displaysets): void {
+        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+            return;
+        }
+
+        $domainmap = $this->get_subitem_domain_map();
+        if (empty($domainmap)) {
+            return;
+        }
+
+        $codesbydomain = [];
+        foreach ($displaysets as $set) {
+            $values = (array)($set['values'] ?? $set['raw'] ?? []);
+            foreach ($domainmap as $subitem => $domain) {
+                $rawvalue = trim((string)($values[$subitem] ?? ''));
+                if ($rawvalue === '') {
+                    continue;
+                }
+                $cachekey = $domain . "\n" . $rawvalue;
+                if (array_key_exists($cachekey, $this->resolveddisplaycache)) {
+                    continue;
+                }
+                $codesbydomain[$domain][$rawvalue] = $rawvalue;
+            }
+        }
+
+        foreach ($codesbydomain as $domain => $codes) {
+            try {
+                $labels = \local_profilefield_repeatable\resolver::resolve_bulk($domain, array_values($codes));
+            } catch (\Throwable $e) {
+                $labels = [];
+            }
+            foreach ($codes as $code) {
+                $cachekey = $domain . "\n" . $code;
+                $label = $labels[$code] ?? null;
+                $this->resolveddisplaycache[$cachekey] =
+                    (is_string($label) && trim($label) !== '') ? $label : null;
+            }
+        }
     }
 
     /**

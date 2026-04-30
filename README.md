@@ -129,7 +129,7 @@ Language|iso639              → resolve('en', 'iso639') → 'English'
 Proficiency|cefrframework    → resolve('B2', 'cefrframework') → 'Upper-Intermediate'
 ```
 
-Domain plugins implement `\local_profilefield_repeatable\Resolver`.
+Domain plugins implement `\local_profilefield_repeatable\resolver`.
 
 
 API

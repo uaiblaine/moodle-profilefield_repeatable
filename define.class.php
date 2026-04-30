@@ -560,7 +560,7 @@ class profile_define_repeatable extends profile_define_base {
     private function is_local_reference_plugin_available(): bool {
         global $DB;
 
-        if (!class_exists('\local_profilefield_repeatable\Resolver')) {
+        if (!class_exists('\local_profilefield_repeatable\resolver')) {
             return false;
         }
 
