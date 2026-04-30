@@ -332,7 +332,7 @@ class display_renderer {
     private function get_display_sets_from_storage(): array {
         global $DB;
 
-            if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
+        if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
             return [];
         }
 
@@ -689,10 +689,4 @@ class display_renderer {
 
         return $sublinesubitems;
     }
-
-    /**
-     * Check if the storage table is available.
-     *
-     * @return bool
-     */
 }

@@ -369,12 +369,16 @@ final class field_class_test extends \advanced_testcase {
         }
 
         $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringContainsString('accordion-collapse collapse show', $output);
+        $this->assertStringContainsString('<details class="profilefield-repeatable-item" open>', $output);
+        $this->assertStringContainsString('profilefield-repeatable-summary', $output);
         $this->assertStringContainsString('101-A', $output);
         $this->assertStringContainsString(userdate($timemodified, '%d/%m/%y - %H:%M'), $output);
 
-        $firstlabel = format_string('codigo_turma', true, ['context' => \context_system::instance()]);
-        $this->assertSame(1, substr_count($output, $firstlabel));
+        $titlelabel = format_string('codigo_turma', true, ['context' => \context_system::instance()]);
+        $this->assertSame(0, substr_count($output, $titlelabel));
+
+        $bodylabel = format_string('codigo_diretoria', true, ['context' => \context_system::instance()]);
+        $this->assertSame(1, substr_count($output, $bodylabel));
     }
 
     /**

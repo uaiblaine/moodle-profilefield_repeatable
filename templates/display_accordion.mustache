@@ -56,15 +56,15 @@
     {{#items}}
         <details class="profilefield-repeatable-item"{{#isopen}} open{{/isopen}}>
             <summary class="profilefield-repeatable-summary" aria-controls="{{bodyid}}">
-                <h3 class="profilefield-repeatable-title">{{titlevalue}}</h3>
+                <span class="profilefield-repeatable-title">{{titlevalue}}</span>
                 {{#hassubline}}
-                    <hr class="profilefield-repeatable-title-divider" aria-hidden="true">
-                    <div class="profilefield-repeatable-subline">
+                    <span class="profilefield-repeatable-title-divider" aria-hidden="true"></span>
+                    <span class="profilefield-repeatable-subline">
                         {{#parts}}
                             {{^isfirst}}<span class="profilefield-repeatable-subline-dot" aria-hidden="true">·</span>{{/isfirst}}
                             <span class="profilefield-repeatable-subline-item{{#isfirst}} profilefield-repeatable-subline-primary{{/isfirst}}">{{value}}</span>
                         {{/parts}}
-                    </div>
+                    </span>
                 {{/hassubline}}
             </summary>
             <div class="profilefield-repeatable-body" id="{{bodyid}}">

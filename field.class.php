@@ -272,7 +272,7 @@ class profile_field_repeatable extends profile_field_base {
     protected function get_payload_from_storage(): array {
         global $DB;
 
-            if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
+        if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
             return [];
         }
 

@@ -37,5 +37,3 @@ function xmldb_profilefield_repeatable_upgrade(int $oldversion): bool {
     // Table and indexes are created by install.xml and install.php.
     return true;
 }
-
-
