@@ -138,8 +138,11 @@ class provider implements
                     'data' => $result->data,
                 ];
 
+                /* One subcontext per field: a shared subcontext would make each
+                 * export_data() call overwrite the previous field's data. */
                 \core_privacy\local\request\writer::with_context($context)->export_data([
                     get_string('pluginname', 'profilefield_repeatable'),
+                    format_string((string)$result->name),
                 ], $data);
             }
         }
@@ -256,7 +259,8 @@ class provider implements
     protected static function get_records(int $userid): array {
         global $DB;
 
-        $sql = "SELECT *
+        $sql = "SELECT uda.id, uda.userid, uda.fieldid, uda.data, uda.dataformat,
+                       uif.shortname, uif.name, uif.description
                   FROM {user_info_data} uda
                   JOIN {user_info_field} uif ON uda.fieldid = uif.id
                  WHERE uda.userid = :userid
