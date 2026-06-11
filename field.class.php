@@ -36,6 +36,12 @@ class profile_field_repeatable extends profile_field_base {
     /** @var string Hidden element identifier used by AMD init. */
     protected $hiddenid = '';
 
+    /** @var stdClass[]|null Memoised storage rows for this field instance. */
+    protected ?array $storagerecords = null;
+
+    /** @var bool Whether storage rows were already loaded for this instance. */
+    protected bool $storagerecordsloaded = false;
+
     /**
      * Adds elements for this field type to the edit form.
      *
@@ -167,6 +173,8 @@ class profile_field_repeatable extends profile_field_base {
 
         // Keep local instance data consistent for callers in same request.
         $this->data = $fallbackjson;
+        $this->storagerecords = null;
+        $this->storagerecordsloaded = false;
     }
 
     /**
@@ -201,6 +209,11 @@ class profile_field_repeatable extends profile_field_base {
             if (!$this->is_valid_json_object($rawpayload)) {
                 return [$this->inputname => get_string('errorinvalidjson', 'profilefield_repeatable')];
             }
+
+            $limiterror = $this->validate_payload_limits(json_decode($rawpayload, true));
+            if ($limiterror !== null) {
+                return [$this->inputname => $limiterror];
+            }
         }
 
         $payload = \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
@@ -212,6 +225,50 @@ class profile_field_repeatable extends profile_field_base {
         $usernew->{$this->inputname} = empty($payload) ? '' : \profilefield_repeatable\helper::encode_payload($payload);
 
         return parent::edit_validate_field($usernew);
+    }
+
+    /**
+     * Check raw payload against the configured set-count and value-length limits.
+     *
+     * Runs on the raw decoded JSON because normalisation silently enforces the
+     * same caps; validating after normalising could never see the excess.
+     *
+     * @param mixed $decoded Raw decoded JSON payload.
+     * @return string|null Error message, or null when within limits.
+     */
+    protected function validate_payload_limits($decoded): ?string {
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        if (count($decoded) > \profilefield_repeatable\helper::MAX_SETS) {
+            return get_string(
+                'errortoomanysets',
+                'profilefield_repeatable',
+                \profilefield_repeatable\helper::MAX_SETS
+            );
+        }
+
+        $subitems = array_fill_keys($this->get_subitems(), true);
+        foreach ($decoded as $setdata) {
+            if (!is_array($setdata)) {
+                continue;
+            }
+            foreach ($setdata as $subitem => $value) {
+                if (!isset($subitems[$subitem]) || !is_scalar($value)) {
+                    continue;
+                }
+                if (core_text::strlen((string)$value) > \profilefield_repeatable\helper::MAX_VALUE_LENGTH) {
+                    return get_string(
+                        'errorvaluetoolong',
+                        'profilefield_repeatable',
+                        \profilefield_repeatable\helper::MAX_VALUE_LENGTH
+                    );
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -250,7 +307,10 @@ class profile_field_repeatable extends profile_field_base {
         $renderer = new \profilefield_repeatable\output\display_renderer(
             $this->field,
             (int)($this->userid ?? 0),
-            (string)$this->data
+            (string)$this->data,
+            null,
+            null,
+            $this->get_storage_records()
         );
         return $renderer->render();
     }
@@ -265,12 +325,22 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Resolve payload from storage table for the current user.
+     * Fetch and memoise the storage rows for this field instance.
      *
-     * @return array
+     * One instance serves several read calls per request (is_empty, edit
+     * load, display); without the memo each call re-queried the database.
+     *
+     * @return stdClass[]
      */
-    protected function get_payload_from_storage(): array {
+    protected function get_storage_records(): array {
         global $DB;
+
+        if ($this->storagerecordsloaded) {
+            return $this->storagerecords ?? [];
+        }
+
+        $this->storagerecordsloaded = true;
+        $this->storagerecords = [];
 
         if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
             return [];
@@ -281,25 +351,34 @@ class profile_field_repeatable extends profile_field_base {
             'fieldid' => (int)$this->field->id,
         ]);
 
-        return $dataid ? $this->get_payload_from_dataid((int)$dataid) : [];
+        if ($dataid) {
+            $this->storagerecords = array_values($DB->get_records(
+                'profilefield_repeatable_data',
+                ['dataid' => (int)$dataid],
+                'set_id ASC, id ASC',
+                'id, set_id, data, timemodified'
+            ));
+        }
+
+        return $this->storagerecords;
     }
 
     /**
-     * Resolve payload from storage table by data id.
+     * Resolve payload from storage table for the current user.
      *
-     * @param int $dataid
      * @return array
      */
-    protected function get_payload_from_dataid(int $dataid): array {
-        global $DB;
+    protected function get_payload_from_storage(): array {
+        return $this->get_payload_from_records($this->get_storage_records());
+    }
 
-        $records = $DB->get_records(
-            'profilefield_repeatable_data',
-            ['dataid' => $dataid],
-            'set_id ASC, id ASC',
-            'id, set_id, data'
-        );
-
+    /**
+     * Resolve payload from storage rows.
+     *
+     * @param stdClass[] $records
+     * @return array
+     */
+    protected function get_payload_from_records(array $records): array {
         if (empty($records)) {
             return [];
         }

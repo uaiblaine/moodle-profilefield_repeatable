@@ -50,6 +50,9 @@ class display_renderer {
     /** @var moodle_page */
     private $page;
 
+    /** @var \stdClass[]|null Preloaded storage rows; null means fetch on demand. */
+    private ?array $preloadedrecords;
+
     /**
      * Constructor.
      *
@@ -58,19 +61,23 @@ class display_renderer {
      * @param string $data Raw field data.
      * @param \core_renderer|null $output Core renderer (optional, uses global if null).
      * @param \moodle_page|null $page Moodle page (optional, uses global if null).
+     * @param \stdClass[]|null $preloadedrecords Storage rows already fetched by the caller
+     *                                           (avoids re-querying); null fetches on demand.
      */
     public function __construct(
         object $field,
         int $userid,
         string $data,
         $output = null,
-        $page = null
+        $page = null,
+        ?array $preloadedrecords = null
     ) {
         $this->field = $field;
         $this->userid = $userid;
         $this->data = $data;
         $this->output = $output ?? ($GLOBALS['OUTPUT'] ?? null);
         $this->page = $page ?? ($GLOBALS['PAGE'] ?? null);
+        $this->preloadedrecords = $preloadedrecords;
     }
 
     /**
@@ -325,27 +332,30 @@ class display_renderer {
     }
 
     /**
-     * Resolve display sets from storage table.
+     * Resolve display sets from storage table or preloaded rows.
      *
      * @return array
      */
     private function get_display_sets_from_storage(): array {
         global $DB;
 
-        if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
-            return [];
-        }
+        $records = $this->preloadedrecords;
+        if ($records === null) {
+            if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
+                return [];
+            }
 
-        $dataid = $DB->get_field('user_info_data', 'id', [
-            'userid' => $this->userid,
-            'fieldid' => (int)$this->field->id,
-        ]);
-        $records = $dataid ? $DB->get_records(
-            'profilefield_repeatable_data',
-            ['dataid' => (int)$dataid],
-            'set_id ASC, id ASC',
-            'id, set_id, data, timemodified'
-        ) : [];
+            $dataid = $DB->get_field('user_info_data', 'id', [
+                'userid' => $this->userid,
+                'fieldid' => (int)$this->field->id,
+            ]);
+            $records = $dataid ? $DB->get_records(
+                'profilefield_repeatable_data',
+                ['dataid' => (int)$dataid],
+                'set_id ASC, id ASC',
+                'id, set_id, data, timemodified'
+            ) : [];
+        }
 
         $subitems = $this->get_subitems();
         if (empty($records) || empty($subitems)) {

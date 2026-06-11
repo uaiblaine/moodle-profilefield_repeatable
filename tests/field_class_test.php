@@ -699,4 +699,148 @@ final class field_class_test extends \advanced_testcase {
         $this->assertStringContainsString('Sao Paulo', $output);
         $this->assertStringContainsString('EE Alpha', $output);
     }
+
+    /**
+     * Build a JSON payload with the requested number of sets.
+     *
+     * @param int $count
+     * @return string
+     */
+    private function build_payload_with_sets(int $count): string {
+        $sets = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $sets['@@ID#' . $i] = ['name' => 'N' . $i, 'role' => 'R' . $i];
+        }
+
+        return json_encode($sets);
+    }
+
+    /**
+     * Validation must reject payloads with more sets than the configured maximum.
+     */
+    public function test_edit_validate_field_rejects_too_many_sets(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field();
+        $inputname = $field->inputname;
+
+        $errors = $field->edit_validate_field((object) [
+            'id' => 0,
+            $inputname => $this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 1),
+        ]);
+
+        $this->assertArrayHasKey($inputname, $errors);
+        $this->assertSame(
+            get_string('errortoomanysets', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_SETS),
+            $errors[$inputname]
+        );
+    }
+
+    /**
+     * Validation must reject sub-item values longer than the configured maximum.
+     */
+    public function test_edit_validate_field_rejects_oversized_value(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field();
+        $inputname = $field->inputname;
+
+        $oversized = str_repeat('a', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 1);
+        $errors = $field->edit_validate_field((object) [
+            'id' => 0,
+            $inputname => json_encode(['@@ID#1' => ['name' => $oversized, 'role' => 'X']]),
+        ]);
+
+        $this->assertArrayHasKey($inputname, $errors);
+        $this->assertSame(
+            get_string('errorvaluetoolong', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_VALUE_LENGTH),
+            $errors[$inputname]
+        );
+    }
+
+    /**
+     * Normalisation must defensively cap set count and value length on non-form paths.
+     */
+    public function test_normalise_payload_enforces_caps(): void {
+        $subitems = ['name', 'role'];
+
+        $payload = json_decode($this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 5), true);
+        $normalised = \profilefield_repeatable\helper::normalise_payload($payload, $subitems);
+        $this->assertCount(\profilefield_repeatable\helper::MAX_SETS, $normalised);
+
+        $oversized = str_repeat('b', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 50);
+        $normalised = \profilefield_repeatable\helper::normalise_payload(
+            ['@@ID#1' => ['name' => $oversized, 'role' => '']],
+            $subitems
+        );
+        $first = reset($normalised);
+        $this->assertSame(\profilefield_repeatable\helper::MAX_VALUE_LENGTH, \core_text::strlen($first['name']));
+    }
+
+    /**
+     * Repeated storage reads on one field instance must be memoised.
+     */
+    public function test_is_empty_memoises_storage_reads(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $this->create_field();
+        $user = $this->getDataGenerator()->create_user();
+        $fieldrecord = $DB->get_record('user_info_field', ['shortname' => 'repeatable_test'], '*', MUST_EXIST);
+
+        $savefield = new \profile_field_repeatable(0, 0, $fieldrecord);
+        $savefield->edit_save_data((object) [
+            'id' => $user->id,
+            $savefield->inputname => '{"@@ID#1":{"name":"Alice","role":"Manager"}}',
+        ]);
+
+        $field = new \profile_field_repeatable((int)$fieldrecord->id, (int)$user->id);
+        $this->assertFalse($field->is_empty());
+
+        $before = $DB->perf_get_reads();
+        $this->assertFalse($field->is_empty());
+        $this->assertSame(0, $DB->perf_get_reads() - $before, 'Second is_empty() must not query the database again.');
+    }
+
+    /**
+     * The display renderer must consume preloaded storage records without querying.
+     */
+    public function test_display_renderer_uses_preloaded_records(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddata = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable',
+            'name' => 'Preload test',
+            'shortname' => 'repeatable_preload_test',
+            'required' => 0,
+            'forceunique' => 0,
+            'defaultdata' => '{}',
+            'param1' => self::SUBITEMS_NAME_ROLE,
+        ]);
+
+        $records = [
+            (object) [
+                'id' => 1,
+                'set_id' => 1,
+                'data' => json_encode(['name' => 'Preloaded', 'role' => 'Ghost']),
+                'timemodified' => 0,
+            ],
+        ];
+
+        $renderer = new \profilefield_repeatable\output\display_renderer(
+            $fielddata,
+            999999,
+            '',
+            null,
+            null,
+            $records
+        );
+
+        $output = $renderer->render();
+        $this->assertStringContainsString('Preloaded', $output);
+        $this->assertStringContainsString('Ghost', $output);
+    }
 }

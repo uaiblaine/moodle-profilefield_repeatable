@@ -40,6 +40,8 @@ $string['errorsublineincludesprimary'] = 'The subline cannot include the title s
 $string['errorsublinesubitemduplicate'] = 'Subline sub-item(s) duplicated: {$a}.';
 $string['errorsublinesubitemlimit'] = 'You can include at most {$a} sub-items in the subline.';
 $string['errorsublinesubitemunknown'] = 'Subline sub-item(s) not found in Sub-items: {$a}.';
+$string['errortoomanysets'] = 'Too many sets: at most {$a} sets are allowed.';
+$string['errorvaluetoolong'] = 'Value too long: each value is limited to {$a} characters.';
 $string['indexedsubitems'] = 'Indexed sub-items (one per line)';
 $string['indexedsubitems_help'] =
     'Optionally list sub-items that should receive dedicated PostgreSQL indexes. Each line must match a sub-item exactly.';

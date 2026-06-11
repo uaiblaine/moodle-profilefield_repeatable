@@ -30,6 +30,12 @@ class helper {
     /** PostgreSQL feature flag: GIN deduplication parameter. */
     public const POSTGRES_FEATURE_GIN_DEDUP = 'gin_dedup';
 
+    /** Maximum number of sets accepted per field value. */
+    public const MAX_SETS = 200;
+
+    /** Maximum length of one sub-item value in characters. */
+    public const MAX_VALUE_LENGTH = 1024;
+
     /**
      * Check if the active DB family is PostgreSQL.
      *
@@ -104,6 +110,10 @@ class helper {
         $counter = 1;
 
         foreach ($decoded as $setdata) {
+            if ($counter > self::MAX_SETS) {
+                break;
+            }
+
             if (is_object($setdata)) {
                 $setdata = json_decode(json_encode($setdata), true);
             }
@@ -120,6 +130,9 @@ class helper {
                 }
 
                 $value = (string)$value;
+                if (\core_text::strlen($value) > self::MAX_VALUE_LENGTH) {
+                    $value = \core_text::substr($value, 0, self::MAX_VALUE_LENGTH);
+                }
                 if (trim($value) !== '') {
                     $hasvalue = true;
                 }

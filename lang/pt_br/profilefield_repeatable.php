@@ -40,6 +40,8 @@ $string['errorsublineincludesprimary'] = 'A linha auxiliar não pode incluir o s
 $string['errorsublinesubitemduplicate'] = 'Subiten(s) da linha auxiliar duplicado(s): {$a}.';
 $string['errorsublinesubitemlimit'] = 'Você pode incluir no máximo {$a} subitens na linha auxiliar.';
 $string['errorsublinesubitemunknown'] = 'Subiten(s) da linha auxiliar não encontrado(s) em Subitens: {$a}.';
+$string['errortoomanysets'] = 'Conjuntos demais: no máximo {$a} conjuntos são permitidos.';
+$string['errorvaluetoolong'] = 'Valor muito longo: cada valor é limitado a {$a} caracteres.';
 $string['indexedsubitems'] = 'Subitens indexados (um por linha)';
 $string['indexedsubitems_help'] =
     'Opcionalmente liste subitens que devem receber índices PostgreSQL dedicados. Cada linha deve corresponder exatamente a um subitem.';
