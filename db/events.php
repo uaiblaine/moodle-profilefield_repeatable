@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Repeatable profile field version information.
+ * Event observer definitions for profilefield_repeatable.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
@@ -24,9 +24,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026061000;
-$plugin->requires  = 2024100100;
-$plugin->component = 'profilefield_repeatable';
-$plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = 'v2.0.2';
-$plugin->supported = [405, 501];
+$observers = [
+    [
+        'eventname' => '\core\event\user_deleted',
+        'callback' => '\profilefield_repeatable\observer::user_deleted',
+    ],
+    [
+        'eventname' => '\core\event\user_info_field_deleted',
+        'callback' => '\profilefield_repeatable\observer::user_info_field_deleted',
+    ],
+];
