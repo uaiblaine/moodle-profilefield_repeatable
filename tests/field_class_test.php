@@ -372,7 +372,10 @@ final class field_class_test extends \advanced_testcase {
         $this->assertStringContainsString('<details class="profilefield-repeatable-item" open>', $output);
         $this->assertStringContainsString('profilefield-repeatable-summary', $output);
         $this->assertStringContainsString('101-A', $output);
-        $this->assertStringContainsString(userdate($timemodified, '%d/%m/%y - %H:%M'), $output);
+        $this->assertStringContainsString(
+            userdate($timemodified, get_string('strftimedatetimeshort', 'langconfig')),
+            $output
+        );
 
         $titlelabel = format_string('codigo_turma', true, ['context' => \context_system::instance()]);
         $this->assertSame(0, substr_count($output, $titlelabel));
