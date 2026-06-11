@@ -7,3 +7,9 @@ jobs:
     uses: catalyst/catalyst-moodle-workflows/.github/workflows/ci.yml@main
     with:
       extra_plugin_runners: 'moodle-plugin-ci add-plugin --branch main uaiblaine/moodle-local_profilefield_repeatable'
+      # The snapshot-based workflow cannot run Behat for plugin features:
+      # the snapshot config.php defines no chrome behat profile, never sets
+      # MOODLE_START_BEHAT_SERVERS, and behat.yml is generated before the
+      # plugin is copied in. Behat runs in .github/workflows/behat.yml
+      # (standard moodlehq flow) instead.
+      disable_behat: true

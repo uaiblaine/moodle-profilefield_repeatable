@@ -34,13 +34,20 @@ hardcode `public/` inside plugin code.
 
 CI (catalyst/catalyst-moodle-workflows) additionally gates on `phpcs`
 (moodle standard, see `phpcs.xml`), `phpdoc --max-warnings 0`, mustache lint,
-stylelint (`.stylelintrc.json`), PHPUnit (`--fail-on-warning`), and Behat
-(`tests/behat/`; the edit-form scenario is `@javascript`). There is no
-committed local wrapper — run these through your own `moodle-plugin-ci`
+stylelint (`.stylelintrc.json`), and PHPUnit (`--fail-on-warning`). There is
+no committed local wrapper — run these through your own `moodle-plugin-ci`
 checkout before pushing. The CI gate only runs the full suite on
 `pull_request` events or pushes to a **protected** ref (`main` is covered by
-a ruleset). Behat note: avoid bare "Language"-like field locators on the
-profile edit form — Mink matches labels by substring, so scope to the
+a ruleset).
+
+**Behat runs in its own workflow** ([.github/workflows/behat.yml](.github/workflows/behat.yml),
+standard moodlehq flow, one leg: 5.01 × PHP 8.2 × pgsql) because the catalyst
+snapshot workflow cannot run plugin Behat — the snapshot `config.php` lacks
+the chrome profile, never sets `MOODLE_START_BEHAT_SERVERS`, and `behat.yml`
+is generated before the plugin is copied in (`disable_behat: true` in
+`ci.yml`; flip it if catalyst fixes snapshot Behat). Locator note: avoid bare
+"Language"-like field locators on the profile edit form — Mink matches
+labels by substring ("Preferred language" collides), so scope to the
 category fieldset (e.g. `in the "Testing" "fieldset"`).
 
 Local raw PHPUnit (if wired up) reads `phpunit.xml` at the **repo root**
