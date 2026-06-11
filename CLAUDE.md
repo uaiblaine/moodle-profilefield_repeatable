@@ -83,18 +83,22 @@ field.class.php              profile_field_repeatable (runtime field: edit/save/
 define.class.php             profile_define_repeatable (admin field definition + validation)
 lib.php                      profilefield_repeatable_myprofile_navigation() widget hook
 classes/
-  helper.php                 Payload parse/normalise/encode + PostgreSQL helpers
+  helper.php                 Payload parse/normalise/encode (+ MAX_SETS / MAX_VALUE_LENGTH
+                             caps) + PostgreSQL helpers
+  observer.php               user_deleted / user_info_field_deleted cleanup observers
   output/display_renderer.php  Accordion/plain display + bulk reference prefetch
-  privacy/provider.php       GDPR metadata + export/delete
+  privacy/provider.php       GDPR metadata + export/delete (one subcontext per field)
   task/reconcile_indexes.php Adhoc task managing PG expression indexes
 db/
   install.xml                profilefield_repeatable_data table
+  events.php                 Observer registrations (cleanup on core deletions)
   lib.php                    Procedural wrappers for install/upgrade (no autoload there)
   install.php / upgrade.php / uninstall.php
 amd/src/                     repeatable.js (edit UI), displayaccordion.js
 templates/                   edit_form, display_accordion, display_plain (Mustache)
 lang/en/ + lang/pt_br/       Both maintained in lockstep (same keys)
-tests/                       define_class_test.php, field_class_test.php
+tests/                       define_class_test, field_class_test, observer_test,
+                             privacy/provider_test
 ```
 
 ## Architecture gotchas
@@ -141,10 +145,28 @@ Core's `user_info_field` columns carry the field configuration:
   first, fall back to the `user_info_data` JSON when the table has nothing.
 - Set keys in the in-memory payload are `'@@ID#' . $n` (1-based, from
   `helper::normalise_payload()`); empty sets are dropped on normalise.
+- **Payload limits**: `helper::MAX_SETS` (200) and `helper::MAX_VALUE_LENGTH`
+  (1024 chars). `edit_validate_field()` rejects raw payloads above the caps
+  with `errortoomanysets` / `errorvaluetoolong`; `normalise_payload()`
+  enforces the same caps silently so non-form paths stay bounded. Validation
+  must inspect the **raw** decoded JSON — normalise caps first, so the excess
+  is invisible afterwards.
+- **Storage rows are memoised per field instance** (`get_storage_records()`),
+  shared with `display_renderer` via its `$preloadedrecords` constructor
+  param. `edit_save_data()` invalidates the memo after commit; do the same in
+  any new write path. Renderer semantics: `null` = fetch on demand, `[]` =
+  authoritatively empty (falls back to the `$this->data` JSON).
 - `upsert_set_row()` has **two branches**: PostgreSQL
   `INSERT ... ON CONFLICT (dataid, set_id) DO UPDATE` and a portable
   select-then-insert/update fallback. Any schema or semantic change must land
   in **both** branches.
+- **Cleanup on core deletions** lives in `classes/observer.php`
+  (`db/events.php`): core deletes `user_info_data` directly on user/field
+  deletion, so the observers purge `profilefield_repeatable_data` by
+  `userid` / `fieldid` (the table carries both — no `dataid` join needed) and
+  queue `reconcile_indexes` on PostgreSQL. The privacy API can't see these
+  orphans (context discovery goes through `user_info_data`), so the observers
+  are the only line of defence.
 
 ### db/lib.php — no autoloading during install/upgrade
 

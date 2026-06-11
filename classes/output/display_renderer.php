@@ -295,7 +295,7 @@ class display_renderer {
             ] + $titledata + $sublinedata;
 
             if (!empty($timemodified)) {
-                $formatted = userdate((int)$timemodified, '%d/%m/%y - %H:%M');
+                $formatted = userdate((int)$timemodified, get_string('strftimedatetimeshort', 'langconfig'));
                 $item['syncvalue'] = get_string('synchronisedat', 'profilefield_repeatable', $formatted);
             }
 

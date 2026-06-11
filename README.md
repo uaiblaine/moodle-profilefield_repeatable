@@ -137,11 +137,16 @@ API
 
 ### PHPUnit Testing
 
+Tests run in CI (moodle-plugin-ci) against PostgreSQL and MariaDB. To run
+them locally from an initialised Moodle PHPUnit environment (Moodle 5.x
+split layout shown; drop `public/` on older layouts):
+
 ```bash
-./vendor/bin/phpunit user/profile/field/repeatable/tests/
+vendor/bin/phpunit public/user/profile/field/repeatable/tests/
 ```
 
-All critical paths covered: field definition, storage, display, privacy, migrations.
+Covered areas: field definition, storage upsert/read, display rendering,
+privacy export/delete, and deletion-cleanup observers.
 
 
 Troubleshooting
@@ -151,11 +156,16 @@ Troubleshooting
 Ensure the `profilefield_repeatable_data` table was created. Check upgrade logs in Site Administration > Logs.
 
 #### Indexes not created on PostgreSQL
-Check Site Administration > Scheduled tasks > profilefield_repeatable > Reconcile indexes for recent runs.
-Ensure the field has configured "Indexed sub-items" values and verify PostgreSQL 13+ connectivity.
+Index reconciliation runs as an **ad hoc task** queued whenever the field configuration is saved
+(it is not listed under Scheduled tasks). Check Site Administration > Server > Tasks > Ad hoc tasks
+(and the task logs) for recent runs, ensure the field has configured "Indexed sub-items" values,
+and verify PostgreSQL 13+ connectivity. Running cron processes the queue.
 
 #### MySQL/MariaDB behavior
-On MySQL/MariaDB, the plugin keeps compatibility using JSON storage in `user_info_data` and does not create PostgreSQL-specific indexes.
+On MySQL/MariaDB the storage table (`profilefield_repeatable_data`) is populated exactly as on
+PostgreSQL, with a `user_info_data` JSON fallback kept in sync. Only the PostgreSQL-specific
+parts are skipped: the JSONB column conversion, the base GIN index, and the per-sub-item
+expression indexes.
 
 #### Reference resolution not working
 1. Verify `moodle-local_profilefield_repeatable` is installed

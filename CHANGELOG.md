@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2026-06-10
+
+### Fixed
+- **Orphaned data on core deletions**: new event observers purge `profilefield_repeatable_data`
+  rows when a user is deleted (`\core\event\user_deleted`) or a repeatable field is deleted
+  (`\core\event\user_info_field_deleted`); field deletion also queues index reconciliation on
+  PostgreSQL so expression indexes are dropped immediately
+- **Privacy export overwrote itself with multiple repeatable fields**: each field now exports
+  under its own subcontext (plugin name + field name)
+- Privacy provider `get_records()` selects explicit columns instead of `SELECT *` with
+  colliding `id` columns
+
+### Added
+- Payload limits with validation messages: at most 200 sets per field value and 1024
+  characters per sub-item value (`helper::MAX_SETS` / `helper::MAX_VALUE_LENGTH`);
+  normalisation enforces the same caps defensively on non-form paths
+
+### Changed
+- Storage rows are memoised per field instance and shared with the display renderer,
+  halving profile-page queries per repeatable field
+- Sync footer timestamp uses the localised `strftimedatetimeshort` format instead of a
+  hardcoded format string
+- README corrections: ad hoc (not scheduled) task wording, accurate MySQL/MariaDB storage
+  behaviour, split-layout PHPUnit path, accurate test-coverage claims
+
+## [2.0.1] - 2026-04-30
+
+### Changed
+- Display accordion reimplemented with native `<details>`/`<summary>` elements and improved
+  accessibility
+- Class file names normalised to lowercase; reference label resolution in the display
+  renderer optimised (bulk prefetch per domain)
+
 ## [2.0.0] - 2026-04-24
 
 ### BREAKING CHANGE
@@ -47,6 +80,8 @@ All notable changes to this project will be documented in this file.
 
 | Version | Release Date | Notes |
 |---------|--------------|-------|
+| 2.0.2   | 2026-06-10   | Deletion-cleanup observers, privacy export fix, payload limits |
+| 2.0.1   | 2026-04-30   | Native details/summary accordion, lowercase class files |
 | 2.0.0   | 2026-04-24   | Clean install baseline — no legacy migrations |
 | 1.0.1   | 2026-04-02   | Documentation updates |
 | 1.0.0   | 2026-04-01   | Initial stable release |
