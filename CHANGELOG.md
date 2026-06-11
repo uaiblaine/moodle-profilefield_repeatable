@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.3] - 2026-06-11
+
+### Added
+- Behat coverage: `@javascript` scenario filling a repeatable set on the profile edit form
+  and asserting the accordion widget on the profile page
+
 ## [2.0.2] - 2026-06-10
 
 ### Fixed
@@ -80,6 +86,7 @@ All notable changes to this project will be documented in this file.
 
 | Version | Release Date | Notes |
 |---------|--------------|-------|
+| 2.0.3   | 2026-06-11   | Behat coverage |
 | 2.0.2   | 2026-06-10   | Deletion-cleanup observers, privacy export fix, payload limits |
 | 2.0.1   | 2026-04-30   | Native details/summary accordion, lowercase class files |
 | 2.0.0   | 2026-04-24   | Clean install baseline — no legacy migrations |
