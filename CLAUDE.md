@@ -35,9 +35,9 @@ hardcode `public/` inside plugin code.
 CI (moodle-an-hochschulen/moodle-workflows, full `moodle-plugin-ci install`
 per job) gates on: a static leg (`phplint`, `phpmd`, `phpcs --max-warnings 0`,
 `phpdoc --max-warnings 0`, a **development-leftover checker that fails on
-stray to-do markers (the uppercase keyword), `@testme`, or merge-conflict
-markers in ANY file — docs included, so never write that keyword literally,
-not even here**, `validate`, `savepoints`,
+stray to-do markers, test-me annotations, or merge-conflict markers in ANY
+file — docs included; never write any of those tokens literally, not even
+here**, `validate`, `savepoints`,
 `mustache`, `grunt --max-lint-warnings 0`) plus runtime legs running
 **PHPUnit (`--fail-on-warning`) and Behat (`--profile chrome`) on every
 PHP × DB combination**; Behat faildumps upload as artifacts on failure.
