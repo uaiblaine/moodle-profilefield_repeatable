@@ -34,8 +34,10 @@ hardcode `public/` inside plugin code.
 
 CI (moodle-an-hochschulen/moodle-workflows, full `moodle-plugin-ci install`
 per job) gates on: a static leg (`phplint`, `phpmd`, `phpcs --max-warnings 0`,
-`phpdoc --max-warnings 0`, a **development-leftover checker that fails on any
-`TODO`/`@testme`/merge markers in any file**, `validate`, `savepoints`,
+`phpdoc --max-warnings 0`, a **development-leftover checker that fails on
+stray to-do markers (the uppercase keyword), `@testme`, or merge-conflict
+markers in ANY file — docs included, so never write that keyword literally,
+not even here**, `validate`, `savepoints`,
 `mustache`, `grunt --max-lint-warnings 0`) plus runtime legs running
 **PHPUnit (`--fail-on-warning`) and Behat (`--profile chrome`) on every
 PHP × DB combination**; Behat faildumps upload as artifacts on failure.
@@ -237,11 +239,14 @@ Every PHP file starts with the GPL block, then:
  */
 ```
 
-`defined('MOODLE_INTERNAL') || die();` in procedural files and files with
-side-effects. Pure namespaced class files with no side-effects (single class,
-no `require_once`/globals) must **omit** the guard — the sniff
-`moodle.Files.MoodleInternal.MoodleInternalNotNeeded` fires otherwise
-(`classes/helper.php` is the in-repo example).
+`defined('MOODLE_INTERNAL') || die();` **only** in files with real top-level
+side-effects: `require_once`, variable assignments (`db/*.php` definition
+arrays, `version.php`), or executable statements (tests bootstrap with
+`global $CFG` + `require_once`). Any pure-declaration file must **omit** the
+guard or the sniff `moodle.Files.MoodleInternal.MoodleInternalNotNeeded`
+fires — and with `phpcs --max-warnings 0` that warning fails CI. This
+applies even to non-namespaced legacy files: `lib.php` (functions only),
+`field.class.php` and `define.class.php` (single class each) carry no guard.
 
 ### PHPDoc
 
@@ -341,10 +346,12 @@ containing PHP-looking text (e.g. `// active=0`) triggers
 `Squiz.PHP.CommentedOutCode.Found`. Remove trivial trailing comments, or
 rephrase to avoid `=` inside the comment text.
 
-**9. `defined('MOODLE_INTERNAL')` not needed in pure namespaced class
-files.** See "File header" above. Files that DO need the guard: anything
-with side-effects — `require_once`, `global $CFG`, procedural top-level code
-(`lib.php`, `db/*.php`, `field.class.php`, `define.class.php`).
+**9. `defined('MOODLE_INTERNAL')` only in files with top-level
+side-effects.** See "File header" above — the sniff fires on ANY
+pure-declaration file, namespaced or not (`lib.php`, `field.class.php`,
+`define.class.php` carry no guard). Files that DO need it: `db/*.php`
+definition arrays, tests with `global $CFG` + `require_once`, form classes
+with `require_once`.
 
 **10. `\R` line splitting.** User-entered multi-line config (sub-items,
 mappings) is split with `preg_split('/\R/u', ...)` — never `explode("\n")`;

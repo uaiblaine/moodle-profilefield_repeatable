@@ -20,8 +20,6 @@ use core\task\adhoc_task;
 use core\task\manager;
 use profilefield_repeatable\helper;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Reconcile dynamic PostgreSQL indexes for configured repeatable sub-items.
  *
