@@ -46,7 +46,10 @@ matrix; 5.00/4.05 `one-db-only`) — **update those calls when
 `$plugin->supported` changes**. It runs on every push/PR (no protected-ref
 gate; concurrent runs cancel superseded ones). There is no committed local
 wrapper — run checks through your own `moodle-plugin-ci` checkout before
-pushing.
+pushing. To read a failed job's raw log (the MAH reusable-workflow jobs
+often return empty from `gh run view --log-failed`):
+`gh api repos/uaiblaine/moodle-profilefield_repeatable/actions/jobs/<jobid>/logs`
+(get `<jobid>` from `gh run view <runid> --json jobs`).
 
 Behat locator note: avoid bare "Language"-like field locators on the
 profile edit form — Mink matches labels by substring ("Preferred language"
