@@ -405,6 +405,12 @@ with `require_once`.
 mappings) is split with `preg_split('/\R/u', ...)` — never `explode("\n")`;
 Windows CRLF input must keep working.
 
+**11. Anonymous functions need a space: `function (`.** Closures (incl.
+`static function`) must have a space before the paren —
+`static function ($x) use ($y) {`, not `function($x)`. Named methods keep
+`function name(`. Sniff:
+`Squiz.Functions.MultiLineFunctionDeclaration.SpaceAfterFunction`.
+
 ## Database (XMLDB)
 
 - Every `<FIELD>` element needs `SEQUENCE="true"` or `SEQUENCE="false"`

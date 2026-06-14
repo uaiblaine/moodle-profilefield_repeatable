@@ -135,7 +135,7 @@ class repeatable_set extends base {
                     ->set_type(column::TYPE_TEXT)
                     ->add_field($valuesql, 'val' . $index, $valueparams)
                     ->set_is_sortable(true)
-                    ->add_callback(static function(?string $value) use ($domain): string {
+                    ->add_callback(static function (?string $value) use ($domain): string {
                         return self::resolve_label($domain, $value);
                     });
 
@@ -216,7 +216,7 @@ class repeatable_set extends base {
                     $valueparams
                 ))
                     ->add_joins($this->get_joins())
-                    ->set_options_callback(static function() use ($fieldid, $subitem, $domain): array {
+                    ->set_options_callback(static function () use ($fieldid, $subitem, $domain): array {
                         return self::name_filter_options($fieldid, $subitem, $domain);
                     });
 
