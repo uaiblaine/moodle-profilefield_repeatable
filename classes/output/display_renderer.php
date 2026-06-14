@@ -26,9 +26,6 @@ namespace profilefield_repeatable\output;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class display_renderer {
-    /** @var string Domain shortname pattern for reference mapping. */
-    private const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
-
     /** @var object Field configuration object. */
     private object $field;
 
@@ -592,59 +589,11 @@ class display_renderer {
         }
 
         $rawmappings = (string)($this->field->param3 ?? '');
-        $this->subitemdomainmap = $this->parse_subitem_domain_map($rawmappings, $this->get_subitems());
+        $this->subitemdomainmap = \profilefield_repeatable\helper::parse_subitem_domain_map(
+            $rawmappings,
+            $this->get_subitems()
+        );
         return $this->subitemdomainmap;
-    }
-
-    /**
-     * Parse subitem/domain mapping lines with format subitem|domain.
-     *
-     * @param string $rawmappings
-     * @param string[] $subitems
-     * @return array
-     */
-    private function parse_subitem_domain_map(string $rawmappings, array $subitems): array {
-        if (trim($rawmappings) === '' || empty($subitems)) {
-            return [];
-        }
-
-        $canonicalsubitems = [];
-        foreach ($subitems as $subitem) {
-            $canonicalsubitems[\core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $mappings = [];
-        $lines = preg_split('/\R/u', $rawmappings) ?: [];
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '' || substr_count($line, '|') !== 1) {
-                continue;
-            }
-
-            [$rawsubitem, $rawdomain] = array_map('trim', explode('|', $line, 2));
-            if ($rawsubitem === '' || $rawdomain === '') {
-                continue;
-            }
-
-            $subitemkey = \core_text::strtolower($rawsubitem);
-            if (!isset($canonicalsubitems[$subitemkey])) {
-                continue;
-            }
-
-            $canonicalsubitem = $canonicalsubitems[$subitemkey];
-            if (isset($mappings[$canonicalsubitem])) {
-                continue;
-            }
-
-            $domain = \core_text::strtolower($rawdomain);
-            if (!preg_match(self::DOMAIN_PATTERN, $domain)) {
-                continue;
-            }
-
-            $mappings[$canonicalsubitem] = $domain;
-        }
-
-        return $mappings;
     }
 
     /**

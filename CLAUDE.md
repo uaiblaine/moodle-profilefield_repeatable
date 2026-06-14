@@ -87,9 +87,11 @@ dictionaries (domain → code → label). The contract:
   `local_profilefield_repeatable_domain` (queried directly by
   `define.class.php::get_missing_reference_domains()`). Renaming either on
   the local side breaks this plugin.
-- **Domain shortname pattern** `/^[a-z0-9_]+$/` is duplicated in
-  `define.class.php`, `classes/output/display_renderer.php`, and in the local
-  plugin's `resolver`/`manager`. Keep all copies in lockstep.
+- **Domain shortname pattern** `/^[a-z0-9_]+$/` lives in `helper::DOMAIN_PATTERN`
+  (canonical), `define.class.php`, and the local plugin's `resolver`/`manager`.
+  Keep all copies in lockstep. The `subitem|domain` parser is centralized as
+  `helper::parse_subitem_domain_map()` — `display_renderer` and the Report
+  Builder entity both delegate to it; don't re-fork that logic.
 - **CI cross-installs the other repo's `main`** via the `plugin-dependencies`
   input in `.github/workflows/ci.yml`. A breaking change pushed to either
   `main` turns the other repo's CI red — coordinate contract changes across
@@ -103,10 +105,13 @@ define.class.php             profile_define_repeatable (admin field definition +
 lib.php                      profilefield_repeatable_myprofile_navigation() widget hook
 classes/
   helper.php                 Payload parse/normalise/encode (+ MAX_SETS / MAX_VALUE_LENGTH
-                             caps) + PostgreSQL helpers
+                             caps) + PostgreSQL helpers + subitem/domain parser +
+                             cross-DB JSON-extract SQL (sql_subitem_value)
   observer.php               user_deleted / user_info_field_deleted cleanup observers
   output/display_renderer.php  Accordion/plain display + bulk reference prefetch
   privacy/provider.php       GDPR metadata + export/delete (one subcontext per field)
+  reportbuilder/datasource/repeatable_sets.php     Report Builder source: one row per set
+  reportbuilder/local/entities/repeatable_set.php  Per-subitem columns/filters + labels
   task/reconcile_indexes.php Adhoc task managing PG expression indexes
 db/
   install.xml                profilefield_repeatable_data table
@@ -116,8 +121,9 @@ db/
 amd/src/                     repeatable.js (edit UI), displayaccordion.js
 templates/                   edit_form, display_accordion, display_plain (Mustache)
 lang/en/ + lang/pt_br/       Both maintained in lockstep (same keys)
-tests/                       define_class_test, field_class_test, observer_test,
-                             privacy/provider_test, behat/
+tests/                       define_class_test, field_class_test, helper_test,
+                             observer_test, privacy/provider_test, behat/,
+                             reportbuilder/datasource/repeatable_sets_test
 ```
 
 ## Architecture gotchas
@@ -225,6 +231,40 @@ reference.
   else) and **bulk-prefetches reference labels once per domain** before
   rendering — keep it N+1-free when touching it.
 - Zero `html_writer` calls: all markup comes from the Mustache templates.
+
+### Report Builder integration
+
+Core exposes each custom profile field as a single column/filter over the raw
+`user_info_data.data` blob (`core_reportbuilder\local\helpers\user_profile_fields`),
+with **no per-field override hook** — so a `repeatable` field shows every set
+concatenated in one cell and its filter only matches the stored code. Both
+limitations are worked around with a dedicated datasource, not by changing core.
+
+- **`reportbuilder/datasource/repeatable_sets.php`** reuses the core `user`
+  entity (main table `user`, excludes guest/deleted) and adds one
+  `repeatable_set` entity per `repeatable` field via a `LEFT JOIN` on
+  `profilefield_repeatable_data` scoped to that `fieldid`. The join multiplies
+  one user into **one row per set**, which is what makes native aggregation
+  work. Datasources are auto-discovered (`manager::get_report_datasources`);
+  `is_available()` hides the source when no repeatable field exists.
+- **Entity name is `repeatable_<shortname>`** (not the field id) so column/filter
+  unique identifiers (`repeatable_<shortname>:subitem1`, `:setnumber`,
+  `:subitemcode1`) are stable and referenceable from Behat. Column/filter
+  **internal names are 1-based index** per sub-item (`subitem1`, or
+  `subitemname1`+`subitemcode1` when mapped) — never derived from the label.
+- **Sub-item values are read from JSON in SQL** via
+  `helper::sql_subitem_value()` (PG `(data)::jsonb ->> :key`, MySQL/MariaDB
+  `JSON_UNQUOTE(JSON_EXTRACT(...))`), key bound as a param. Any new SQL that
+  touches a sub-item must go through this helper so both DB families stay green.
+- **Mapped sub-items** (param3) get a resolved-name column (callback →
+  `resolver::resolve`, falls back to the code) **and** a raw-code column; plus a
+  code text filter **and** a name autocomplete filter whose options come from the
+  codes present in the data labelled via `resolver::resolve_bulk` (so the filter
+  shows names but filters on the indexed code). All resolver use stays behind the
+  `class_exists` soft-dependency guard — no new cross-repo surface was added.
+- **Caveat:** columns from two different repeatable fields in one report
+  cross-join their sets (each field is its own join). One repeatable field per
+  report.
 
 ## Coding style
 

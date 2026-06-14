@@ -24,8 +24,14 @@
 
 $string['actioncolumn'] = 'ACTION';
 $string['addnewset'] = 'Add new set';
+$string['columnsubitem'] = '{$a}';
+$string['columnsubitemcode'] = '{$a} (code)';
+$string['columnsubitemname'] = '{$a} (name)';
+$string['datasourcerepeatablesets'] = 'Repeatable profile field sets';
 $string['displaytableinfo'] = 'Information';
 $string['displaytablevalue'] = 'Value';
+$string['entityrepeatableset'] = 'Repeatable set';
+$string['entityrepeatablesetnamed'] = '{$a}';
 $string['errordomainmapduplicatesubitem'] = 'Reference mapping duplicates for sub-item(s): {$a}.';
 $string['errordomainmapformat'] = 'Invalid reference mapping format: {$a}. Use "subitem|domain" (one per line).';
 $string['errordomainmapinvaliddomain'] = 'Invalid domain shortname(s): {$a}. Allowed pattern: lowercase letters, numbers, underscore.';
@@ -70,6 +76,7 @@ $string['referencesubitemdomains_help'] =
 $string['removeset'] = 'Remove set';
 $string['repeatableset'] = 'Set {$a}';
 $string['setcolumn'] = 'SET';
+$string['setnumber'] = 'Set number';
 $string['subitems'] = 'Sub-items (one per line)';
 $string['subitems_help'] =
     'Define each sub-item label on a new line. These labels will become text inputs inside each repeatable set.';

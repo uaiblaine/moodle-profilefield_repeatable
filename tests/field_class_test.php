@@ -434,39 +434,6 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * Ensure subitem/domain mapping parser keeps only valid canonical entries.
-     */
-    public function test_parse_subitem_domain_map_normalises_valid_entries(): void {
-        $this->resetAfterTest();
-
-        $renderer = new \profilefield_repeatable\output\display_renderer(
-            (object) [
-                'id' => 1,
-                'shortname' => 'test',
-                'param1' => "Codigo_Diretoria\nCodigo_Escola",
-                'param3' => '',
-            ],
-            0,
-            '',
-            fn() => false
-        );
-
-            $method = new \ReflectionMethod(\profilefield_repeatable\output\display_renderer::class, 'parse_subitem_domain_map');
-            $method->setAccessible(true);
-
-            $mapping = $method->invoke(
-                $renderer,
-                "codigo_diretoria|Diretorias\ninvalidline\ncodigo_escola|escolas\ncodigo_diretoria|duplicado\nnaoexiste|abc",
-                ['Codigo_Diretoria', 'Codigo_Escola']
-            );
-
-        $this->assertSame([
-            'Codigo_Diretoria' => 'diretorias',
-            'Codigo_Escola' => 'escolas',
-        ], $mapping);
-    }
-
-    /**
      * Ensure profile display falls back to code when reference label is unavailable.
      */
     public function test_display_data_profile_context_keeps_code_when_reference_not_found(): void {

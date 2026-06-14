@@ -36,6 +36,9 @@ class helper {
     /** Maximum length of one sub-item value in characters. */
     public const MAX_VALUE_LENGTH = 1024;
 
+    /** Domain shortname pattern for reference mapping. */
+    public const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
+
     /**
      * Check if the active DB family is PostgreSQL.
      *
@@ -73,6 +76,88 @@ class helper {
         }
 
         return $subitems;
+    }
+
+    /**
+     * Parse subitem/domain mapping lines with format "subitem|domain".
+     *
+     * Shared by display rendering and the Report Builder integration so the
+     * reference-mapping format has a single canonical parser.
+     *
+     * @param string $rawmappings Raw param3 contents.
+     * @param string[] $subitems Canonical configured sub-items.
+     * @return array<string, string> Map of canonical sub-item to domain shortname.
+     */
+    public static function parse_subitem_domain_map(string $rawmappings, array $subitems): array {
+        if (trim($rawmappings) === '' || empty($subitems)) {
+            return [];
+        }
+
+        $canonicalsubitems = [];
+        foreach ($subitems as $subitem) {
+            $canonicalsubitems[\core_text::strtolower($subitem)] = $subitem;
+        }
+
+        $mappings = [];
+        $lines = preg_split('/\R/u', $rawmappings) ?: [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || substr_count($line, '|') !== 1) {
+                continue;
+            }
+
+            [$rawsubitem, $rawdomain] = array_map('trim', explode('|', $line, 2));
+            if ($rawsubitem === '' || $rawdomain === '') {
+                continue;
+            }
+
+            $subitemkey = \core_text::strtolower($rawsubitem);
+            if (!isset($canonicalsubitems[$subitemkey])) {
+                continue;
+            }
+
+            $canonicalsubitem = $canonicalsubitems[$subitemkey];
+            if (isset($mappings[$canonicalsubitem])) {
+                continue;
+            }
+
+            $domain = \core_text::strtolower($rawdomain);
+            if (!preg_match(self::DOMAIN_PATTERN, $domain)) {
+                continue;
+            }
+
+            $mappings[$canonicalsubitem] = $domain;
+        }
+
+        return $mappings;
+    }
+
+    /**
+     * Build a cross-DB SQL expression extracting one sub-item's text value from a set's JSON.
+     *
+     * PostgreSQL reads the JSONB value with the ->> operator (casting defensively so a
+     * not-yet-migrated text column still works); MySQL/MariaDB use
+     * JSON_UNQUOTE(JSON_EXTRACT(...)) with a quoted JSON path. The sub-item key is bound
+     * as a parameter on both drivers so arbitrary labels are handled safely.
+     *
+     * @param \moodle_database $db
+     * @param string $columnsql Aliased reference to the JSON column, e.g. "alias.data".
+     * @param string $subitem Sub-item key to extract.
+     * @param string $paramname Unique bound-parameter name to use for the key.
+     * @return array Two-element list: the SQL expression string and its bound parameters.
+     */
+    public static function sql_subitem_value(
+        \moodle_database $db,
+        string $columnsql,
+        string $subitem,
+        string $paramname
+    ): array {
+        if (static::is_postgres($db)) {
+            return ["(($columnsql)::jsonb ->> :$paramname)", [$paramname => $subitem]];
+        }
+
+        $path = '$."' . str_replace(['\\', '"'], ['\\\\', '\\"'], $subitem) . '"';
+        return ["JSON_UNQUOTE(JSON_EXTRACT($columnsql, :$paramname))", [$paramname => $path]];
     }
 
     /**

@@ -24,8 +24,14 @@
 
 $string['actioncolumn'] = 'AÇÃO';
 $string['addnewset'] = 'Adicionar novo conjunto';
+$string['columnsubitem'] = '{$a}';
+$string['columnsubitemcode'] = '{$a} (código)';
+$string['columnsubitemname'] = '{$a} (nome)';
+$string['datasourcerepeatablesets'] = 'Conjuntos de campo de perfil repetível';
 $string['displaytableinfo'] = 'Informação';
 $string['displaytablevalue'] = 'Valor';
+$string['entityrepeatableset'] = 'Conjunto repetível';
+$string['entityrepeatablesetnamed'] = '{$a}';
 $string['errordomainmapduplicatesubitem'] = 'Mapeamento de referência duplicado para subiten(s): {$a}.';
 $string['errordomainmapformat'] = 'Formato de mapeamento de referência inválido: {$a}. Use "subitem|domínio" (um por linha).';
 $string['errordomainmapinvaliddomain'] = 'Nomes de domínio inválidos: {$a}. Padrão permitido: letras minúsculas, números, sublinhado.';
@@ -70,6 +76,7 @@ $string['referencesubitemdomains_help'] =
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
 $string['setcolumn'] = 'CONJUNTO';
+$string['setnumber'] = 'Número do conjunto';
 $string['subitems'] = 'Subitens (um por linha)';
 $string['subitems_help'] =
     'Defina cada rótulo de subitem em uma nova linha. Esses rótulos se tornarão campos de texto dentro de cada conjunto repetível.';
