@@ -94,7 +94,7 @@ class repeatable_set extends base {
      * Build all columns for the configured sub-items.
      *
      * @param string[] $subitems Canonical configured sub-items.
-     * @param array<string, string> $domainmap Map of sub-item to reference domain.
+     * @param array $domainmap Map of sub-item to reference domain (canonical sub-item => domain).
      * @return column[]
      */
     protected function get_all_columns(array $subitems, array $domainmap): array {
@@ -175,7 +175,7 @@ class repeatable_set extends base {
      * Build all filters for the configured sub-items.
      *
      * @param string[] $subitems Canonical configured sub-items.
-     * @param array<string, string> $domainmap Map of sub-item to reference domain.
+     * @param array $domainmap Map of sub-item to reference domain (canonical sub-item => domain).
      * @return filter[]
      */
     protected function get_all_filters(array $subitems, array $domainmap): array {

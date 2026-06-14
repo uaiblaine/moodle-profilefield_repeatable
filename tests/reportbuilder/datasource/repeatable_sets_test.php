@@ -93,7 +93,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
      * Seed a reference domain with code/label items.
      *
      * @param string $shortname Domain shortname.
-     * @param array<string, string> $codetolabel Code to label map.
+     * @param array $codetolabel Code to label map (code => label).
      */
     private function seed_domain(string $shortname, array $codetolabel): void {
         global $DB;

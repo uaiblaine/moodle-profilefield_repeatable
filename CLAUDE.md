@@ -300,6 +300,11 @@ Moodle's `phpdoc --max-warnings 0` enforces:
   fully implied by signatures)
 - Type hints in PHPDoc use `int|null`, `?int`, `array<int, string>` —
   match the actual PHP type
+- **`@param` cannot use the `array<k, v>` generic.** The PHPDoc checker splits
+  the type on the space inside `array<string, string>` and loses the `$var`
+  name → `incomplete parameters list` (CI error). Use plain `array` (or
+  `type[]`) in `@param`; the `array<...>` generic is only safe in `@var` and
+  `@return`.
 - File-level docblock has `@package`, `@copyright`, `@license`
 - No `@author` tags (Moodle convention)
 
