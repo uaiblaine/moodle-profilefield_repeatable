@@ -9,7 +9,7 @@ A Moodle user profile field plugin that stores repeatable field data as sets of 
 Requirements
 ------------
 
-This plugin requires Moodle 4.5+
+This plugin requires Moodle 4.5+ (tested through Moodle 5.2).
 
 Database baseline follows Moodle requirements:
 

@@ -11,10 +11,12 @@ set in `profilefield_repeatable_data`, whose `data` column is converted to
 **JSONB on PostgreSQL** with a base GIN index and per-sub-item expression
 indexes. Optional code→label "reference resolution" delegates to the companion
 plugin **local_profilefield_repeatable** (soft dependency — see contract
-section). Supports Moodle **4.5 through 5.1** (`$plugin->requires = 2024100100`,
-`$plugin->supported = [405, 501]`), MATURITY_STABLE. CI is the
+section). Supports Moodle **4.5 through 5.2** (`$plugin->requires = 2024100100`,
+`$plugin->supported = [405, 502]`), MATURITY_STABLE. CI is the
 **moodle-an-hochschulen/moodle-workflows** reusable workflow, called once per
-supported Moodle branch in `.github/workflows/ci.yml`.
+supported Moodle branch in `.github/workflows/ci.yml`; releases to the Moodle
+plugins directory are automated by `.github/workflows/moodle-release.yml`
+(triggered on `v*` tags).
 
 ## Commands
 
@@ -41,8 +43,8 @@ here**, `validate`, `savepoints`,
 `mustache`, `grunt --max-lint-warnings 0`) plus runtime legs running
 **PHPUnit (`--fail-on-warning`) and Behat (`--profile chrome`) on every
 PHP × DB combination**; Behat faildumps upload as artifacts on failure.
-`ci.yml` calls the workflow once per supported Moodle branch (5.01 full
-matrix; 5.00/4.05 `one-db-only`) — **update those calls when
+`ci.yml` calls the workflow once per supported Moodle branch (5.02 full
+matrix; 5.01/5.00/4.05 `one-db-only`) — **update those calls when
 `$plugin->supported` changes**. It runs on every push/PR (no protected-ref
 gate; concurrent runs cancel superseded ones). There is no committed local
 wrapper — run checks through your own `moodle-plugin-ci` checkout before

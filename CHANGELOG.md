@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-06-16
+
+### Added
+- Moodle 5.2 support (`$plugin->supported = [405, 502]`); CI runs the full PHP × DB
+  matrix on Moodle 5.02 with 5.01/5.00/4.05 on PostgreSQL only.
+- Automated release to the Moodle plugins directory via `moodle-release.yml`
+  (triggered on `v*` tags).
+
+## [2.1.0] - 2026-06-14
+
+### Added
+- Report Builder datasource (`repeatable_sets`): one row per set, with per-sub-item
+  raw-code and resolved-name columns and matching filters.
+
+### Changed
+- CI migrated to the moodle-an-hochschulen/moodle-workflows reusable workflow,
+  called once per supported Moodle branch (PHPUnit + Behat on every PHP × DB leg)
+  and cross-installing the companion `local_profilefield_repeatable`.
+
 ## [2.0.3] - 2026-06-11
 
 ### Added
