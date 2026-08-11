@@ -57,7 +57,7 @@ const createSetTemplate = (subitems, strings) => {
 
     const title = document.createElement('span');
     title.dataset.region = 'set-title';
-    title.className = 'fw-semibold';
+    title.className = 'profilefield-repeatable-set-title';
     titlecell.appendChild(title);
     row.appendChild(titlecell);
 
