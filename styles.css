@@ -193,3 +193,25 @@
         margin-top: 0;
     }
 }
+
+/*
+ * Sticky table head and set titles.
+ *
+ * These carried top-0, bg-body and fw-semibold, which are Bootstrap 5 utilities: Moodle 4.5
+ * ships Bootstrap 4, whose forward bridge (theme/boost/scss/moodle/bs5-bridge.scss, 116 lines)
+ * covers only g-0, btn-close, the ms/me/ps/pe spacers and float/text/border/rounded-start and
+ * -end. All three resolved to nothing there, so the head scrolled away unstuck and unpainted.
+ *
+ * Owned here rather than polyfilled behind a version gate, because this markup renders on
+ * core's /user/edit.php - the plugin has no page of its own to hang a body class on. The
+ * background reads the theme's own token where it exists and falls back where it does not:
+ * Moodle 5.x defines --bs-body-bg, 4.5 defines no --bs-* custom property at all.
+ */
+.profilefield-repeatable-sticky-head {
+    top: 0;
+    background-color: var(--bs-body-bg, #fff);
+}
+
+.profilefield-repeatable-set-title {
+    font-weight: 600;
+}
