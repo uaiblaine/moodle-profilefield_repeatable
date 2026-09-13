@@ -499,8 +499,11 @@ empty render.
 - Every change under `amd/src/` requires the rebuilt `amd/build/*.min.js`
   (+ `.map`) committed in the same PR (`amd/build/` is tracked; Moodle
   serves the compiled bundle). Build with the grunt command above.
-- Dev loop: *Debug = DEVELOPER* + *cachejs = off* makes Moodle load
-  `amd/src/*.js` directly (no rebuild needed on save).
+- Dev loop: *cachejs = off* stops Moodle caching JavaScript, but it still
+  serves `amd/build/*.min.js`, never `amd/src` (unless the `.map` is missing).
+  Rebuild with `mdl grunt <stack> user/profile/field/repeatable` after each
+  save, then reload. A JS
+  mutation test that skips the rebuild silently tests the old build.
 
 ## PHPUnit tests
 
