@@ -62,27 +62,37 @@ final class reconcile_indexes_test extends \advanced_testcase {
     }
 
     /**
-     * A sub-item whose literal the DML placeholder scan would misread is never given an index.
+     * The desired indexes are the indexed columns, named after the field and the key.
      *
-     * Runs on every database family: the desired map is built from the field record alone.
+     * Runs on every database family: the desired map is built from the field record alone. A stored
+     * key the schema rules reject (here with ":") is never written into the DDL, whose placeholder
+     * scan would misread it.
      */
-    public function test_desired_indexes_skip_subitems_with_placeholder_characters(): void {
+    public function test_desired_indexes_follow_the_indexed_keys(): void {
         $this->resetAfterTest();
 
+        $columns = [
+            ['key' => 'plain', 'label' => 'Plain', 'mode' => 'free', 'title' => true],
+            ['key' => 'start_date', 'label' => 'Start:date', 'mode' => 'free', 'indexed' => true],
+            ['key' => 'name', 'label' => 'Name?', 'mode' => 'free', 'indexed' => true],
+            ['key' => 'bad:key', 'label' => 'Bad', 'mode' => 'free', 'indexed' => true],
+        ];
         $field = $this->getDataGenerator()->create_custom_profile_field([
             'datatype' => 'repeatable',
             'name' => 'Repeatable placeholders',
             'shortname' => 'repeatable_placeholders',
-            'param1' => "plain\nStart:date\nName?",
-            'param2' => "Start:date\nplain\nName?",
+            'param1' => json_encode(['version' => 2, 'columns' => $columns]),
         ]);
 
         $task = new reconcile_indexes();
         $map = new \ReflectionMethod(reconcile_indexes::class, 'get_desired_index_map');
         $desired = $map->invoke($task, (int)$field->id);
 
-        $this->assertSame(['plain'], array_values($desired));
-        $this->assertDebuggingCalledCount(2);
+        $prefix = 'pfrd_f' . $field->id . '_';
+        $this->assertSame([
+            $prefix . substr(sha1('start_date'), 0, 16) => 'start_date',
+            $prefix . substr(sha1('name'), 0, 16) => 'name',
+        ], $desired);
     }
 
     /**
@@ -140,7 +150,7 @@ final class reconcile_indexes_test extends \advanced_testcase {
             'datatype' => 'repeatable',
             'name' => 'Repeatable index',
             'shortname' => 'repeatable_index',
-            'param1' => "name\nrole",
+            'param1' => $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json(['name', 'role']),
         ]);
         $fieldid = (int)$field->id;
         // A second repeatable field whose id starts with the first one's digits.
@@ -151,7 +161,7 @@ final class reconcile_indexes_test extends \advanced_testcase {
             'name' => 'Repeatable index other',
             'datatype' => 'repeatable',
             'categoryid' => $field->categoryid,
-            'param1' => "name\nrole",
+            'param1' => $field->param1,
         ], false, false, true);
 
         $own = 'pfrd_f' . $fieldid . '_' . self::HASH;

@@ -215,3 +215,9 @@
 .profilefield-repeatable-set-title {
     font-weight: 600;
 }
+
+.profilefield-repeatable-required {
+    color: var(--bs-danger, var(--danger, #ca3120));
+    margin-left: 2px;
+    text-decoration: none;
+}

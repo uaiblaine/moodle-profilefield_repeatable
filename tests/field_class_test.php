@@ -21,6 +21,7 @@ defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/user/profile/lib.php');
 require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
+require_once($CFG->dirroot . '/user/profile/definelib.php');
 require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
 
 /**
@@ -32,17 +33,30 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class field_class_test extends \advanced_testcase {
-    /** @var string Sub-items: name and role. */
-    private const SUBITEMS_NAME_ROLE = "name\nrole";
-
-    /** @var string Sub-items: diretoria, escola, turma, disciplina. */
-    private const SUBITEMS_DIR_ESC_TUR_DISC = "diretoria\nescola\nturma\ndisciplina";
-
-    /** @var string Sub-items: codigo_turma, codigo_diretoria, codigo_escola. */
-    private const SUBITEMS_COD_TUR_DIR_ESC = "codigo_turma\ncodigo_diretoria\ncodigo_escola";
-
     /** @var string Script path for profile page. */
     private const SCRIPT_PROFILE = '/user/profile.php';
+
+    /**
+     * The schema JSON of some columns ({@see \profilefield_repeatable_generator::schema_json()}).
+     *
+     * @param array $columns
+     * @return string
+     */
+    private function schema(array $columns): string {
+        return $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json($columns);
+    }
+
+    /**
+     * A free "codigo_diretoria" column on the "diretoria" dictionary, then a free "codigo_escola".
+     *
+     * @return string
+     */
+    private function dictionary_schema(): string {
+        return $this->schema([
+            ['label' => 'codigo_diretoria', 'mode' => 'dictionary', 'domain' => 'diretoria'],
+            'codigo_escola',
+        ]);
+    }
 
     /**
      * Create repeatable profile field instance.
@@ -58,7 +72,7 @@ final class field_class_test extends \advanced_testcase {
             'required' => 0,
             'forceunique' => 0,
             'defaultdata' => '{}',
-            'param1' => self::SUBITEMS_NAME_ROLE,
+            'param1' => $this->schema(['name', 'role']),
         ], $extradata));
 
         return new \profile_field_repeatable(0, 0, $fielddata);
@@ -130,7 +144,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => self::SUBITEMS_DIR_ESC_TUR_DISC,
+            'param1' => $this->schema(['diretoria', 'escola', 'turma', 'disciplina']),
         ]);
 
         $processed = $field->edit_save_data_preprocess(
@@ -151,7 +165,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => self::SUBITEMS_DIR_ESC_TUR_DISC,
+            'param1' => $this->schema(['diretoria', 'escola', 'turma', 'disciplina']),
         ]);
 
         $processed = $field->edit_save_data_preprocess(
@@ -174,7 +188,7 @@ final class field_class_test extends \advanced_testcase {
         $payload = helper::normalise_payload(
             '{"@@ID#10":{"diretoria":"","escola":"","turma":"","disciplina":""},' .
             '"@@ID#20":{"diretoria":"16154","escola":"45","turma":"3"}}',
-            helper::parse_subitems(self::SUBITEMS_DIR_ESC_TUR_DISC)
+            local\schema::from_json($this->schema(['diretoria', 'escola', 'turma', 'disciplina']))
         );
 
         $this->assertSame([
@@ -204,7 +218,7 @@ final class field_class_test extends \advanced_testcase {
             'forceunique' => 0,
             'locked' => 1,
             'defaultdata' => '{}',
-            'param1' => self::SUBITEMS_NAME_ROLE,
+            'param1' => $this->schema(['name', 'role']),
         ]);
         $user = $this->getDataGenerator()->create_user();
 
@@ -242,7 +256,7 @@ final class field_class_test extends \advanced_testcase {
         $this->setAdminUser();
 
         $field = $this->create_field([
-            'param1' => self::SUBITEMS_NAME_ROLE,
+            'param1' => $this->schema(['name', 'role']),
         ]);
         $user = $this->getDataGenerator()->create_user();
         $inputname = $field->inputname;
@@ -297,7 +311,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+            'param1' => $this->schema(['codigo_turma', 'codigo_diretoria', 'codigo_escola']),
         ]);
         $field->data = '{"@@ID#1":{"codigo_turma":"101-A","codigo_diretoria":"DIR","codigo_escola":"EE"}}';
 
@@ -330,7 +344,7 @@ final class field_class_test extends \advanced_testcase {
             'required' => 0,
             'forceunique' => 0,
             'defaultdata' => '{}',
-            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+            'param1' => $this->schema(['codigo_turma', 'codigo_diretoria', 'codigo_escola']),
         ]);
         $user = $this->getDataGenerator()->create_user();
 
@@ -401,7 +415,7 @@ final class field_class_test extends \advanced_testcase {
 
         $field = $this->create_field([
             'name' => 'Field R&D <b>x</b>',
-            'param1' => "Item R&D <b>x</b>\nrole",
+            'param1' => $this->schema(['Item R&D <b>x</b>', 'role']),
         ]);
         $html = $this->submit_edit_form($field, '{}')->render();
 
@@ -419,9 +433,9 @@ final class field_class_test extends \advanced_testcase {
 
         $field = $this->create_field([
             'name' => 'Field R&D <b>x</b>',
-            'param1' => "role\nItem R&D <b>x</b>",
+            'param1' => $this->schema(['role', 'Item R&D <b>x</b>']),
         ]);
-        $field->data = '{"@@ID#1":{"role":"first","Item R&D <b>x</b>":"second"}}';
+        $field->data = '{"@@ID#1":{"role":"first","item_r_d_b_x_b":"second"}}';
 
         $originalscript = $SCRIPT ?? null;
         try {
@@ -433,8 +447,8 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        // The plain list prints the key of each filled sub-item; the accordion titles the set with the first
-        // sub-item's value, labels the other rows with their names and puts the field name in its aria-label.
+        // The plain list prints the label of each filled column; the accordion titles the set with the title
+        // column's value, labels the other rows with their names and puts the field name in its aria-label.
         $this->assertStringContainsString('profilefield-repeatable-display-accordion', $accordion);
         $this->assertSame(1, substr_count($plain, 'Item R&amp;D'));
         $this->assertSame(1, substr_count($accordion, 'Item R&amp;D'));
@@ -454,7 +468,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+            'param1' => $this->schema(['codigo_turma', 'codigo_diretoria', 'codigo_escola']),
         ]);
         $field->data = '{"@@ID#1":{"codigo_turma":"101-A","codigo_diretoria":"DIR","codigo_escola":"EE"}}';
 
@@ -479,7 +493,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => self::SUBITEMS_COD_TUR_DIR_ESC,
+            'param1' => $this->schema(['codigo_turma', 'codigo_diretoria', 'codigo_escola']),
         ]);
         $field->data = '{"@@ID#1":{"codigo_turma":"","codigo_diretoria":"DIR","codigo_escola":"EE"}}';
 
@@ -503,8 +517,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => "codigo_diretoria\ncodigo_escola",
-            'param3' => "codigo_diretoria|diretoria",
+            'param1' => $this->dictionary_schema(),
         ]);
         $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
 
@@ -537,8 +550,7 @@ final class field_class_test extends \advanced_testcase {
         $generator->create_item(['domain' => 'diretoria', 'code' => '16', 'label' => 'Sao Paulo']);
 
         $field = $this->create_field([
-            'param1' => "codigo_diretoria\ncodigo_escola",
-            'param3' => "codigo_diretoria|diretoria",
+            'param1' => $this->dictionary_schema(),
         ]);
         $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
 
@@ -571,8 +583,7 @@ final class field_class_test extends \advanced_testcase {
         $generator->create_item(['domain' => 'diretoria', 'code' => '16', 'label' => 'Sao Paulo']);
 
         $field = $this->create_field([
-            'param1' => "codigo_diretoria\ncodigo_escola",
-            'param3' => "codigo_diretoria|diretoria",
+            'param1' => $this->dictionary_schema(),
         ]);
         $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
 
@@ -597,8 +608,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => "codigo_diretoria\ncodigo_escola",
-            'param3' => "codigo_diretoria|diretoria",
+            'param1' => $this->dictionary_schema(),
         ]);
         $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
 
@@ -622,7 +632,7 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field([
-            'param1' => "codigo_turma\ncodigo_diretoria\ncodigo_escola",
+            'param1' => $this->schema(['codigo_turma', 'codigo_diretoria', 'codigo_escola']),
         ]);
         $field->data = '{"@@ID#1":{"codigo_escola":"EE","codigo_diretoria":"DIR","codigo_turma":"101"}}';
 
@@ -645,9 +655,9 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * Ensure accordion resolves reference labels when field is configured via define_save_preprocess.
+     * Ensure the accordion resolves labels of a schema saved through define_save_preprocess(), domains lower-cased.
      */
-    public function test_display_data_profile_resolves_reference_with_preprocessed_param3(): void {
+    public function test_display_data_profile_resolves_reference_with_preprocessed_schema(): void {
         global $SCRIPT;
 
         $this->resetAfterTest();
@@ -663,12 +673,13 @@ final class field_class_test extends \advanced_testcase {
         $generator->create_domain(['shortname' => 'escolas', 'name' => 'Escolas']);
         $generator->create_item(['domain' => 'escolas', 'code' => '45', 'label' => 'EE Alpha']);
 
-        // Canonicalise param1 and param3 through define_save_preprocess, as the admin form does.
+        // Canonicalise the schema through define_save_preprocess, as the admin form does.
         $define = new \profile_define_repeatable();
         $preprocessed = $define->define_save_preprocess((object) [
-            'param1' => "Codigo_Diretoria\nCodigo_Escola",
-            'param2' => '',
-            'param3' => "codigo_diretoria|Diretorias\ncodigo_escola|ESCOLAS",
+            'param1' => $this->schema([
+                ['label' => 'Codigo_Diretoria', 'mode' => 'dictionary', 'domain' => 'Diretorias'],
+                ['label' => 'Codigo_Escola', 'mode' => 'dictionary_open', 'domain' => 'ESCOLAS'],
+            ]),
         ]);
 
         $fielddata = $this->getDataGenerator()->create_custom_profile_field([
@@ -679,11 +690,10 @@ final class field_class_test extends \advanced_testcase {
             'forceunique' => 0,
             'defaultdata' => '{}',
             'param1' => $preprocessed->param1,
-            'param3' => $preprocessed->param3,
         ]);
 
         $field = new \profile_field_repeatable(0, 0, $fielddata);
-        $field->data = '{"@@ID#1":{"Codigo_Diretoria":"16","Codigo_Escola":"45"}}';
+        $field->data = '{"@@ID#1":{"codigo_diretoria":"16","codigo_escola":"45"}}';
 
         $originalscript = $SCRIPT ?? null;
         try {
@@ -760,7 +770,8 @@ final class field_class_test extends \advanced_testcase {
      * Normalisation must defensively cap set count and value length on non-form paths.
      */
     public function test_normalise_payload_enforces_caps(): void {
-        $subitems = ['name', 'role'];
+        $this->resetAfterTest();
+        $subitems = local\schema::from_json($this->schema(['name', 'role']));
 
         $payload = json_decode($this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 5), true);
         $normalised = \profilefield_repeatable\helper::normalise_payload($payload, $subitems);
@@ -867,7 +878,7 @@ final class field_class_test extends \advanced_testcase {
             'required' => 0,
             'forceunique' => 0,
             'defaultdata' => '{}',
-            'param1' => self::SUBITEMS_NAME_ROLE,
+            'param1' => $this->schema(['name', 'role']),
         ]);
         $payload = '{"@@ID#1":{"name":"Alice","role":"Manager"}}';
         $synctime = 1700000000;
@@ -958,7 +969,7 @@ final class field_class_test extends \advanced_testcase {
             'shortname' => 'repeatable_test',
             'required' => 1,
             'defaultdata' => '{}',
-            'param1' => self::SUBITEMS_NAME_ROLE,
+            'param1' => $this->schema(['name', 'role']),
         ]);
         // Own profile, so core also adds its client-side required rule to the element.
         $field = new \profile_field_repeatable((int)$fielddata->id, (int)$USER->id);
@@ -978,5 +989,143 @@ final class field_class_test extends \advanced_testcase {
         $this->assertNotNull($data);
         $this->assertSame($payload, $data->{$field->inputname});
         $this->assertSame(1, preg_match_all('~<input[^>]* name="' . preg_quote($field->inputname, '~') . '"~', $form->render()));
+    }
+
+    /**
+     * Every set with a value must fill the required columns; an empty optional field passes.
+     */
+    public function test_edit_validate_field_required_columns(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field(['param1' => $this->schema(['name', ['label' => 'Role', 'required' => true]])]);
+        $inputname = $field->inputname;
+        $validate = fn(string $payload): array => $field->edit_validate_field((object)['id' => 0, $inputname => $payload]);
+
+        $this->assertSame([], $validate('{}'), 'The field itself is optional');
+        $this->assertSame([], $validate('{"@@ID#1":{"name":"Alice","role":"Lead"},"@@ID#2":{"name":"","role":"Lead"}}'));
+
+        $errors = $validate('{"@@ID#1":{"name":"Alice","role":"Lead"},"@@ID#2":{"name":"","role":""},'
+            . '"@@ID#3":{"name":"Bob","role":"  "}}');
+        $this->assertSame(
+            [$inputname => get_string('errorcolumnrequired', 'profilefield_repeatable', (object)['set' => 2, 'column' => 'Role'])],
+            $errors,
+            'The emptied set is dropped, so Bob is set 2'
+        );
+    }
+
+    /**
+     * The required column error renders under the widget, and its column name is escaped.
+     */
+    public function test_edit_form_renders_required_column_error(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $field = $this->create_field(['param1' => $this->schema(['name', ['label' => 'R&D', 'required' => true]])]);
+        $form = $this->submit_edit_form($field, '{"@@ID#1":{"name":"Alice","r_d":""}}');
+
+        $this->assertNull($form->get_data());
+        $message = get_string('errorcolumnrequired', 'profilefield_repeatable', (object)['set' => 1, 'column' => 'R&amp;D']);
+        $this->assertMatchesRegularExpression(
+            '~id="' . preg_quote('fgroup_id_error_' . $field->inputname, '~') . '"[^>]*>\s*' . preg_quote($message, '~') . '~',
+            $form->render()
+        );
+    }
+
+    /**
+     * The edit form gives the widget each column's key, plain label and required flag, and marks required headers.
+     */
+    public function test_edit_form_hands_the_columns_to_the_widget(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $field = $this->create_field(['param1' => $this->schema([
+            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'iso639', 'required' => true],
+            'Notes',
+        ])]);
+        $html = $this->submit_edit_form($field, '{}')->render();
+
+        $this->assertSame(1, preg_match('~data-columns="([^"]*)"~', $html, $matches));
+        $this->assertSame([
+            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'required' => true],
+            ['key' => 'notes', 'label' => 'Notes', 'mode' => 'free', 'required' => false],
+        ], json_decode(html_entity_decode($matches[1]), true));
+        $this->assertSame(1, substr_count($html, 'class="profilefield-repeatable-required"'));
+    }
+
+    /**
+     * A payload still keyed by version 1 labels reads like its re-keyed form, through the legacy labels.
+     */
+    public function test_reads_accept_label_keyed_payloads_while_legacy_labels_exist(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $field = $this->create_field([
+            'param1' => $this->schema([
+                ['key' => 'full_name', 'label' => 'Full name'],
+                'role',
+                ['label' => 'Required x', 'required' => true],
+            ]),
+        ]);
+        $legacy = ['full_name' => 'Name (old)', 'required_x' => 'Req'];
+        set_config(local\schema::legacy_config_name((int)$field->field->id), json_encode($legacy), 'profilefield_repeatable');
+        $field = new \profile_field_repeatable(0, 0, $field->field);
+
+        // Set 1 has the version 1 shape; set 2 was saved after the upgrade, keyed by key.
+        $field->data = '{"@@ID#1":{"Name (old)":"Alice","role":"Lead","Req":"yes"},'
+            . '"@@ID#2":{"full_name":"Bob","role":"","required_x":"no","Name (old)":"ignored"}}';
+
+        $loaded = new \stdClass();
+        $field->edit_load_user_data($loaded);
+        $this->assertSame(
+            '{"@@ID#1":{"full_name":"Alice","role":"Lead","required_x":"yes"},'
+                . '"@@ID#2":{"full_name":"Bob","role":"","required_x":"no"}}',
+            $loaded->{$field->inputname}
+        );
+        $this->assertFalse($field->is_empty());
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+        $this->assertStringContainsString('Alice', $output);
+        $this->assertStringNotContainsString('ignored', $output);
+
+        // The raw caps see a value under its legacy label too.
+        $oversized = str_repeat('a', helper::MAX_VALUE_LENGTH + 1);
+        $errors = $field->edit_validate_field((object)[
+            'id' => 0,
+            $field->inputname => json_encode(['@@ID#1' => ['Req' => $oversized]]),
+        ]);
+        $this->assertSame(
+            get_string('errorvaluetoolong', 'profilefield_repeatable', helper::MAX_VALUE_LENGTH),
+            $errors[$field->inputname]
+        );
+
+        // Without the legacy labels, the version 1 set is only "role".
+        unset_config(local\schema::legacy_config_name((int)$field->field->id), 'profilefield_repeatable');
+        $field = new \profile_field_repeatable(0, 0, $field->field);
+        $field->data = '{"@@ID#1":{"Name (old)":"Alice","role":"Lead"}}';
+        $loaded = new \stdClass();
+        $field->edit_load_user_data($loaded);
+        $this->assertSame('{"@@ID#1":{"full_name":"","role":"Lead","required_x":""}}', $loaded->{$field->inputname});
+    }
+
+    /**
+     * A field still on the version 1 parameters reads its label-keyed payloads, e.g. before the upgrade step.
+     */
+    public function test_reads_accept_a_v1_field(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field(['param1' => "Full name\nRole", 'param4' => 'Role']);
+        $field->data = '{"@@ID#1":{"Full name":"Alice","Role":"Lead"}}';
+
+        $loaded = new \stdClass();
+        $field->edit_load_user_data($loaded);
+        $this->assertSame('{"@@ID#1":{"full_name":"Alice","role":"Lead"}}', $loaded->{$field->inputname});
     }
 }

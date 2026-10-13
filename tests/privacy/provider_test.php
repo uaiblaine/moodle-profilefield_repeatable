@@ -55,7 +55,10 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             'required' => 0,
             'forceunique' => 0,
             'defaultdata' => '{}',
-            'param1' => "name\nrole",
+            'param1' => $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json([
+                ['key' => 'name', 'label' => 'Full <b>name</b>'],
+                'Role',
+            ]),
         ]);
 
         $fieldrecord = $DB->get_record('user_info_field', ['id' => $fielddata->id], '*', MUST_EXIST);
@@ -82,7 +85,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * Exporting must keep the data of every repeatable field, one subcontext per field.
+     * Exporting must keep the data of every repeatable field, one subcontext per field, sets under labels.
      */
     public function test_export_user_data_keeps_all_repeatable_fields(): void {
         $this->resetAfterTest();
@@ -118,8 +121,37 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
         $this->assertNotEmpty((array)$dataa, 'Field "Repeatable A" must be exported under its own subcontext.');
         $this->assertNotEmpty((array)$datab, 'Field "Repeatable B" must be exported under its own subcontext.');
-        $this->assertStringContainsString('Alice', (string)$dataa->data);
-        $this->assertStringContainsString('Bob', (string)$datab->data);
+        $set = get_string('repeatableset', 'profilefield_repeatable', 1);
+        $this->assertSame([$set => ['Full name' => 'Alice', 'Role' => 'Manager']], $dataa->sets);
+        $this->assertSame([$set => ['Full name' => 'Bob', 'Role' => 'Teacher']], $datab->sets);
+        $this->assertObjectNotHasProperty('data', $dataa);
+    }
+
+    /**
+     * A payload still keyed by version 1 labels exports the same sets.
+     */
+    public function test_export_user_data_reads_label_keyed_payloads(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        $fieldid = $this->create_field_with_data('repeatable_priv_v1', 'Repeatable V1', (int)$user->id, '{}');
+        $DB->set_field('user_info_data', 'data', '{"@@ID#1":{"Old name":"Alice","role":"Lead"}}', [
+            'userid' => $user->id,
+            'fieldid' => $fieldid,
+        ]);
+        set_config(
+            \profilefield_repeatable\local\schema::legacy_config_name($fieldid),
+            json_encode(['name' => 'Old name']),
+            'profilefield_repeatable'
+        );
+
+        $context = \context_user::instance($user->id);
+        provider::export_user_data(new approved_contextlist($user, 'profilefield_repeatable', [$context->id]));
+
+        $data = writer::with_context($context)->get_data([get_string('pluginname', 'profilefield_repeatable'), 'Repeatable V1']);
+        $set = get_string('repeatableset', 'profilefield_repeatable', 1);
+        $this->assertSame([$set => ['Full name' => 'Alice', 'Role' => 'Lead']], $data->sets);
     }
 
     /**
@@ -213,7 +245,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             get_string('pluginname', 'profilefield_repeatable'),
             'Repeatable Types',
         ]);
-        $this->assertStringContainsString('Alice', (string)($data->data ?? ''));
+        $this->assertSame('Alice', $data->sets[get_string('repeatableset', 'profilefield_repeatable', 1)]['Full name'] ?? null);
 
         provider::delete_data_for_user(new approved_contextlist($requester, 'profilefield_repeatable', [$context->id]));
         $this->assertFalse($DB->record_exists('profilefield_repeatable_data', ['userid' => $user->id]));

@@ -47,7 +47,7 @@ final class observer_test extends \advanced_testcase {
             'required' => 0,
             'forceunique' => 0,
             'defaultdata' => '{}',
-            'param1' => "name\nrole",
+            'param1' => $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json(['name', 'role']),
         ]);
 
         return (int)$fielddata->id;

@@ -70,7 +70,7 @@ final class reproject_sets_test extends \advanced_testcase {
             'name' => 'Repeatable task',
             'shortname' => 'repeatable_task',
             'defaultdata' => '{}',
-            'param1' => "name\nrole",
+            'param1' => $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json(['name', 'role']),
         ]);
         $current = (int)$this->getDataGenerator()->create_user()->id;
         $stale = (int)$this->getDataGenerator()->create_user()->id;

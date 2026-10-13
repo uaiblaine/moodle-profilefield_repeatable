@@ -5,10 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Column schema v2**: a field's columns are one JSON schema in `param1`
+  (`{"version": 2, "columns": [...]}`), each column with a stable key, a label, a mode (`free`,
+  `dictionary`, `dictionary_open`; `pattern` is reserved), an optional domain and parent column,
+  and its role (title, subline, required, indexed). Values, Report Builder identifiers and index
+  names follow the key, so renaming a column no longer orphans its data. The definition form edits
+  the schema as JSON and lists every broken rule under it.
+- Per-column **required**: every set that has a value must fill the required columns; the field's
+  own "required" setting still means "at least one set".
+- Report Builder: free columns are `repeatable_<shortname>:<key>`, dictionary columns
+  `<key>_name` and `<key>_code`; column titles use the column name.
+- Privacy export lists each set's values under the column names.
+- A test data generator for repeatable fields.
 - Moodle 5.3 support: `$plugin->supported` is now `[405, 503]`, and CI runs the full PHP x database
   matrix on 5.3 (5.2 runs one database).
 
 ### Changed
+- `param2`..`param4` are no longer used and are cleared when a field is saved; the strings of the
+  four lists, of their errors and the unused `displaytableinfo`/`displaytablevalue` are removed.
+- The edit widget receives its columns (key, label, mode, required) in a data attribute and marks
+  required columns in the table header.
+- Indexed columns no longer need the ":", "?" and "$" check: keys cannot contain them.
 - Copyright headers carry the name only (no e-mail address); `amd/build` rebuilt for the edited
   module docblocks.
 - `.gitattributes` and `.stylelintrc.json` follow the fleet templates.

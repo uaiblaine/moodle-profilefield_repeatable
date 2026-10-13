@@ -41,17 +41,22 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  */
 final class repeatable_sets_test extends core_reportbuilder_testcase {
     /**
-     * Create a repeatable profile field definition.
+     * Create a repeatable profile field definition: columns "diretoria" and "escola".
      *
      * @param array $extra Extra field configuration to merge.
+     * @param string|null $domain Dictionary of the "diretoria" column; null leaves it free text.
      * @return \stdClass The user_info_field record.
      */
-    private function create_repeatable_field(array $extra = []): \stdClass {
+    private function create_repeatable_field(array $extra = [], ?string $domain = null): \stdClass {
+        $diretoria = $domain === null ? 'diretoria' : ['label' => 'diretoria', 'mode' => 'dictionary', 'domain' => $domain];
         return $this->getDataGenerator()->create_custom_profile_field(array_merge([
             'datatype' => 'repeatable',
             'name' => 'Lotacao',
             'shortname' => 'lotacao',
-            'param1' => "diretoria\nescola",
+            'param1' => $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json([
+                $diretoria,
+                'escola',
+            ]),
         ], $extra));
     }
 
@@ -125,8 +130,8 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
         $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:fullname']);
         $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':setnumber']);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitem1']);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitem2']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':escola']);
         $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
 
         $content = $this->get_custom_report_content($report->get('id'), 0, [
@@ -160,15 +165,15 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitem1']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria']);
         $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
-        $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitem1']);
+        $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria']);
 
         $content = $this->get_custom_report_content($report->get('id'), 0, [
             'user:username_operator' => text::IS_EQUAL_TO,
             'user:username_value' => $user->username,
-            $entity . ':subitem1_operator' => text::IS_EQUAL_TO,
-            $entity . ':subitem1_value' => '16',
+            $entity . ':diretoria_operator' => text::IS_EQUAL_TO,
+            $entity . ':diretoria_value' => '16',
         ]);
 
         $this->assertCount(1, $content);
@@ -182,14 +187,14 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
+        $fielddef = $this->create_repeatable_field([], 'diretorias');
         $user = $this->getDataGenerator()->create_user();
         $this->save_sets($fielddef, $user, '{"@@ID#1":{"diretoria":"16","escola":"45"}}');
 
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemcode1']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria_code']);
         $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
 
         $content = $this->get_custom_report_content($report->get('id'), 0, [
@@ -255,7 +260,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         repeatable_set::reset_label_memo();
         $this->seed_domain('diretorias', ['16' => 'Diretoria Centro', '99' => 'Diretoria Norte']);
 
-        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
+        $fielddef = $this->create_repeatable_field([], 'diretorias');
         $user = $this->getDataGenerator()->create_user();
         $this->save_sets(
             $fielddef,
@@ -266,10 +271,10 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemname1']);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemcode1']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria_name']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria_code']);
         $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
-        $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemname1']);
+        $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria_name']);
 
         $content = $this->get_custom_report_content($report->get('id'), 0, [
             'user:username_operator' => text::IS_EQUAL_TO,
@@ -283,7 +288,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $filtered = $this->get_custom_report_content($report->get('id'), 0, [
             'user:username_operator' => text::IS_EQUAL_TO,
             'user:username_value' => $user->username,
-            $entity . ':subitemname1_values' => ['16'],
+            $entity . ':diretoria_name_values' => ['16'],
         ]);
 
         $this->assertCount(1, $filtered);
@@ -319,7 +324,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
+        $fielddef = $this->create_repeatable_field([], 'diretorias');
         $user = $this->getDataGenerator()->create_user();
         $this->save_sets($fielddef, $user, json_encode([
             '@@ID#1' => ['diretoria' => '<img src=x onerror=alert(1)>', 'escola' => '<script>alert(2)</script>'],
@@ -328,9 +333,9 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemname1']);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemcode1']);
-        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitem2']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria_name']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':diretoria_code']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':escola']);
         $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
 
         $content = $this->get_custom_report_content($report->get('id'), 0, [
@@ -352,13 +357,14 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
+        $fielddef = $this->create_repeatable_field([], 'diretorias');
         $user = $this->getDataGenerator()->create_user();
         $code = '<img src=x onerror=alert(1)>';
         $this->save_sets($fielddef, $user, json_encode(['@@ID#1' => ['diretoria' => $code, 'escola' => '1']]));
 
         $method = new \ReflectionMethod(repeatable_set::class, 'name_filter_options');
-        $options = $method->invoke(null, (int)$fielddef->id, 'diretoria', 'diretorias');
+        $schema = \profilefield_repeatable\local\schema::from_field($fielddef);
+        $options = $method->invoke(null, (int)$fielddef->id, $schema, 'diretoria', 'diretorias');
 
         $this->assertSame([$code => s($code)], $options);
     }
@@ -391,7 +397,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias', 'visible' => $visible]);
+        $fielddef = $this->create_repeatable_field(['visible' => $visible], 'diretorias');
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
 
@@ -402,7 +408,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $instance = manager::get_report_from_persistent($report);
 
         $entity = $this->entity_name($fielddef);
-        foreach (['setnumber', 'subitemname1', 'subitemcode1', 'subitem2'] as $name) {
+        foreach (['setnumber', 'diretoria_name', 'diretoria_code', 'escola'] as $name) {
             $column = $instance->get_column("{$entity}:{$name}");
             $this->assertNotNull($column, "Column {$name}");
             $this->assertSame($expected, $column->get_is_available(), "Column {$name}");
@@ -451,17 +457,15 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->setAdminUser();
 
         $teachers = $this->create_repeatable_field([
-            'param3' => 'diretoria|diretorias',
             'visible' => PROFILE_VISIBLE_TEACHERS,
             'shortname' => 'teachersfield',
             'name' => 'Teachers field',
-        ]);
+        ], 'diretorias');
         $private = $this->create_repeatable_field([
-            'param3' => 'diretoria|diretorias',
             'visible' => PROFILE_VISIBLE_PRIVATE,
             'shortname' => 'privatefield',
             'name' => 'Private field',
-        ]);
+        ], 'diretorias');
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
         $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
 

@@ -152,7 +152,7 @@ class projection {
         }
 
         $datarecords = $DB->get_records_sql(
-            "SELECT d.id, d.userid, d.fieldid, d.data, f.param1
+            "SELECT d.id, d.userid, d.fieldid, d.data, f.param1, f.param2, f.param3, f.param4
                FROM {user_info_data} d
                JOIN {user_info_field} f ON f.id = d.fieldid
               WHERE d.userid = :userid
@@ -176,9 +176,16 @@ class projection {
 
         $stale = [];
         foreach ($datarecords as $datarecord) {
-            $payload = helper::normalise_payload($datarecord->data, helper::parse_subitems((string)$datarecord->param1));
+            $schema = schema::from_field((object)[
+                'id' => $datarecord->fieldid,
+                'param1' => $datarecord->param1,
+                'param2' => $datarecord->param2,
+                'param3' => $datarecord->param3,
+                'param4' => $datarecord->param4,
+            ]);
+            $payload = helper::normalise_payload($datarecord->data, $schema);
             if (!self::is_current($payload, $rowsbydataid[(int)$datarecord->id] ?? [])) {
-                $stale[] = [(int)$datarecord->id, helper::parse_subitems((string)$datarecord->param1)];
+                $stale[] = [(int)$datarecord->id, $schema];
             }
         }
 
@@ -191,14 +198,14 @@ class projection {
      * Walks the payloads and the rows of the field in two ordered recordsets, so each run costs
      * two queries per field plus one {@see self::reproject_record()} transaction per stale record.
      *
-     * @param \stdClass $field The {user_info_field} record (id, param1).
+     * @param \stdClass $field The {user_info_field} record (id, param1..param4).
      * @return int Number of {user_info_data} records whose rows were rewritten.
      */
     public static function reproject_field(\stdClass $field): int {
         global $DB;
 
         $fieldid = (int)$field->id;
-        $subitems = helper::parse_subitems((string)($field->param1 ?? ''));
+        $schema = schema::from_field($field);
 
         $datars = $DB->get_recordset('user_info_data', ['fieldid' => $fieldid], 'id ASC', 'id, userid, data');
         $rowrs = $DB->get_recordset(
@@ -221,9 +228,9 @@ class projection {
                 $rowrs->next();
             }
 
-            $payload = helper::normalise_payload($datarecord->data, $subitems);
+            $payload = helper::normalise_payload($datarecord->data, $schema);
             if (!self::is_current($payload, $records)) {
-                $stale[] = [$dataid, $subitems];
+                $stale[] = [$dataid, $schema];
             }
         }
         $datars->close();
@@ -235,13 +242,13 @@ class projection {
     /**
      * Rewrite the rows of each stale record, one transaction per record.
      *
-     * @param array $stale List of [dataid, subitems].
+     * @param array $stale List of [dataid, schema].
      * @return int Number of records rewritten.
      */
     private static function write_stale(array $stale): int {
         $written = 0;
-        foreach ($stale as [$dataid, $subitems]) {
-            if (self::reproject_record($dataid, $subitems)) {
+        foreach ($stale as [$dataid, $schema]) {
+            if (self::reproject_record($dataid, $schema)) {
                 $written++;
             }
         }
@@ -260,10 +267,10 @@ class projection {
      * Internal API: called by the reprojection paths of this class and by its tests.
      *
      * @param int $dataid The {user_info_data}.id.
-     * @param string[] $subitems Configured sub-items of the field ({@see helper::parse_subitems()}).
+     * @param schema $schema Column schema of the field ({@see schema::from_field()}).
      * @return bool Whether rows were rewritten; false when the record is gone or already current.
      */
-    public static function reproject_record(int $dataid, array $subitems): bool {
+    public static function reproject_record(int $dataid, schema $schema): bool {
         global $DB;
 
         $transaction = $DB->start_delegated_transaction();
@@ -274,7 +281,7 @@ class projection {
             return false;
         }
 
-        $payload = helper::normalise_payload($datarecord->data, $subitems);
+        $payload = helper::normalise_payload($datarecord->data, $schema);
         $records = $DB->get_records(
             'profilefield_repeatable_data',
             ['dataid' => $dataid],

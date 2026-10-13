@@ -6,8 +6,8 @@ Feature: Repeatable profile field sets in Report Builder
 
   Background:
     Given the following "custom profile fields" exist:
-      | datatype   | shortname | name    | param1    |
-      | repeatable | lotacao   | Lotacao | diretoria |
+      | datatype   | shortname | name    | param1                                                                                     |
+      | repeatable | lotacao   | Lotacao | {"version":2,"columns":[{"key":"diretoria","label":"Diretoria","mode":"free","title":true}]} |
     And the following "users" exist:
       | username | firstname | lastname | email                | profile_field_lotacao                                    |
       | teacher1 | Teacher   | One      | teacher1@example.com | {"@@ID#1":{"diretoria":"16"},"@@ID#2":{"diretoria":"99"}} |
@@ -18,7 +18,7 @@ Feature: Repeatable profile field sets in Report Builder
       | report  | uniqueidentifier             |
       | My sets | user:fullname                |
       | My sets | repeatable_lotacao:setnumber |
-      | My sets | repeatable_lotacao:subitem1  |
+      | My sets | repeatable_lotacao:diretoria |
 
   Scenario: Each repeatable set is shown as its own report row
     When I am on the "My sets" "reportbuilder > Editor" page logged in as "admin"

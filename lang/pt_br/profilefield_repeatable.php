@@ -24,27 +24,21 @@
 
 $string['actioncolumn'] = 'AÇÃO';
 $string['addnewset'] = 'Adicionar novo conjunto';
+$string['columns'] = 'Colunas';
+$string['columns_help'] =
+    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma chave com valores não pode mudar; renomeie o nome da coluna.';
 $string['columnsubitem'] = '{$a}';
 $string['columnsubitemcode'] = '{$a} (código)';
 $string['columnsubitemname'] = '{$a} (nome)';
 $string['datasourcerepeatablesets'] = 'Conjuntos de campo de perfil repetível';
-$string['displaytableinfo'] = 'Informação';
-$string['displaytablevalue'] = 'Valor';
 $string['entityrepeatableset'] = 'Conjunto repetível';
 $string['entityrepeatablesetnamed'] = '{$a}';
+$string['errorcolumnrequired'] = 'Conjunto {$a->set}: {$a->column} é obrigatório.';
 $string['errorcolumnslimit'] = 'Um campo pode ter no máximo {$a} colunas.';
 $string['errorcolumnsrequired'] = 'Adicione pelo menos uma coluna.';
 $string['errordomaininvalid'] = 'Coluna "{$a}": escolha um dicionário (letras minúsculas, dígitos e sublinhado).';
-$string['errordomainmapduplicatesubitem'] = 'Mapeamento de referência duplicado para subiten(s): {$a}.';
-$string['errordomainmapformat'] = 'Formato de mapeamento de referência inválido: {$a}. Use "subitem|domínio" (um por linha).';
-$string['errordomainmapinvaliddomain'] = 'Nomes de domínio inválidos: {$a}. Padrão permitido: letras minúsculas, números, sublinhado.';
-$string['errordomainmapmissingdomain'] = 'Domínio(s) de referência não encontrado(s) em local_dictionaries: {$a}.';
-$string['errordomainmapunknownsubitem'] = 'Subiten(s) de mapeamento de referência não encontrado(s) em Subitens: {$a}.';
 $string['errordomainmissing'] = 'Dicionário não encontrado no local_dictionaries: {$a}.';
 $string['errorindexedlimit'] = 'No máximo {$a} colunas podem ser indexadas.';
-$string['errorindexedsubitemlimit'] = 'Você pode indexar no máximo {$a} subitens para este campo.';
-$string['errorindexedsubitemplaceholder'] = 'Subitens indexados não podem conter ":", "?" ou "$": {$a}.';
-$string['errorindexedsubitemunknown'] = 'Subiten(s) indexado(s) não encontrado(s) em Subitens: {$a}.';
 $string['errorinvalidjson'] = 'Payload repetível inválido; esperado um objeto JSON.';
 $string['errorkeyconflict'] = 'Duas colunas geram a coluna de relatório "{$a}": mude uma das chaves.';
 $string['errorkeyduplicate'] = 'Chave usada por duas colunas: {$a}.';
@@ -55,20 +49,11 @@ $string['errorlabelrequired'] = 'A coluna {$a} não tem nome.';
 $string['errormodeinvalid'] = 'Coluna "{$a}": escolha texto livre ou um modo de dicionário.';
 $string['errorparentinvalid'] = 'A coluna "{$a}" só pode depender de uma coluna de dicionário anterior.';
 $string['errorschemainvalid'] = 'As colunas não formam um esquema versão 2 válido.';
-$string['errorsubitemsduplicate'] = 'Os subitens devem ser únicos (sem distinção entre maiúsculas e minúsculas).';
-$string['errorsubitemsrequired'] = 'Informe pelo menos um subitem, um por linha.';
-$string['errorsublineincludesprimary'] = 'A linha auxiliar não pode incluir o subitem do título ({$a}); ele já é usado como cabeçalho.';
 $string['errorsublinelimit'] = 'No máximo {$a} colunas podem aparecer na linha auxiliar.';
-$string['errorsublinesubitemduplicate'] = 'Subiten(s) da linha auxiliar duplicado(s): {$a}.';
-$string['errorsublinesubitemlimit'] = 'Você pode incluir no máximo {$a} subitens na linha auxiliar.';
-$string['errorsublinesubitemunknown'] = 'Subiten(s) da linha auxiliar não encontrado(s) em Subitens: {$a}.';
 $string['errorsublinetitle'] = 'A coluna "{$a}" é o título e não pode estar também na linha auxiliar.';
 $string['errortitlecount'] = 'Marque exatamente uma coluna como título do conjunto.';
 $string['errortoomanysets'] = 'Conjuntos demais: no máximo {$a} conjuntos são permitidos.';
 $string['errorvaluetoolong'] = 'Valor muito longo: cada valor é limitado a {$a} caracteres.';
-$string['indexedsubitems'] = 'Subitens indexados (um por linha)';
-$string['indexedsubitems_help'] =
-    'Opcionalmente liste subitens que devem receber índices PostgreSQL dedicados. Cada linha deve corresponder exatamente a um subitem.';
 $string['pluginname'] = 'Conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:data'] = 'Dados do usuário do campo de perfil de conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:dataformat'] =
@@ -88,19 +73,10 @@ $string['privacy:metadata:profilefield_repeatable_data:timecreated'] = 'A data e
 $string['privacy:metadata:profilefield_repeatable_data:timemodified'] = 'A data da última modificação da linha do conjunto';
 $string['privacy:metadata:profilefield_repeatable_data:userid'] = 'O ID do usuário proprietário dos dados deste campo repetível';
 $string['profilewidgettitle'] = 'Campos repetíveis';
-$string['referencesubitemdomains'] = 'Mapeamento de referência (subitem|domínio, um por linha)';
-$string['referencesubitemdomains_help'] =
-    'Mapeamento opcional para resolver valores codificados em rótulos na exibição do perfil. Formate cada linha como "subitem|domínio", onde domínio é um nome curto de local_dictionaries.';
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
 $string['setcolumn'] = 'CONJUNTO';
 $string['setnumber'] = 'Número do conjunto';
-$string['subitems'] = 'Subitens (um por linha)';
-$string['subitems_help'] =
-    'Defina cada rótulo de subitem em uma nova linha. Esses rótulos se tornarão campos de texto dentro de cada conjunto repetível.';
-$string['sublinesubitems'] = 'Subitens da linha auxiliar (um por linha)';
-$string['sublinesubitems_help'] =
-    'Opcionalmente liste subitens a exibir como linha secundária sob o título quando o conjunto estiver fechado (por exemplo, "Disciplina · Escola"). Cada linha deve corresponder exatamente a um subitem. O primeiro subitem é reservado para o título e não pode ser usado aqui. Máximo de 3 entradas. Deixe em branco para ocultar a linha auxiliar.';
 $string['synchronisedat'] = 'Sincronizado em: {$a}';
 $string['taskreconcileindexes'] = 'Reconciliar índices JSON do campo de perfil repetível';
 $string['taskreprojectsets'] = 'Reconstruir os conjuntos do campo de perfil repetível para relatórios';

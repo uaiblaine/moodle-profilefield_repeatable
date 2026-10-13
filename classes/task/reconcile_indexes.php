@@ -19,11 +19,12 @@ namespace profilefield_repeatable\task;
 use core\task\adhoc_task;
 use core\task\manager;
 use profilefield_repeatable\helper;
+use profilefield_repeatable\local\schema;
 
 /**
- * Reconcile dynamic PostgreSQL indexes for configured repeatable sub-items.
+ * Reconcile dynamic PostgreSQL indexes for the indexed columns of a repeatable field.
  *
- * Creates and drops one expression index per indexed sub-item (param2) of a field. It is an adhoc
+ * Creates and drops one expression index per indexed column of a field ({@see schema::indexed_keys()}). It is an adhoc
  * task, outside any transaction, because CREATE/DROP INDEX CONCURRENTLY cannot run inside one and
  * may take long on a large table. Every run also drops the indexes of any field that no longer
  * exists ({@see self::sweep_orphaned_indexes()}).
@@ -33,9 +34,6 @@ use profilefield_repeatable\helper;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class reconcile_indexes extends adhoc_task {
-    /** Maximum number of indexed sub-items per field; keep in step with profile_define_repeatable. */
-    private const MAX_INDEXED_SUBITEMS = 3;
-
     /** Name of every index this task owns: field id, then the hash from {@see build_index_name()}. */
     private const INDEX_NAME_PATTERN = '/^pfrd_f(\d+)_[0-9a-f]{16}$/';
 
@@ -72,11 +70,11 @@ class reconcile_indexes extends adhoc_task {
             $this->drop_index_concurrently($indexname);
         }
 
-        foreach ($desired as $indexname => $subitem) {
+        foreach ($desired as $indexname => $key) {
             if (in_array($indexname, $existing, true)) {
                 continue;
             }
-            $this->create_index_concurrently((int)$fieldid, $subitem, $indexname);
+            $this->create_index_concurrently((int)$fieldid, $key, $indexname);
         }
 
         $this->sweep_orphaned_indexes();
@@ -129,10 +127,13 @@ class reconcile_indexes extends adhoc_task {
     }
 
     /**
-     * Resolve desired indexes for a field from param2.
+     * Resolve desired indexes for a field from its indexed columns.
+     *
+     * Keys match {@see schema::KEY_PATTERN}, so their literal is safe in the index DDL, which
+     * moodle_database::execute() scans for placeholders even inside quotes.
      *
      * @param int $fieldid
-     * @return array<string, string> Index name => canonical sub-item; empty once the field is gone.
+     * @return array<string, string> Index name => column key; empty once the field is gone.
      */
     private function get_desired_index_map(int $fieldid): array {
         global $DB;
@@ -140,57 +141,18 @@ class reconcile_indexes extends adhoc_task {
         $field = $DB->get_record('user_info_field', [
             'id' => $fieldid,
             'datatype' => 'repeatable',
-        ], 'id, param1, param2');
+        ], 'id, param1, param2, param3, param4');
 
         if (!$field) {
             return [];
         }
 
-        $subitems = helper::parse_subitems((string)$field->param1);
-        if (empty($subitems)) {
-            return [];
-        }
-
-        $canonicalmap = [];
-        foreach ($subitems as $subitem) {
-            $canonicalmap[\core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $indexedsubitems = [];
-        $seen = [];
-        $lines = preg_split('/\R/u', (string)$field->param2) ?: [];
-        foreach ($lines as $line) {
-            $candidate = trim($line);
-            if ($candidate === '') {
-                continue;
-            }
-
-            $normalised = \core_text::strtolower($candidate);
-            if (isset($seen[$normalised]) || !isset($canonicalmap[$normalised])) {
-                continue;
-            }
-
-            $seen[$normalised] = true;
-            $indexedsubitems[] = $canonicalmap[$normalised];
-
-            if (count($indexedsubitems) >= self::MAX_INDEXED_SUBITEMS) {
-                break;
-            }
-        }
-
         $desired = [];
-        foreach ($indexedsubitems as $subitem) {
-            if (!helper::is_indexable_subitem($subitem)) {
-                // Its literal would be read as a query placeholder, see helper::is_indexable_subitem().
-                debugging(
-                    'profilefield_repeatable: not indexing sub-item "' . $subitem . '" of field ' . $fieldid .
-                    ': it contains ":", "?" or "$"',
-                    DEBUG_DEVELOPER
-                );
+        foreach (schema::from_field($field)->indexed_keys() as $key) {
+            if (!preg_match(schema::KEY_PATTERN, $key)) {
                 continue;
             }
-            $indexname = $this->build_index_name($fieldid, $subitem);
-            $desired[$indexname] = $subitem;
+            $desired[$this->build_index_name($fieldid, $key)] = $key;
         }
 
         return $desired;
@@ -271,21 +233,21 @@ class reconcile_indexes extends adhoc_task {
     }
 
     /**
-     * Create one expression index for a flagged sub-item.
+     * Create one expression index for an indexed column.
      *
      * CREATE INDEX CONCURRENTLY cannot run inside a transaction; the cron runner starts none
      * around an adhoc task.
      *
      * @param int $fieldid
-     * @param string $subitem
+     * @param string $key Column key.
      * @param string $indexname
      */
-    private function create_index_concurrently(int $fieldid, string $subitem, string $indexname): void {
+    private function create_index_concurrently(int $fieldid, string $key, string $indexname): void {
         global $DB;
 
         $quotedindex = helper::quote_identifier($indexname);
         $quotedtable = helper::quote_identifier($DB->get_prefix() . 'profilefield_repeatable_data');
-        $literal = $this->quote_literal($subitem);
+        $literal = $this->quote_literal($key);
         $fieldid = (int)$fieldid;
 
         $sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS $quotedindex
@@ -301,7 +263,7 @@ class reconcile_indexes extends adhoc_task {
         } catch (\Throwable $e) {
             debugging(
                 'Could not create repeatable index ' . $indexname .
-                ' for field ' . $fieldid . ' and subitem "' . $subitem . '": ' . $e->getMessage(),
+                ' for field ' . $fieldid . ' and column "' . $key . '": ' . $e->getMessage(),
                 DEBUG_DEVELOPER
             );
         }
@@ -326,14 +288,14 @@ class reconcile_indexes extends adhoc_task {
     }
 
     /**
-     * Build deterministic index name using field id + sub-item hash.
+     * Build deterministic index name using field id + column key hash.
      *
      * @param int $fieldid
-     * @param string $subitem
+     * @param string $key Column key.
      * @return string
      */
-    private function build_index_name(int $fieldid, string $subitem): string {
-        $hash = substr(sha1(\core_text::strtolower($subitem)), 0, 16);
+    private function build_index_name(int $fieldid, string $key): string {
+        $hash = substr(sha1($key), 0, 16);
         return 'pfrd_f' . $fieldid . '_' . $hash;
     }
 

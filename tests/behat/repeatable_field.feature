@@ -9,8 +9,8 @@ Feature: Repeatable profile field editing and display
       | username | firstname | lastname | email                |
       | student1 | Sam       | Student  | student1@example.com |
     And the following "custom profile fields" exist:
-      | datatype   | shortname | name      | param1          |
-      | repeatable | languages | Languages | Spoken language |
+      | datatype   | shortname | name      | param1                                                                                                 |
+      | repeatable | languages | Languages | {"version":2,"columns":[{"key":"spoken_language","label":"Spoken language","mode":"free","title":true}]} |
 
   Scenario: User fills a repeatable set and sees it on the profile page
     Given I log in as "student1"
@@ -23,3 +23,4 @@ Feature: Repeatable profile field editing and display
     Then I should see "Repeatable fields"
     And I should see "Languages"
     And I should see "Portuguese"
+

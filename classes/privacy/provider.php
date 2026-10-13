@@ -122,7 +122,8 @@ class provider implements
     /**
      * Export all user data in approved contexts.
      *
-     * Exports the JSON payload of each field; the projection rows are derived from it and are not
+     * Exports the sets of each field, each set's values under the column labels
+     * ({@see self::export_sets()}); the projection rows are derived from the payload and are not
      * exported.
      *
      * @param approved_contextlist $contextlist
@@ -139,7 +140,7 @@ class provider implements
                 $data = (object) [
                     'name' => $result->name,
                     'description' => $result->description,
-                    'data' => $result->data,
+                    'sets' => static::export_sets($result),
                 ];
 
                 /* One subcontext per field: a shared subcontext would make each
@@ -150,6 +151,39 @@ class provider implements
                 ], $data);
             }
         }
+    }
+
+    /**
+     * The sets of one stored payload, keyed "Set N", each mapping column label to value.
+     *
+     * Read through the field's schema, so a payload not yet re-keyed exports the same way.
+     *
+     * @param \stdClass $record A {@see self::get_records()} row: data, fieldid, param1..param4.
+     * @return array
+     */
+    protected static function export_sets(\stdClass $record): array {
+        $schema = \profilefield_repeatable\local\schema::from_field((object)[
+            'id' => $record->fieldid,
+            'param1' => $record->param1,
+            'param2' => $record->param2,
+            'param3' => $record->param3,
+            'param4' => $record->param4,
+        ]);
+        $context = \core\context\system::instance();
+
+        $sets = [];
+        $setnumber = 0;
+        foreach (\profilefield_repeatable\helper::normalise_payload($record->data, $schema) as $set) {
+            $setnumber++;
+            $values = [];
+            foreach ($set as $key => $value) {
+                $label = format_string($schema->label($key), true, ['context' => $context, 'escape' => false]);
+                $values[$label] = $value;
+            }
+            $sets[get_string('repeatableset', 'profilefield_repeatable', $setnumber)] = $values;
+        }
+
+        return $sets;
     }
 
     /**
@@ -264,7 +298,7 @@ class provider implements
         global $DB;
 
         $sql = "SELECT uda.id, uda.userid, uda.fieldid, uda.data, uda.dataformat,
-                       uif.shortname, uif.name, uif.description
+                       uif.shortname, uif.name, uif.description, uif.param1, uif.param2, uif.param3, uif.param4
                   FROM {user_info_data} uda
                   JOIN {user_info_field} uif ON uda.fieldid = uif.id
                  WHERE uda.userid = :userid

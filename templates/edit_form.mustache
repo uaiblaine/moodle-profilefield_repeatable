@@ -24,6 +24,9 @@
     value (errorid), so a server-side validation error is announced with the widget. That region
     lives outside this template, so the example context leaves errorid out.
 
+    columnsjson is the JSON of columns that repeatable.js builds the inputs from; the header
+    cells come from the same columns.
+
     Example context (json):
     {
         "fieldlabel": "Repeatable test",
@@ -32,23 +35,25 @@
         "setcolumn": "SET",
         "actioncolumn": "ACTION",
         "addnewset": "Add new set",
-        "subitems": [
-            {"name": "Name"},
-            {"name": "Role"}
+        "columnsjson": "[]",
+        "columns": [
+            {"key": "name", "label": "Name", "required": true},
+            {"key": "role", "label": "Role", "required": false}
         ]
     }
 }}
 <label id="{{labelid}}" class="d-block mb-2">{{fieldlabel}}</label>
 <div id="{{wrapperid}}" class="profilefield-repeatable-wrapper" data-region="repeatable-wrapper"
-    role="group" aria-labelledby="{{labelid}}"{{#errorid}} aria-describedby="{{errorid}}"{{/errorid}}>
+    role="group" aria-labelledby="{{labelid}}"{{#errorid}} aria-describedby="{{errorid}}"{{/errorid}}
+    data-columns="{{columnsjson}}">
     <div class="profilefield-repeatable-table-wrapper border rounded" data-region="table-wrapper">
         <table class="table table-striped table-hover mb-0">
             <thead>
                 <tr>
                     <th scope="col" class="position-sticky profilefield-repeatable-sticky-head">{{setcolumn}}</th>
-                    {{#subitems}}
-                        <th scope="col" class="position-sticky profilefield-repeatable-sticky-head">{{name}}</th>
-                    {{/subitems}}
+                    {{#columns}}
+                        <th scope="col" class="position-sticky profilefield-repeatable-sticky-head">{{label}}{{#required}}<abbr class="profilefield-repeatable-required" title="{{#str}}required{{/str}}">*</abbr>{{/required}}</th>
+                    {{/columns}}
                     <th scope="col" class="position-sticky profilefield-repeatable-sticky-head text-center">{{actioncolumn}}</th>
                 </tr>
             </thead>
