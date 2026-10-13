@@ -87,7 +87,8 @@ classes/task/reconcile_indexes.php adhoc: PG expression indexes
 classes/task/reproject_sets.php    scheduled, daily: repair stale projections
 classes/task/rekey_payloads.php    adhoc: finishes the v2 migration of a field above 500 payloads
 db/upgradelib.php      the v2 upgrade step: convert fields, map saved report identifiers
-amd/src/               repeatable.js (edit widget), columneditor.js (define form), displayaccordion.js
+amd/src/               repeatable.js (edit widget), dictionary_transport.js (its autocomplete transport),
+                       markup.js (shared by both), columneditor.js (define form), displayaccordion.js
 ```
 
 ## Versions
@@ -138,8 +139,9 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   (COALESCE) read either shape until `migration::finish_field()` removes that config. Any new reader
   goes through these two.
 - The define form is a modal `dynamic_form`; the editor's data (locked keys, users, domains) rides
-  in data attributes of the textarea, because `js_call_amd()` warns past 1024 characters. The
-  companion has no public domain-listing API: `helper::companion_domains()` reads its `manager`.
+  in data attributes of the textarea, because `js_call_amd()` warns past 1024 characters.
+  `helper::companion_domains()` reads `\local_dictionaries\api::list_domains()`; its `parentdomain`
+  feeds the editor's parent-mismatch warning and `schema::validate()`'s `$parentdomains` rule.
 
 ### Canonical payload and projection
 
@@ -174,6 +176,25 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   hidden input sits inside a form group named after the field, because QuickForm prints no error
   for a bare hidden element; the widget points at the error with `aria-describedby`.
 - Several repeatable fields can share one form: never assume a single instance in the JS.
+- Dictionary columns marked `autocomplete` (companion with `api::lookup()` AND `api::can_read()` for
+  the editing user, because the search service refuses the rest) are selects enhanced by
+  `core/form-autocomplete` with `dictionary_transport`; the rest stay text inputs. Core addresses
+  an enhanced select by id and keeps form handlers that look its elements up on submit, so a select
+  keeps one id for life and a removed set holding one is hidden (`data-removed`), never deleted.
+  `markup.js` exists so `repeatable.js` loads without the companion (the transport imports it).
+- The widget reads values on submit itself: core turns typed text into a tag asynchronously, after
+  the payload is built, so `controlValue()` reads an open column's typed text. Preloaded labels ride
+  on the hidden input's `data-labels` (resolver, read in `edit_after_data()` from the element value,
+  so a failed validation keeps them).
+- Code checks live in `edit_validate_field()` → `validate_dictionary_codes()` (one `api::lookup()`
+  per readable domain); like `required`, web services and sync skip them. A codes-only column accepts
+  the code already stored for that user and key (folded), read from `$this->data`, never the submission.
+  `companion_available()` is the seam tests override to run without the companion.
+- **No oracle on restricted dictionaries**: `lookup()` and `resolve_bulk()` are ungated, so every
+  path that turns a SUBMITTED code into an answer is decided on `can_read_domain()` (the editing
+  user): unreadable domains get labels only for stored codes, one uniform error for any other code
+  of a codes-only column, no lookup and no parent check (also when only the parent's domain is
+  unreadable), and no autocomplete.
 
 ### PostgreSQL layer
 
@@ -208,12 +229,15 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 - No `dependencies` in `version.php`; every touchpoint guards with `class_exists()`, so the plugin
   installs, validates and renders without the companion. Touchpoints, all through the companion's
   public API and never its tables: `\local_dictionaries\resolver::resolve()`/`resolve_bulk()`
-  (renderer, entity), `domain_exists()` (`define.class.php`), and `resolver::DOMAIN_PATTERN` read by
-  `helper::domain_pattern()`, with `helper::DOMAIN_PATTERN` as the fallback that a test pins equal.
-  The one exception is the domain list of the column editor (`helper::companion_domains()`).
+  (renderer, entity, edit-form labels), `domain_exists()` (`define.class.php`), `api::list_domains()`
+  (`helper::companion_domains()`), `api::can_read()` and `api::lookup()` (edit form, probed by
+  `helper::companion_lookup_available()`), the AMD `local_dictionaries/autocomplete_transport`, and
+  `resolver::DOMAIN_PATTERN` read by `helper::domain_pattern()`, with `helper::DOMAIN_PATTERN` as
+  the fallback that a test pins equal. `helper::fold_code()` mirrors the companion's internal code key.
 - The companion is `local_dictionaries` (repo `uaiblaine/moodle-local_dictionaries`). Its domains have
   a `visibility`; the field resolves codes the viewer already sees, which the companion's contract
-  leaves ungated, so the field checks no visibility.
+  leaves ungated, so display checks no visibility. Searching is gated by the companion's service:
+  the edit form asks `api::can_read()` first and falls back to a text input.
 - `ci.yml` installs the companion's `main` (`plugin-dependencies`): a contract change in either repo
   turns the other's CI red. The renderer prefetches labels once per domain: keep it N+1-free.
 

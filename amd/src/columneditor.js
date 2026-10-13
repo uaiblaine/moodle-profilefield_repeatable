@@ -46,9 +46,9 @@ const STRINGKEYS = [
     'columnkeyhint', 'columnkeylocked', 'columnlabel', 'columnlabelhint', 'columnmode', 'columnnew', 'columnparent',
     'columnparenthint', 'columnrole', 'columnsindata', 'domainoption', 'domainrestricted', 'domainvisible',
     'modedictionary', 'modedictionaryhelp', 'modedictionaryopen', 'modedictionaryopenhelp', 'modefree', 'modefreehelp',
-    'movedown', 'moveup', 'newcolumn', 'parentnone', 'removecolumn', 'removecolumnlocked', 'roleindexed', 'roleindexedlabel',
-    'rolerequired', 'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel', 'summaryindexed',
-    'summarysubline', 'summarytitle',
+    'movedown', 'moveup', 'newcolumn', 'parentmismatch', 'parentnone', 'removecolumn', 'removecolumnlocked', 'roleindexed',
+    'roleindexedlabel', 'rolerequired', 'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel',
+    'summaryindexed', 'summarysubline', 'summarytitle',
 ];
 
 /**
@@ -539,10 +539,40 @@ class Editor {
             attrs: {'aria-describedby': id('parent') + '-hint'},
         }, parents);
 
-        return make('div', {className: 'profilefield-repeatable-ce-pair profilefield-repeatable-ce-box'}, [
+        const children = [
             field('domain', this.str('columndomain'), domaincontrol, hint),
             field('parent', this.str('columnparent'), parentcontrol, this.str('columnparenthint')),
-        ]);
+        ];
+        const parentdomain = this.parentMismatch(column);
+        if (parentdomain !== null) {
+            children.push(make('p', {
+                className: 'profilefield-repeatable-ce-warning', id: id('parentmismatch'), attrs: {role: 'alert'},
+            }, [this.str('parentmismatch', {domain: column.domain, parentdomain})]));
+            parentcontrol.setAttribute('aria-describedby', `${id('parent')}-hint ${id('parentmismatch')}`);
+        }
+
+        return make('div', {className: 'profilefield-repeatable-ce-pair profilefield-repeatable-ce-box'}, children);
+    }
+
+    /**
+     * The domain a column's parent column should use, when the chosen one uses another.
+     *
+     * Known only when the companion reports the domain holding the parents of the column's
+     * domain; define_validate_specific() refuses the same schema on save.
+     *
+     * @param {Object} column
+     * @returns {String|null} The expected parent domain, or null when there is nothing to warn about.
+     */
+    parentMismatch(column) {
+        if (!this.companion || !column.parent) {
+            return null;
+        }
+        const domain = this.domains.find((candidate) => candidate.shortname === column.domain);
+        const parent = this.columns.find((candidate) => candidate.key === column.parent);
+        if (!domain || !domain.parentdomain || !parent || !isDictionary(parent.mode)) {
+            return null;
+        }
+        return parent.domain === domain.parentdomain ? null : domain.parentdomain;
     }
 
     /**

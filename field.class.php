@@ -64,12 +64,13 @@ class profile_field_repeatable extends profile_field_base {
         $columns = [];
         foreach ($schema->columns() as $column) {
             // The template and the module escape: format_string() must hand them the plain spelling.
-            $columns[] = [
+            $entry = [
                 'key' => $column['key'],
                 'label' => format_string($schema->label($column['key']), true, ['context' => $context, 'escape' => false]),
                 'mode' => $column['mode'],
                 'required' => !empty($column['required']),
             ];
+            $columns[] = $entry + $this->dictionary_widget_properties($column);
         }
 
         $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
@@ -97,6 +98,117 @@ class profile_field_repeatable extends profile_field_base {
             false
         );
         $mform->setType($this->inputname, PARAM_RAW_TRIMMED);
+    }
+
+    /**
+     * Whether the companion offers the API dictionary columns need on the edit form.
+     *
+     * The one seam between this field and {@see \profilefield_repeatable\helper::companion_lookup_available()},
+     * so tests can run the field as if the companion were absent.
+     *
+     * @return bool
+     */
+    protected function companion_available(): bool {
+        return \profilefield_repeatable\helper::companion_lookup_available();
+    }
+
+    /**
+     * What the widget needs to offer a dictionary column through the companion's autocomplete.
+     *
+     * A dictionary column gets its domain, whether it accepts new codes ('open') and whether it
+     * is searched ('autocomplete'): only when the current user may read the domain, and the
+     * parent column's domain too for a dependent column ({@see self::can_read_domain()}), because
+     * the search service refuses everyone else; the column is then typed as a code, as without
+     * the companion. A column with a parent also gets the parent's key, domain and plain label.
+     *
+     * @param array $column Normalised schema column.
+     * @return array Empty for a free column.
+     */
+    protected function dictionary_widget_properties(array $column): array {
+        $domains = $this->get_schema()->domain_map();
+        if (!isset($domains[$column['key']])) {
+            return [];
+        }
+
+        $domain = $domains[$column['key']];
+        $parent = $column['parent'] ?? '';
+        $hasparent = $parent !== '' && isset($domains[$parent]);
+        $properties = [
+            'domain' => $domain,
+            'open' => $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY_OPEN,
+            'autocomplete' => $this->can_read_domain($domain) && (!$hasparent || $this->can_read_domain($domains[$parent])),
+        ];
+        if ($hasparent) {
+            $properties['parent'] = $parent;
+            $properties['parentdomain'] = $domains[$parent];
+            $properties['parentlabel'] = format_string($this->get_schema()->label($parent), true, [
+                'context' => \core\context\system::instance(),
+                'escape' => false,
+            ]);
+        }
+
+        return $properties;
+    }
+
+    /**
+     * Whether the current (editing) user may search a domain, as the companion's search service decides.
+     *
+     * False without the companion's lookup-era API. Every code check and label that could tell a
+     * user something about a dictionary they cannot read is decided on this.
+     *
+     * @param string $domain
+     * @return bool
+     */
+    protected function can_read_domain(string $domain): bool {
+        return $this->companion_available() && \local_dictionaries\api::can_read($domain);
+    }
+
+    /**
+     * Labels of the codes a payload holds in the dictionary columns, for the widget.
+     *
+     * The widget shows each preloaded value as "label (code)", as the search does, without a
+     * request. The payload is the stored one or, after a failed validation, the submitted one:
+     * in a domain the editing user cannot read, only codes stored for the profile owner under
+     * that key get a label, or submitting codes would read a restricted dictionary through the
+     * ungated resolver. Labels are formatted and left unescaped; the widget escapes.
+     *
+     * @param string $payload Raw payload the form holds.
+     * @return array Domain => [code => plain label]; codes without a label are absent.
+     */
+    protected function widget_labels(string $payload): array {
+        if (!$this->companion_available()) {
+            return [];
+        }
+
+        $schema = $this->get_schema();
+        $domains = $schema->domain_map();
+        $readable = [];
+        foreach (array_unique($domains) as $domain) {
+            $readable[$domain] = $this->can_read_domain($domain);
+        }
+        $stored = $this->stored_codes();
+        $codes = [];
+        foreach (\profilefield_repeatable\helper::normalise_payload($payload, $schema) as $set) {
+            foreach ($domains as $key => $domain) {
+                $code = trim((string)($set[$key] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                if ($readable[$domain] || isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)])) {
+                    $codes[$domain][$code] = true;
+                }
+            }
+        }
+
+        $context = \core\context\system::instance();
+        $labels = [];
+        foreach ($codes as $domain => $list) {
+            foreach (\local_dictionaries\resolver::resolve_bulk($domain, array_keys($list)) as $code => $label) {
+                $labels[$domain][(string)$code] = format_string($label, true, ['context' => $context, 'escape' => false]);
+            }
+        }
+
+        return $labels;
     }
 
     /**
@@ -130,6 +242,20 @@ class profile_field_repeatable extends profile_field_base {
 
         global $PAGE;
 
+        // The labels of the values the form holds (stored, or submitted after a failed validation)
+        // ride on the hidden input: js_call_amd() warns past 1024 characters.
+        $group = $mform->getElement($this->inputname);
+        if ($group instanceof \MoodleQuickForm_group) {
+            foreach ($group->getElements() as $element) {
+                if ($element->getName() === $this->inputname) {
+                    $labels = $this->widget_labels((string)$element->getValue());
+                    $element->updateAttributes([
+                        'data-labels' => json_encode((object)$labels, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+                    ]);
+                }
+            }
+        }
+
         $config = [
             'wrapperid' => $this->get_wrapper_id(),
             'hiddenid' => $this->get_hidden_id(),
@@ -138,6 +264,8 @@ class profile_field_repeatable extends profile_field_base {
                 'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
                 'removeset' => get_string('removeset', 'profilefield_repeatable'),
                 'repeatableset' => get_string('repeatableset', 'profilefield_repeatable', '{no}'),
+                'newcode' => get_string('newcode', 'profilefield_repeatable'),
+                'searchplaceholder' => get_string('searchplaceholder', 'profilefield_repeatable'),
             ],
         ];
 
@@ -249,6 +377,10 @@ class profile_field_repeatable extends profile_field_base {
         if ($requirederror !== null) {
             return [$this->inputname => $requirederror];
         }
+        $codeerror = $this->validate_dictionary_codes($payload);
+        if ($codeerror !== null) {
+            return [$this->inputname => $codeerror];
+        }
 
         // The parent's uniqueness check compares this value with stored data: give it the canonical
         // JSON, or '' so that an empty optional value is not checked.
@@ -335,6 +467,188 @@ class profile_field_repeatable extends profile_field_base {
         }
 
         return null;
+    }
+
+    /**
+     * Check the codes of the dictionary columns against the companion.
+     *
+     * In a domain the editing user may read ({@see self::can_read_domain()}):
+     * - a "codes only" column accepts a code that exists and is active, or the code the profile
+     *   owner already has stored under that column (a code deactivated or removed since stays
+     *   until it is changed); an "any code" column accepts every code, its length capped like any
+     *   value;
+     * - a column with a parent, when the parent column's domain is readable too and the item has
+     *   a parent: the parent column must be filled, with the item's parent code (folded like the
+     *   companion's code key) in the item's parent domain.
+     *
+     * In a domain the editing user may not read, nothing derived from the dictionary reaches them:
+     * a "codes only" column accepts the stored codes and refuses every other code with one message,
+     * whether it exists or not; an "any code" column takes the code as text. The dictionary is not
+     * even looked up.
+     *
+     * Runs only when the companion offers \local_dictionaries\api::lookup(): without it the codes
+     * are kept as typed text. One lookup per readable domain, however many sets.
+     *
+     * @param array $payload Normalised payload.
+     * @return string|null Error naming the first set and column that fail, or null.
+     */
+    protected function validate_dictionary_codes(array $payload): ?string {
+        if (empty($payload) || !$this->companion_available()) {
+            return null;
+        }
+        $schema = $this->get_schema();
+        $domains = $schema->domain_map();
+        if (empty($domains)) {
+            return null;
+        }
+        $readable = [];
+        foreach (array_unique($domains) as $domain) {
+            $readable[$domain] = $this->can_read_domain($domain);
+        }
+
+        $codes = [];
+        foreach ($payload as $set) {
+            foreach ($domains as $key => $domain) {
+                $code = trim((string)($set[$key] ?? ''));
+                if ($code !== '' && $readable[$domain]) {
+                    $codes[$domain][$code] = true;
+                }
+            }
+        }
+        $items = [];
+        foreach ($codes as $domain => $list) {
+            $items[$domain] = \local_dictionaries\api::lookup($domain, array_keys($list));
+        }
+        $stored = $this->stored_codes();
+
+        $setnumber = 0;
+        foreach ($payload as $set) {
+            $setnumber++;
+            foreach ($schema->columns() as $column) {
+                $error = $this->column_code_error($column, $set, $setnumber, $domains, $readable, $items, $stored);
+                if ($error !== null) {
+                    return $error;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The error of one column in one set, or null ({@see self::validate_dictionary_codes()}).
+     *
+     * @param array $column Normalised schema column.
+     * @param array $set Normalised set: key => value.
+     * @param int $setnumber
+     * @param array $domains Key => domain of the dictionary columns.
+     * @param array $readable Domain => whether the editing user may read it.
+     * @param array $items Domain => caller code => item, from \local_dictionaries\api::lookup().
+     * @param array $stored Key => [folded code => true] stored for the profile owner.
+     * @return string|null
+     */
+    protected function column_code_error(
+        array $column,
+        array $set,
+        int $setnumber,
+        array $domains,
+        array $readable,
+        array $items,
+        array $stored
+    ): ?string {
+        $key = $column['key'];
+        $code = trim((string)($set[$key] ?? ''));
+        if ($code === '' || !isset($domains[$key])) {
+            return null;
+        }
+        $strict = $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY;
+        $isstored = isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)]);
+
+        if (!$readable[$domains[$key]]) {
+            if ($strict && !$isstored) {
+                return $this->code_error('errorcoderestricted', $setnumber, $key, $code);
+            }
+            return null;
+        }
+
+        $item = $items[$domains[$key]][$code] ?? null;
+        if ($strict && ($item === null || !$item['active']) && !$isstored) {
+            return $this->code_error($item === null ? 'errorcodeunknown' : 'errorcodeinactive', $setnumber, $key, $code);
+        }
+
+        $parentkey = $column['parent'] ?? '';
+        if (
+            $item === null || $item['parentcode'] === null || $parentkey === '' || !isset($domains[$parentkey])
+            || !$readable[$domains[$parentkey]]
+        ) {
+            return null;
+        }
+        $parentcode = trim((string)($set[$parentkey] ?? ''));
+        if ($parentcode === '') {
+            return $this->code_error('errorcodeparentmissing', $setnumber, $key, $code, $parentkey);
+        }
+        $sameparent = \profilefield_repeatable\helper::fold_code($item['parentcode'])
+            === \profilefield_repeatable\helper::fold_code($parentcode);
+        $samedomain = \core_text::strtolower(trim((string)$item['parentdomain'])) === $domains[$parentkey];
+        if (!$sameparent || !$samedomain) {
+            return $this->code_error('errorcodeparent', $setnumber, $key, $code, $parentkey, $parentcode);
+        }
+
+        return null;
+    }
+
+    /**
+     * The folded codes the user has stored, per column key.
+     *
+     * Read from this instance's data, which the constructor loaded from user_info_data for the
+     * user being edited: the submitted payload never counts as stored.
+     *
+     * @return array Key => [folded code => true].
+     */
+    protected function stored_codes(): array {
+        $stored = [];
+        foreach (\profilefield_repeatable\helper::normalise_payload((string)($this->data ?? ''), $this->get_schema()) as $set) {
+            foreach ($set as $key => $value) {
+                $value = trim((string)$value);
+                if ($value !== '') {
+                    $stored[$key][\profilefield_repeatable\helper::fold_code($value)] = true;
+                }
+            }
+        }
+        return $stored;
+    }
+
+    /**
+     * One escaped code validation message.
+     *
+     * @param string $identifier Lang string identifier.
+     * @param int $setnumber
+     * @param string $key Column key.
+     * @param string $code The submitted code.
+     * @param string $parentkey Parent column key, for errorcodeparent and errorcodeparentmissing.
+     * @param string $parentcode The parent column's code, for errorcodeparent.
+     * @return string
+     */
+    protected function code_error(
+        string $identifier,
+        int $setnumber,
+        string $key,
+        string $code,
+        string $parentkey = '',
+        string $parentcode = ''
+    ): string {
+        $schema = $this->get_schema();
+        $options = ['context' => \core\context\system::instance()];
+        $a = (object)[
+            'set' => $setnumber,
+            'column' => format_string($schema->label($key), true, $options),
+            'code' => s($code),
+        ];
+        if ($parentkey !== '') {
+            $a->parent = format_string($schema->label($parentkey), true, $options);
+            $a->parentcode = s($parentcode);
+        }
+        return get_string($identifier, 'profilefield_repeatable', $a);
     }
 
     /**

@@ -274,6 +274,33 @@ final class schema_test extends \advanced_testcase {
     }
 
     /**
+     * A parent column on another dictionary than the one holding the parents is refused, when that dictionary is known.
+     */
+    public function test_validate_refuses_a_parent_on_the_wrong_dictionary(): void {
+        $this->resetAfterTest();
+        $columns = [
+            ['key' => 'name', 'label' => 'Name', 'mode' => 'free', 'title' => true],
+            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'langs'],
+            ['key' => 'state', 'label' => 'State', 'mode' => 'dictionary', 'domain' => 'uf'],
+            ['key' => 'city', 'label' => 'C&ity', 'mode' => 'dictionary_open', 'domain' => 'cities', 'parent' => 'lang'],
+        ];
+        $mismatch = get_string('errorparentmismatch', 'profilefield_repeatable', (object)[
+            'column' => 'C&amp;ity',
+            'domain' => 'cities',
+            'parentdomain' => 'uf',
+        ]);
+
+        $this->assertSame([$mismatch], schema::validate($this->document($columns), null, [], ['cities' => 'uf']));
+        // Control: the parent column on the dictionary holding the parents passes.
+        $columns[3]['parent'] = 'state';
+        $this->assertSame([], schema::validate($this->document($columns), null, [], ['cities' => 'uf']));
+        // An unknown parent dictionary (none, or parents in several) is not checked.
+        $columns[3]['parent'] = 'lang';
+        $this->assertSame([], schema::validate($this->document($columns), null, [], ['langs' => 'langs']));
+        $this->assertSame([], schema::validate($this->document($columns)));
+    }
+
+    /**
      * The accessors read roles, falling back where a stored schema breaks a rule.
      */
     public function test_accessors(): void {
