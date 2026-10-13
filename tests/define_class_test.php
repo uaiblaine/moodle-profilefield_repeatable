@@ -304,6 +304,11 @@ final class define_class_test extends \advanced_testcase {
         global $DB;
 
         $this->resetAfterTest();
+        if (class_exists('\local_dictionaries\resolver')) {
+            // With the companion installed, validation requires the mapped domain to exist.
+            $this->getDataGenerator()->get_plugin_generator('local_dictionaries')
+                ->create_domain(['shortname' => 'roles', 'name' => 'Roles']);
+        }
         $fielddata = $this->getDataGenerator()->create_custom_profile_field([
             'datatype' => 'repeatable', 'shortname' => 'oldfield', 'name' => 'Old field',
             'param1' => "Full name\nRole", 'param3' => 'Role|roles', 'param4' => 'Role',
