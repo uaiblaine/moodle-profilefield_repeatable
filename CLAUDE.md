@@ -75,15 +75,19 @@ session was resumed on a container that skipped the setup script: attach `moodle
 
 ```
 field.class.php        profile_field_repeatable: edit form, validation, save, display entry
-define.class.php       profile_define_repeatable: admin definition, param1..param4 validation
-classes/helper.php     payload parse/normalise/encode, caps, PG helpers, sql_subitem_value()
-classes/local/projection.php       per-set rows: sync(), is_current(), reproject_*()
+define.class.php       profile_define_repeatable: admin definition (schema JSON + column editor)
+classes/helper.php     payload normalise/encode, caps, PG helpers, sql_column_value()
+classes/local/schema.php           column schema v2: parse, from_v1(), validate(), keys, accessors
+classes/local/migration.php        re-keying of payloads after the v2 upgrade (shared with the task)
+classes/local/projection.php       per-set rows: sync(), is_current(), reproject_*(), keys_in_use()
 classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
 classes/output/display_renderer.php  accordion (profile pages) or plain list, bulk label prefetch
 classes/reportbuilder/             datasource repeatable_sets + entity repeatable_set
 classes/task/reconcile_indexes.php adhoc: PG expression indexes
 classes/task/reproject_sets.php    scheduled, daily: repair stale projections
-amd/src/               repeatable.js (edit widget), displayaccordion.js
+classes/task/rekey_payloads.php    adhoc: finishes the v2 migration of a field above 500 payloads
+db/upgradelib.php      the v2 upgrade step: convert fields, map saved report identifiers
+amd/src/               repeatable.js (edit widget), columneditor.js (define form), displayaccordion.js
 ```
 
 ## Versions
@@ -103,20 +107,28 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   class map). `db/lib.php` stays only as the install hook's procedural entry point to
   `helper::ensure_postgres_jsonb_support()`; it is not needed to avoid the autoloader.
 
-### Field parameters
+### Column schema (v2)
 
-| Column | Meaning |
-|---|---|
-| `param1` | Sub-items, one per line (required, duplicates rejected) |
-| `param2` | Indexed sub-items (max 3, must exist in param1) → PG expression indexes |
-| `param3` | Reference mappings `subitem\|domain`, one per line |
-| `param4` | Subline sub-items (max 3, never the primary sub-item) |
-| `defaultdata` | Forced to `'{}'` |
-
-- `define_save_preprocess()` canonicalises all four; split lines with `preg_split('/\R/u')`, never
-  `explode("\n")`, because CRLF input must keep working.
-- Column schema v2 (one JSON schema in place of the four lists) is planned before r1:
-  `docs/audit-and-direction-2026-10.md` §4.5.
+- `param1` holds `{"version":2,"columns":[{key,label,mode,domain?,parent?,pattern?,title?,subline?,
+  required?,indexed?}]}`; `param2`..`param4` are cleared on save; `defaultdata` is forced to `'{}'`.
+  `local\schema::validate()` is the only gate (exactly one title, subline/indexed ≤ 3, ≤ 20 columns,
+  parent = an earlier dictionary column, no two columns producing one Report Builder identifier);
+  the constructor normalises and never rejects. `pattern` is reserved and rejected until stage C.
+- **Payloads and Report Builder identifiers are keyed by column key**, never by label. A key is
+  `[a-z][a-z0-9_]{0,39}`; `generate_key()` and `amd/src/columneditor.js` `generateKey()` must stay
+  in step. Keys holding values (`projection::keys_in_use()`, read from the STORED field) are locked
+  in the editor; removing a column hides its values without deleting them.
+- Report Builder identifiers: free `<key>`, dictionary `<key>_name` + `<key>_code`, plus
+  `setnumber`. The upgrade maps 2.x `subitemN`/`subitemnameN`/`subitemcodeN` (1-based position) in
+  `reportbuilder_column`, `reportbuilder_filter`, `conditiondata` and users' filter values.
+- **v1-tolerant reads**: a field still on the four lists is read through `schema::from_v1()`; a
+  converted field whose payloads are not re-keyed yet has its key → 2.x label map in the plugin
+  config `legacykeys_<fieldid>`. `helper::normalise_payload()` and `helper::sql_column_value()`
+  (COALESCE) read either shape until `migration::finish_field()` removes that config. Any new reader
+  goes through these two.
+- The define form is a modal `dynamic_form`; the editor's data (locked keys, users, domains) rides
+  in data attributes of the textarea, because `js_call_amd()` warns past 1024 characters. The
+  companion has no public domain-listing API: `helper::companion_domains()` reads its `manager`.
 
 ### Canonical payload and projection
 
@@ -169,8 +181,8 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 
 - Core shows a profile field as one column over the raw blob with no per-field hook, so the
   datasource joins one `repeatable_<shortname>` entity per field to the core `user` entity: one row
-  per set. Internal column names use a 1-based sub-item index (`subitem1`, `subitemcode1`), so
-  identifiers stay stable for Behat and saved reports.
+  per set. Column names follow the column key (see "Column schema"), so a label rename keeps saved
+  reports.
 - Every column value and filter option label goes through `s()`: core's autocomplete prints option
   labels unescaped (stored XSS otherwise).
 - Every column and filter is `set_is_available(is_visible(system))` on a field instance built with
@@ -187,6 +199,7 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   public API and never its tables: `\local_dictionaries\resolver::resolve()`/`resolve_bulk()`
   (renderer, entity), `domain_exists()` (`define.class.php`), and `resolver::DOMAIN_PATTERN` read by
   `helper::domain_pattern()`, with `helper::DOMAIN_PATTERN` as the fallback that a test pins equal.
+  The one exception is the domain list of the column editor (`helper::companion_domains()`).
 - The companion is `local_dictionaries` (repo `uaiblaine/moodle-local_dictionaries`). Its domains have
   a `visibility`; the field resolves codes the viewer already sees, which the companion's contract
   leaves ungated, so the field checks no visibility.
@@ -203,9 +216,11 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 
 ## Testing notes
 
-- Fields come from `create_custom_profile_field()` (`field_class_test.php::create_field()`); form
-  behaviour (the error group) goes through `tests/fixtures/edit_form.php`, which calls the edit
-  hooks in `user/edit.php`'s order.
+- Fields come from the plugin's data generator (`schema_json()`, `create_field()`), which builds a
+  v2 schema from labels or column arrays; form behaviour (the error group) goes through
+  `tests/fixtures/edit_form.php`, which calls the edit hooks in `user/edit.php`'s order. The
+  upgrade is tested by calling `xmldb_profilefield_repeatable_upgrade()` on v1 rows
+  (`tests/upgrade_test.php`).
 - PG-only behaviour is asserted behind a dbfamily check or `markTestSkipped()`, and
   companion-dependent tests skip when its classes or tables are absent.
 - Behat: scope profile-form locators to the category fieldset (`in the "Testing" "fieldset"`),
