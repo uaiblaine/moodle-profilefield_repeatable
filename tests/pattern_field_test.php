@@ -328,7 +328,7 @@ final class pattern_field_test extends \advanced_testcase {
         }
         $this->resetAfterTest();
         $field = new \profile_field_repeatable((int)$this->create_field_record()->id, 0);
-        $field->data = $this->payload([['name' => 'A', 'cpf' => self::CPF_RAW]]);
+        $field->data = $this->payload([['name' => 'A', 'cpf' => self::CPF_RAW, 'code' => '<b>x</b>']]);
 
         $originalscript = $SCRIPT ?? null;
         try {
@@ -340,6 +340,8 @@ final class pattern_field_test extends \advanced_testcase {
 
         $this->assertStringContainsString(self::CPF_RAW, $output);
         $this->assertStringNotContainsString(self::CPF, $output);
+        $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt;', $output);
+        $this->assertStringNotContainsString('<b>x', $output);
     }
 
     /**

@@ -250,17 +250,18 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   a stored setting differently, so it counts as absent). The plugin installs on 5.1+ only: on 4.5 and
   5.0 the field always runs "absent", with no branching beyond that probe.
 - Absent means: the mode is not offered, `schema::validate()` refuses a new or changed pattern column
-  (`$patternerrors === null`) and accepts a stored one only with the same `pattern` object (loose `==`,
-  key order ignored, from `pattern_objects()` of the STORED field); values are validated by nothing,
-  stored as typed, shown as stored.
+  (`$patternerrors === null`) and accepts a stored one only with the same `pattern` object (strict
+  `===` after a recursive key sort, never a loose `==`, which reads "1000" as "1e3"), read from
+  `pattern_objects()` of the STORED field; values are validated by nothing, stored as typed, shown
+  as stored.
 - Present: `edit_validate_field()` → `validate_pattern_values()` (the plugin's message is already safe
   HTML, passed into `errorpattern` unescaped); `edit_save_data_preprocess()` normalises (raw/masked),
   so web services and sync store the configured shape too; `edit_load_user_data()` formats, so a raw
   value is edited masked; renderer, Report Builder value callback (`s()` after formatting) and privacy
   export (plain text) format. `pattern_available()` on the field and the definition is the test seam.
 - The widget builds inputs in JS, so the plugin's `input_attributes()` ride in the columns JSON
-  (`inputattributes`, allowlisted names in `repeatable.js`) and `api::js_init()` loads the formatter,
-  whose document-level listener covers inputs of sets added later. The editor gets availability and
+  (`inputattributes`; `repeatable.js` sets only the four names the API emits) and `api::js_init()`
+  loads the formatter, whose document-level listener covers inputs of sets added later. The editor gets availability and
   presets (with their masks) from the textarea's `data-pattern` / `data-presets`.
 
 ### Display and styles

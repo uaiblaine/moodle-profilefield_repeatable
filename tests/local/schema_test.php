@@ -226,6 +226,11 @@ final class schema_test extends \advanced_testcase {
                 'errorpatternunavailable',
                 'Code',
             ],
+            'escaped pattern column name' => [
+                [$title, ['key' => 'code', 'label' => '<b>Code</b>', 'mode' => 'pattern']],
+                'errorpatternunavailable',
+                '&lt;b&gt;Code&lt;/b&gt;',
+            ],
             'unknown mode' => [[$title, $free('code', ['mode' => 'select'])], 'errormodeinvalid', 'Code'],
             'dictionary without domain' => [[$title, $dictionary('lang', ['domain' => ''])], 'errordomaininvalid', 'Lang'],
             'malformed domain' => [[$title, $dictionary('lang', ['domain' => 'bad-domain'])], 'errordomaininvalid', 'Lang'],
@@ -464,6 +469,27 @@ final class schema_test extends \advanced_testcase {
             [],
             null,
             $stored
+        ));
+        // A setting changed to a string that only a loose comparison takes for the stored one, and a
+        // nested setting in another order (kept: the order is not part of the configuration).
+        $numeric = ['doc' => ['preset' => 'custom', 'mask' => '9999', 'regex' => '1000', 'extra' => ['b' => 1, 'a' => 2]]];
+        $this->assertSame($unavailable('Doc'), schema::validate(
+            $this->document([$title, $column('doc', ['preset' => 'custom', 'mask' => '9999', 'regex' => '1e3',
+                'extra' => ['b' => 1, 'a' => 2]])]),
+            null,
+            [],
+            [],
+            null,
+            $numeric
+        ));
+        $this->assertSame([], schema::validate(
+            $this->document([$title, $column('doc', ['extra' => ['a' => 2, 'b' => 1], 'regex' => '1000', 'mask' => '9999',
+                'preset' => 'custom'])]),
+            null,
+            [],
+            [],
+            null,
+            $numeric
         ));
         // A new pattern column, and an existing free column turned into one.
         $this->assertSame($unavailable('Other'), schema::validate(

@@ -560,8 +560,12 @@ final class schema {
         $object = $column['pattern'] ?? [];
         if ($patternerrors === null) {
             $key = $column['key'];
-            // Loose comparison: the order of the settings is not part of the configuration.
-            if (!array_key_exists($key, $storedpatterns) || $storedpatterns[$key] != $object) {
+            // Strict, on both sides' settings in key order: the order is not part of the configuration,
+            // but a loose == would take "1000" for "1e3" and let a changed setting through.
+            if (
+                !array_key_exists($key, $storedpatterns)
+                || self::sorted_by_key($storedpatterns[$key]) !== self::sorted_by_key($object)
+            ) {
                 return [self::error('errorpatternunavailable', $name)];
             }
             return [];
@@ -575,6 +579,24 @@ final class schema {
             ]);
         }
         return $errors;
+    }
+
+    /**
+     * A value with the keys of every array in it sorted, recursively, so that two decoded JSON
+     * objects that differ only in key order compare identical with ===.
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private static function sorted_by_key($value) {
+        if (!is_array($value)) {
+            return $value;
+        }
+        ksort($value, SORT_STRING);
+        foreach ($value as $name => $item) {
+            $value[$name] = self::sorted_by_key($item);
+        }
+        return $value;
     }
 
     /**

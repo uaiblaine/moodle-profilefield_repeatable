@@ -56,8 +56,11 @@ let selectcounter = 0;
  */
 const renderSetTitle = (template, index) => template.replace('{no}', String(index));
 
-/** Attributes a pattern column's input may take from the server: customfield_pattern's input attributes. */
-const INPUT_ATTRIBUTE = /^(data-[a-z0-9-]+|placeholder|inputmode|maxlength)$/;
+/**
+ * Attributes a pattern column's input may take from the server: exactly the ones
+ * \customfield_pattern\api::input_attributes() emits. Anything else is dropped, whatever the server sends.
+ */
+const INPUT_ATTRIBUTES = ['data-customfield-pattern-mask', 'placeholder', 'inputmode', 'maxlength'];
 
 /**
  * Give a pattern column's input the attributes customfield_pattern asks for.
@@ -73,7 +76,7 @@ const applyInputAttributes = (control, attributes) => {
         return;
     }
     Object.entries(attributes).forEach(([name, value]) => {
-        if (INPUT_ATTRIBUTE.test(name)) {
+        if (INPUT_ATTRIBUTES.includes(name)) {
             control.setAttribute(name, String(value));
         }
     });
