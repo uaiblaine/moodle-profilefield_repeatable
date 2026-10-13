@@ -11,12 +11,12 @@ that stores repeatable sets of sub-items per user. The canonical value is a JSON
 `user_info_data.data`; the plugin's own table `profilefield_repeatable_data` holds one row per set
 as a projection for Report Builder (JSONB on PostgreSQL, with a GIN index and per-sub-item
 expression indexes). Optional code→label resolution comes from the companion dictionary plugin
-(soft dependency, see below). Supports Moodle **4.5 through 5.2**
-(`$plugin->requires = 2024100100`, `$plugin->supported = [405, 502]`), MATURITY_STABLE, one
+(soft dependency, see below). Supports Moodle **4.5 through 5.3**
+(`$plugin->requires = 2024100100`, `$plugin->supported = [405, 503]`), MATURITY_STABLE, one
 branch (`main`). CI is the moodle-an-hochschulen reusable workflow, one job per supported
 branch in `.github/workflows/ci.yml` — **update those jobs when `supported` changes**. Development
-happens on the m502 stack; this repo is mounted into m405, m501, m502 and m502b at
-`user/profile/field/repeatable` (see `~/dev/moodle-dev/plugins.conf`).
+happens on the m502 stack; the stacks that mount this repo at `user/profile/field/repeatable` follow
+`$plugin->supported` (`~/dev/moodle-dev/plugins.conf`, `auto`; `mdl mounts` regenerates them).
 
 ## Agent orchestration budget (fleet rule, repeated here on purpose)
 

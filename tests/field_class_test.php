@@ -28,7 +28,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
- * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class field_class_test extends \advanced_testcase {

@@ -29,7 +29,7 @@ use profilefield_repeatable\helper;
  * exists ({@see self::sweep_orphaned_indexes()}).
  *
  * @package    profilefield_repeatable
- * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class reconcile_indexes extends adhoc_task {

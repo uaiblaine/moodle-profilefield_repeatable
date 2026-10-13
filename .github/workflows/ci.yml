@@ -28,11 +28,20 @@ jobs:
   # in the same commit as the version.php change. The highest branch runs the
   # full PHP x DB matrix; older branches run one DB only. PHPUnit and Behat
   # run on every runtime leg.
+  ci-503:
+    name: Moodle 5.03
+    uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    with:
+      moodle-core-branch: MOODLE_503_STABLE
+      plugin-dependencies: |
+        uaiblaine/moodle-local_dictionaries,main
+
   ci-502:
     name: Moodle 5.02
     uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
     with:
       moodle-core-branch: MOODLE_502_STABLE
+      one-db-only: true
       plugin-dependencies: |
         uaiblaine/moodle-local_dictionaries,main
 

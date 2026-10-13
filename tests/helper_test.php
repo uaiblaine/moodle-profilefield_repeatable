@@ -21,7 +21,7 @@ namespace profilefield_repeatable;
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\helper
- * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class helper_test extends \advanced_testcase {
