@@ -400,9 +400,18 @@ final class schema {
      *                                    domains; null skips the check (companion absent).
      * @param array $lockedlabels Key => label of the stored columns holding values: each of
      *                            these keys must still be in the document.
+     * @param array $parentdomains Domain => the domain holding the parents of its items, for the
+     *                             domains whose parent domain the companion knows
+     *                             (\local_dictionaries\api::list_domains()): a column whose
+     *                             parent column uses another domain is rejected. Empty skips the check.
      * @return string[] Error messages; empty when the schema may be saved.
      */
-    public static function validate($document, ?callable $domainexists = null, array $lockedlabels = []): array {
+    public static function validate(
+        $document,
+        ?callable $domainexists = null,
+        array $lockedlabels = [],
+        array $parentdomains = []
+    ): array {
         $rawcolumns = is_array($document) ? ($document['columns'] ?? null) : null;
         if (!is_array($rawcolumns) || ($document['version'] ?? null) !== self::VERSION || !array_is_list($rawcolumns)) {
             return [self::error('errorschemainvalid')];
@@ -421,7 +430,7 @@ final class schema {
 
         $columns = (new self($rawcolumns))->columns();
         $errors = array_merge(
-            self::validate_columns($columns, $domainexists),
+            self::validate_columns($columns, $domainexists, $parentdomains),
             self::validate_roles($columns),
             self::validate_identifiers($columns)
         );
@@ -440,12 +449,14 @@ final class schema {
      *
      * @param array[] $columns Normalised columns.
      * @param callable|null $domainexists
+     * @param array $parentdomains Domain => parent domain ({@see self::validate()}).
      * @return string[]
      */
-    private static function validate_columns(array $columns, ?callable $domainexists): array {
+    private static function validate_columns(array $columns, ?callable $domainexists, array $parentdomains): array {
         $errors = [];
         $keys = [];
         $labels = [];
+        // Key => domain of the dictionary columns seen so far.
         $dictionarykeys = [];
 
         foreach ($columns as $position => $column) {
@@ -484,8 +495,18 @@ final class schema {
             // The parent must come earlier, so a set is always filled parent first.
             if (isset($column['parent']) && !isset($dictionarykeys[$column['parent']])) {
                 $errors[] = self::error('errorparentinvalid', $name);
+            } else if (
+                isset($column['parent'], $parentdomains[$domain])
+                && $parentdomains[$domain] !== $dictionarykeys[$column['parent']]
+            ) {
+                // The child's suggestions are filtered by a parent code from another dictionary: none would match.
+                $errors[] = get_string('errorparentmismatch', 'profilefield_repeatable', (object)[
+                    'column' => s($name),
+                    'domain' => s($domain),
+                    'parentdomain' => s($parentdomains[$domain]),
+                ]);
             }
-            $dictionarykeys[$key] = true;
+            $dictionarykeys[$key] = $domain;
         }
 
         return $errors;

@@ -91,6 +91,37 @@ class helper {
     }
 
     /**
+     * Whether the companion offers what dictionary columns need on the edit form.
+     *
+     * Stage B of the schema needs \local_dictionaries\api::lookup() (server-side validation) and
+     * the search service behind its autocomplete transport, which came before it. Without them
+     * dictionary columns are typed as text and their codes are not checked.
+     *
+     * @return bool
+     */
+    public static function companion_lookup_available(): bool {
+        return class_exists('\local_dictionaries\api') && method_exists('\local_dictionaries\api', 'lookup');
+    }
+
+    /**
+     * Fold a code for comparison: trimmed, accents removed, lower case.
+     *
+     * Mirrors the companion's code key (\local_dictionaries\local\keys::code_key(), internal to
+     * it), so two spellings the companion reads as one code compare equal here too.
+     *
+     * @param string $code
+     * @return string
+     */
+    public static function fold_code(string $code): string {
+        $code = trim($code);
+        $decomposed = \Normalizer::normalize($code, \Normalizer::FORM_D);
+        if (is_string($decomposed)) {
+            $code = preg_replace('/\p{Mn}+/u', '', $decomposed) ?? $decomposed;
+        }
+        return \core_text::strtolower($code);
+    }
+
+    /**
      * Check if the active DB family is PostgreSQL.
      *
      * @param \moodle_database $db

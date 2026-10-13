@@ -1032,7 +1032,8 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * The edit form gives the widget each column's key, plain label and required flag, and marks required headers.
+     * The edit form gives the widget each column's key, plain label, required flag and dictionary properties,
+     * and marks required headers.
      */
     public function test_edit_form_hands_the_columns_to_the_widget(): void {
         $this->resetAfterTest();
@@ -1046,7 +1047,11 @@ final class field_class_test extends \advanced_testcase {
 
         $this->assertSame(1, preg_match('~data-columns="([^"]*)"~', $html, $matches));
         $this->assertSame([
-            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'required' => true],
+            [
+                'key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'required' => true,
+                // The admin may search any domain, so the column is searched whenever the companion can.
+                'domain' => 'iso639', 'open' => false, 'autocomplete' => helper::companion_lookup_available(),
+            ],
             ['key' => 'notes', 'label' => 'Notes', 'mode' => 'free', 'required' => false],
         ], json_decode(html_entity_decode($matches[1]), true));
         $this->assertSame(1, substr_count($html, 'class="profilefield-repeatable-required"'));

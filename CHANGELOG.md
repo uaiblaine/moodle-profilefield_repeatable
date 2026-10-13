@@ -15,6 +15,17 @@ All notable changes to this project will be documented in this file.
   key equals another column's 2.x label, which would cross-wire the reads of label-keyed sets.
 
 ### Added
+- **Autocomplete and strict codes (schema v2, stage B)**: with `local_dictionaries` installed
+  (a version with `api::lookup()`), a dictionary column on the edit form is a search box over its
+  dictionary (`core/form-autocomplete` through the companion's transport): a name or a code finds
+  the item, a value shows as "name (code)" and stores the code. A column that depends on another
+  only suggests the items of the parent's code and is emptied when the parent changes. A "codes
+  only" column refuses an unknown or deactivated code on save, except the code the user already
+  has; an "any code" column offers "Use code ..." and marks a code that has no name yet. A child
+  whose item belongs to another parent code is refused. A user who may not search a restricted
+  dictionary types the code instead. Without the companion, codes stay typed text, unchecked.
+- The column editor warns, and the definition form refuses, a parent column that does not use
+  the dictionary holding the parents of the column's dictionary (when the companion knows it).
 - **Column schema v2**: a field's columns are one JSON schema in `param1`
   (`{"version": 2, "columns": [...]}`), each column with a stable key, a label, a mode (`free`,
   `dictionary`, `dictionary_open`; `pattern` is reserved), an optional domain and parent column,

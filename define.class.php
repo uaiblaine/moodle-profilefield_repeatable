@@ -160,7 +160,15 @@ class profile_define_repeatable extends profile_define_base {
             }
         }
 
-        $errors = \profilefield_repeatable\local\schema::validate($document, $domainexists, $lockedlabels);
+        // Domain => the domain holding its parents, where the companion knows it.
+        $parentdomains = [];
+        foreach (\profilefield_repeatable\helper::companion_domains() ?? [] as $domain) {
+            if ($domain['parentdomain'] !== null && $domain['parentdomain'] !== '') {
+                $parentdomains[$domain['shortname']] = $domain['parentdomain'];
+            }
+        }
+
+        $errors = \profilefield_repeatable\local\schema::validate($document, $domainexists, $lockedlabels, $parentdomains);
         if (empty($errors)) {
             return [];
         }

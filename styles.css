@@ -376,6 +376,13 @@
     padding: 12px 4px 0;
 }
 
+.profilefield-repeatable-columneditor .profilefield-repeatable-ce-warning {
+    color: var(--bs-danger, var(--danger, #ca3120));
+    flex: 1 1 100%;
+    font-size: 0.875rem;
+    margin: 0 8px 12px;
+}
+
 .profilefield-repeatable-columneditor .profilefield-repeatable-ce-fieldset {
     border: 0;
     margin: 0 0 12px;
@@ -422,4 +429,19 @@
     flex-wrap: wrap;
     justify-content: space-between;
     margin-top: 8px;
+}
+
+/*
+ * Dictionary columns of the edit widget (core/form-autocomplete). The "Use code" suggestion carries
+ * two spellings: the suggestion list shows the offer, the chosen value the code and its marker.
+ */
+.profilefield-repeatable-sets .form-autocomplete-suggestions .profilefield-repeatable-picked,
+.profilefield-repeatable-sets .form-autocomplete-selection .profilefield-repeatable-usecode {
+    display: none;
+}
+
+.profilefield-repeatable-sets .profilefield-repeatable-newcode {
+    font-size: 0.8125em;
+    font-style: italic;
+    opacity: 0.85;
 }

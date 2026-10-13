@@ -16,19 +16,36 @@
 /**
  * Repeatable profilefield UI.
  *
+ * Dictionary columns the server marks "autocomplete" are a select enhanced by core/form-autocomplete
+ * over the companion's search (profilefield_repeatable/dictionary_transport); every other column is
+ * a text input. Either way the value of a control is a code, and the hidden input stays the one
+ * submitted value.
+ *
  * @module     profilefield_repeatable/repeatable
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import Autocomplete from 'core/form-autocomplete';
+import {escapeHtml, newCodeHtml} from 'profilefield_repeatable/markup';
+
+/** Transport module of the enhanced selects, loaded by core only when one is enhanced (the companion is installed). */
+const TRANSPORT = 'profilefield_repeatable/dictionary_transport';
+
 const SELECTORS = {
     sets: '[data-region="sets"]',
-    set: '[data-region="set"]',
+    // A removed set holding an enhanced select is hidden, not deleted: see removeSet().
+    set: '[data-region="set"]:not([data-removed])',
     setTitle: '[data-region="set-title"]',
     removeSet: '[data-action="removeset"]',
     addSet: '[data-action="addset"]',
-    input: 'input[data-key]'
+    input: '[data-key]',
+    autocompleteInput: 'input[data-fieldtype="autocomplete"]',
+    selection: '.form-autocomplete-selection [role="option"]'
 };
+
+/** Counter of the stable ids the enhanced selects need: core keeps addressing them by id. */
+let selectcounter = 0;
 
 /**
  * Replace {no} placeholder in set title template.
@@ -40,13 +57,47 @@ const SELECTORS = {
 const renderSetTitle = (template, index) => template.replace('{no}', String(index));
 
 /**
- * Build one empty set row node to be used as cloning template.
+ * Build the control of one column: a select to enhance, or a text input.
  *
- * @param {Array} columns Objects with key, label and required.
- * @param {Object} strings
+ * @param {Object} column From the wrapper's data-columns.
+ * @param {Boolean} readonly Locked field: never enhanced.
  * @returns {HTMLElement}
  */
-const createSetTemplate = (columns, strings) => {
+const createControl = (column, readonly) => {
+    let control;
+    if (column.autocomplete && !readonly) {
+        control = document.createElement('select');
+        control.dataset.domain = column.domain;
+        control.dataset.open = column.open ? '1' : '0';
+        if (column.parent) {
+            control.dataset.parent = column.parent;
+            control.dataset.parentdomain = column.parentdomain || '';
+            control.dataset.parentlabel = column.parentlabel || '';
+            control.dataset.parentcode = '';
+        }
+    } else {
+        control = document.createElement('input');
+        control.type = 'text';
+        control.className = 'form-control';
+    }
+    control.dataset.key = column.key;
+    control.dataset.label = column.label;
+    if (column.required) {
+        // Not the required attribute: it would block the submit of a set left empty on purpose.
+        control.setAttribute('aria-required', 'true');
+    }
+    return control;
+};
+
+/**
+ * Build one empty set row node to be used as cloning template.
+ *
+ * @param {Array} columns Objects with key, label and required, plus the dictionary properties.
+ * @param {Object} strings
+ * @param {Boolean} readonly
+ * @returns {HTMLElement}
+ */
+const createSetTemplate = (columns, strings, readonly) => {
     const row = document.createElement('tr');
     row.dataset.region = 'set';
     row.className = 'profilefield-repeatable-set';
@@ -70,18 +121,8 @@ const createSetTemplate = (columns, strings) => {
         label.dataset.region = 'subitem-label';
         label.textContent = column.label;
 
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'form-control';
-        input.dataset.key = column.key;
-        input.dataset.label = column.label;
-        if (column.required) {
-            // Not the required attribute: it would block the submit of a set left empty on purpose.
-            input.setAttribute('aria-required', 'true');
-        }
-
         cell.appendChild(label);
-        cell.appendChild(input);
+        cell.appendChild(createControl(column, readonly));
         row.appendChild(cell);
     });
 
@@ -127,18 +168,65 @@ const updateSetMetadata = (wrapper, hiddenid, titletemplate) => {
 
         const inputs = Array.from(set.querySelectorAll(SELECTORS.input));
         inputs.forEach((input, fieldindex) => {
-            const id = `${hiddenid}_${number}_${fieldindex + 1}`;
-            input.id = id;
-
             const parentcell = input.closest('td');
             const label = parentcell ? parentcell.querySelector('[data-region="subitem-label"]') : null;
+            const name = `${String(input.dataset.label)} (${renderedtitle})`;
+
+            if (input.tagName === 'SELECT') {
+                // Core moves the label to its text input and addresses the select by id: the id never changes.
+                if (!input.id) {
+                    selectcounter++;
+                    input.id = `${hiddenid}_ac${selectcounter}`;
+                    if (label) {
+                        label.setAttribute('for', input.id);
+                    }
+                }
+                if (label) {
+                    label.textContent = name;
+                }
+                return;
+            }
+
+            const id = `${hiddenid}_${number}_${fieldindex + 1}`;
+            input.id = id;
             if (label) {
                 label.setAttribute('for', id);
             }
-
-            input.setAttribute('aria-label', `${String(input.dataset.label)} (${renderedtitle})`);
+            input.setAttribute('aria-label', name);
         });
     });
+};
+
+/**
+ * Set the markup of an option.
+ *
+ * Parsed outside the select: the HTML parser drops elements inside an option's innerHTML, and
+ * core shows the option's markup in the chip.
+ *
+ * @param {HTMLOptionElement} option
+ * @param {String} html
+ */
+const setOptionHtml = (option, html) => {
+    const holder = document.createElement('div');
+    holder.innerHTML = html;
+    option.replaceChildren(...holder.childNodes);
+};
+
+/**
+ * The markup a select shows for a code: "label (code)" as the search does, or the bare code.
+ *
+ * @param {HTMLSelectElement} select
+ * @param {String} code
+ * @param {Object} labels Domain => code => plain label, preloaded by the server.
+ * @param {Object} strings
+ * @returns {String}
+ */
+const optionHtml = (select, code, labels, strings) => {
+    const domainlabels = labels[select.dataset.domain] || {};
+    if (Object.prototype.hasOwnProperty.call(domainlabels, code.trim())) {
+        return escapeHtml(`${domainlabels[code.trim()]} (${code})`);
+    }
+    return select.dataset.open === '1' ? newCodeHtml(code, strings.newcode) : escapeHtml(code);
 };
 
 /**
@@ -146,18 +234,70 @@ const updateSetMetadata = (wrapper, hiddenid, titletemplate) => {
  *
  * @param {HTMLElement} template
  * @param {Object} values
+ * @param {Object} labels Domain => code => plain label.
+ * @param {Object} strings
  * @returns {HTMLElement}
  */
-const cloneSetFromTemplate = (template, values = {}) => {
+const cloneSetFromTemplate = (template, values = {}, labels = {}, strings = {}) => {
     const node = template.cloneNode(true);
     const inputs = Array.from(node.querySelectorAll(SELECTORS.input));
+    const valueOf = (key) => (Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : '');
 
     inputs.forEach((input) => {
-        const key = input.dataset.key;
-        input.value = Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : '';
+        const value = valueOf(input.dataset.key);
+        if (input.tagName !== 'SELECT') {
+            input.value = value;
+            return;
+        }
+        if (input.dataset.parent) {
+            input.dataset.parentcode = valueOf(input.dataset.parent).trim();
+        }
+        if (value.trim() !== '') {
+            const option = document.createElement('option');
+            option.value = value;
+            setOptionHtml(option, optionHtml(input, value, labels, strings));
+            option.selected = true;
+            input.appendChild(option);
+        }
     });
 
     return node;
+};
+
+/**
+ * Enhance the selects of one set with core/form-autocomplete; core enhances an element once.
+ *
+ * @param {HTMLElement} set
+ * @param {Object} strings
+ */
+const enhanceSet = (set, strings) => {
+    Array.from(set.querySelectorAll('select[data-key]')).forEach((select) => {
+        Autocomplete.enhance(`#${CSS.escape(select.id)}`, select.dataset.open === '1', TRANSPORT,
+            strings.searchplaceholder, false, true, '');
+    });
+};
+
+/**
+ * The code a control holds.
+ *
+ * For an enhanced select accepting any code, text typed but not yet turned into a value counts:
+ * core turns it into one on submit too, but asynchronously, after this module has read the value.
+ *
+ * @param {HTMLElement} control
+ * @returns {String}
+ */
+const controlValue = (control) => {
+    if (control.tagName !== 'SELECT') {
+        return String(control.value);
+    }
+    if (control.dataset.open === '1') {
+        const cell = control.closest('td');
+        const typed = cell ? cell.querySelector(SELECTORS.autocompleteInput) : null;
+        if (typed && typed.value.trim() !== '') {
+            return typed.value.trim();
+        }
+    }
+    return String(control.value);
 };
 
 /**
@@ -227,7 +367,7 @@ const buildPayloadFromDom = (wrapper, keys) => {
         const valuesbykey = {};
 
         Array.from(set.querySelectorAll(SELECTORS.input)).forEach((input) => {
-            valuesbykey[input.dataset.key] = String(input.value);
+            valuesbykey[input.dataset.key] = controlValue(input);
         });
 
         keys.forEach((key) => {
@@ -251,17 +391,95 @@ const buildPayloadFromDom = (wrapper, keys) => {
  * @param {HTMLElement} wrapper
  * @param {HTMLElement} template
  * @param {String} hiddenid
- * @param {String} titletemplate
+ * @param {Object} strings
  */
-const ensureOneEmptySet = (wrapper, template, hiddenid, titletemplate) => {
+const ensureOneEmptySet = (wrapper, template, hiddenid, strings) => {
     const container = wrapper.querySelector(SELECTORS.sets);
     if (!container) {
         return;
     }
 
     if (!container.querySelector(SELECTORS.set)) {
-        container.appendChild(cloneSetFromTemplate(template));
-        updateSetMetadata(wrapper, hiddenid, titletemplate);
+        const set = cloneSetFromTemplate(template);
+        container.appendChild(set);
+        updateSetMetadata(wrapper, hiddenid, strings.repeatableset);
+        enhanceSet(set, strings);
+    }
+};
+
+/**
+ * Remove one set from the form.
+ *
+ * A set holding an enhanced select stays in the page, hidden and without labels: core's
+ * autocomplete keeps handlers on the form that look its elements up by id on submit, and a
+ * deleted element makes them throw.
+ *
+ * @param {HTMLElement} set
+ */
+const removeSet = (set) => {
+    if (!set.querySelector('select[data-key]')) {
+        set.remove();
+        return;
+    }
+    set.dataset.removed = '1';
+    set.hidden = true;
+    Array.from(set.querySelectorAll('[data-region="subitem-label"], [data-region="set-title"]')).forEach((node) => {
+        node.textContent = '';
+    });
+};
+
+/**
+ * Point the dependent columns of a set at a parent's new code, and empty them when it changed.
+ *
+ * @param {HTMLElement} control The parent column's control.
+ */
+const updateDependents = (control) => {
+    const set = control.closest(SELECTORS.set);
+    if (!set) {
+        return;
+    }
+    const code = controlValue(control).trim();
+    Array.from(set.querySelectorAll('select[data-parent]')).forEach((child) => {
+        if (child.dataset.parent !== control.dataset.key || child.dataset.parentcode === code) {
+            return;
+        }
+        child.dataset.parentcode = code;
+        const cell = child.closest('td');
+        if (!cell) {
+            return;
+        }
+        // Core deselects a value when its chip is clicked, which also re-renders the chips.
+        Array.from(cell.querySelectorAll(SELECTORS.selection)).forEach((chip) => chip.click());
+        const typed = cell.querySelector(SELECTORS.autocompleteInput);
+        if (typed) {
+            typed.value = '';
+        }
+    });
+};
+
+/**
+ * Mark a code typed into a column accepting any code as new, once core has made it a value.
+ *
+ * Core creates such a value (Enter, comma, leaving the field) as a bare option; the "Use code"
+ * suggestion already carries the marker.
+ *
+ * @param {HTMLSelectElement} select
+ * @param {Object} strings
+ */
+const markCreatedCode = (select, strings) => {
+    const option = select.selectedOptions[0];
+    if (!option || !option.dataset.iscustom || option.dataset.marked) {
+        return;
+    }
+    option.dataset.marked = '1';
+    setOptionHtml(option, newCodeHtml(option.value, strings.newcode));
+    const cell = select.closest('td');
+    const chip = cell ? cell.querySelector(`.form-autocomplete-selection [data-value="${CSS.escape(option.value)}"]`) : null;
+    if (chip && !chip.querySelector('.profilefield-repeatable-newcode')) {
+        const marker = document.createElement('span');
+        marker.className = 'profilefield-repeatable-newcode';
+        marker.textContent = strings.newcode;
+        chip.append(' ', marker);
     }
 };
 
@@ -304,6 +522,21 @@ const readColumns = (wrapper) => {
 };
 
 /**
+ * Read the labels the server preloaded for the codes the form holds.
+ *
+ * @param {HTMLElement} hidden
+ * @returns {Object} Domain => code => plain label; empty when the attribute is unreadable.
+ */
+const readLabels = (hidden) => {
+    try {
+        const labels = JSON.parse(hidden.dataset.labels || '{}');
+        return labels && typeof labels === 'object' && !Array.isArray(labels) ? labels : {};
+    } catch (_e) {
+        return {};
+    }
+};
+
+/**
  * Initialise repeatable field UI.
  *
  * Reads the payload from the hidden input once and writes it back from the widget when the form is
@@ -311,6 +544,7 @@ const readColumns = (wrapper) => {
  * The columns come from the wrapper's data-columns attribute (profile_field_repeatable::edit_field_add()).
  *
  * @param {Object} config From profile_field_repeatable::edit_after_data(): wrapperid, hiddenid, readonly, strings.
+ *     The labels of the codes the form holds come from the hidden input's data-labels attribute.
  */
 export const init = (config) => {
     if (!config || !config.wrapperid || !config.hiddenid) {
@@ -333,20 +567,24 @@ export const init = (config) => {
     }
 
     const readonly = !!config.readonly;
+    const given = config.strings || {};
     const strings = {
-        addnewset: config.strings && config.strings.addnewset ? config.strings.addnewset : 'Add new set',
-        removeset: config.strings && config.strings.removeset ? config.strings.removeset : 'Remove set',
-        repeatableset: config.strings && config.strings.repeatableset ? config.strings.repeatableset : 'Set {no}'
+        addnewset: given.addnewset || 'Add new set',
+        removeset: given.removeset || 'Remove set',
+        repeatableset: given.repeatableset || 'Set {no}',
+        newcode: given.newcode || '',
+        searchplaceholder: given.searchplaceholder || '',
     };
 
     const columns = readColumns(wrapper);
     const keys = columns.map((column) => column.key);
-    const settemplate = createSetTemplate(columns, strings);
+    const labels = readLabels(hidden);
+    const settemplate = createSetTemplate(columns, strings, readonly);
 
     const existingsets = parsePayloadToSetList(hidden.value, keys);
     if (existingsets.length) {
         existingsets.forEach((setvalues) => {
-            setscontainer.appendChild(cloneSetFromTemplate(settemplate, setvalues));
+            setscontainer.appendChild(cloneSetFromTemplate(settemplate, setvalues, labels, strings));
         });
     } else if (!readonly) {
         setscontainer.appendChild(cloneSetFromTemplate(settemplate));
@@ -360,12 +598,16 @@ export const init = (config) => {
         return;
     }
 
+    Array.from(setscontainer.querySelectorAll(SELECTORS.set)).forEach((set) => enhanceSet(set, strings));
+
     wrapper.addEventListener('click', (event) => {
         const addbutton = event.target.closest(SELECTORS.addSet);
         if (addbutton) {
             event.preventDefault();
-            setscontainer.appendChild(cloneSetFromTemplate(settemplate));
+            const set = cloneSetFromTemplate(settemplate);
+            setscontainer.appendChild(set);
             updateSetMetadata(wrapper, config.hiddenid, strings.repeatableset);
+            enhanceSet(set, strings);
             return;
         }
 
@@ -374,11 +616,23 @@ export const init = (config) => {
             event.preventDefault();
             const set = removebutton.closest(SELECTORS.set);
             if (set) {
-                set.remove();
-                ensureOneEmptySet(wrapper, settemplate, config.hiddenid, strings.repeatableset);
+                removeSet(set);
+                ensureOneEmptySet(wrapper, settemplate, config.hiddenid, strings);
                 updateSetMetadata(wrapper, config.hiddenid, strings.repeatableset);
             }
         }
+    });
+
+    // Core's autocomplete dispatches change on the select; a text input fires it on leaving.
+    wrapper.addEventListener('change', (event) => {
+        const control = event.target.closest(SELECTORS.input);
+        if (!control || !wrapper.contains(control)) {
+            return;
+        }
+        if (control.tagName === 'SELECT' && control.dataset.open === '1') {
+            markCreatedCode(control, strings);
+        }
+        updateDependents(control);
     });
 
     const form = hidden.closest('form');

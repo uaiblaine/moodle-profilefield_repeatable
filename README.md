@@ -65,8 +65,10 @@ After installing, navigate to **Site Administration > Plugins > Moodle plugins >
      column later changes only its name. Once users have values under a key, the key is locked.
    - **How users fill it**: *Free text*; *Dictionary, codes only*; or *Dictionary, any code*.
      A dictionary column names a domain of the companion plugin `local_dictionaries` (picked from
-     its list when installed) and may **depend on** an earlier dictionary column. In this release
-     both dictionary modes are still typed as text; codes are shown with their names.
+     its list when installed) and may **depend on** an earlier dictionary column whose code
+     narrows its items (cities of the chosen state); the editor warns, and saving refuses, a
+     parent column that does not use the dictionary holding the parents of the column's
+     dictionary. See "Dictionary columns" under Editing.
    - **Role in the set**: exactly one column is the **title** of the set (the accordion header);
      up to 3 others are shown in the **subline**; **required** columns must be filled in every set
      that has any value; up to 3 columns are **indexed** on PostgreSQL.
@@ -118,6 +120,31 @@ Users can:
 
 Empty sets are removed automatically on save. At least one empty set remains in the form.
 
+#### Dictionary columns
+
+With `local_dictionaries` installed (a version that has `\local_dictionaries\api::lookup()`), a
+dictionary column is a search box over its dictionary: type a name or a code ("port", "pt" and
+"Português" all find Portuguese), pick the item, and the column stores its code and shows
+"name (code)". A column that depends on another only suggests the items of the parent's code,
+asks for the parent first while it is empty, and is emptied when the parent changes.
+
+- **Dictionary, codes only**: the list offers the dictionary's active items only. On save, a code
+  that is not in the dictionary, or has been deactivated, is refused, unless it is the code the
+  user already has in that column (a deactivated code stays until the user changes it).
+- **Dictionary, any code**: when no item has the typed code, the list offers `Use code "X"`
+  (Enter does the same), and the value is marked "New code, no name yet" until the dictionary
+  gets it.
+- A dependent column's item must belong to the parent column's code, whatever the mode.
+
+Searching goes through the companion's `local_dictionaries_search_items` service, which applies
+the dictionary's visibility: a dictionary restricted to `local/dictionaries:view` can be searched
+only by users holding that capability (system context). For everyone else the column is a text box
+where the code is typed, and the same server checks apply. Give the capability, or open the
+dictionary to logged-in users, when users fill such a column themselves.
+
+Without the companion (or with one older than `api::lookup()`), dictionary columns are text boxes
+and their codes are not checked.
+
 
 Advanced Features
 -----------------
@@ -164,7 +191,9 @@ level (domain cefr):      'B2' → 'Upper-Intermediate'
 ```
 
 The field calls the static class `\local_dictionaries\resolver` (`resolve()`, `resolve_bulk()`,
-`domain_exists()`); the column editor lists the companion's domains.
+`domain_exists()`) and `\local_dictionaries\api` (`list_domains()` for the column editor,
+`can_read()` and `lookup()` for the edit form); the edit form searches through the companion's
+`local_dictionaries/autocomplete_transport`.
 
 ### Report Builder
 
