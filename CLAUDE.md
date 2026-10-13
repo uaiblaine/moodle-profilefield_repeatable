@@ -99,7 +99,9 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 - `field.class.php` and `define.class.php` keep core's fixed global class names and are loaded by
   `require_once`: tests require `user/profile/lib.php` and the file explicitly. New code goes under
   `classes/`, which is autoloaded.
-- Install and upgrade steps call only the `db/lib.php` procedural wrappers: no autoloading there.
+- Plugin classes autoload during install and upgrade (`CACHE_DISABLE_ALL` makes core rescan the
+  class map). `db/lib.php` stays only as the install hook's procedural entry point to
+  `helper::ensure_postgres_jsonb_support()`; it is not needed to avoid the autoloader.
 
 ### Field parameters
 
@@ -124,7 +126,12 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 - `profilefield_repeatable_data` is a projection for Report Builder only: `edit_save_data()` writes
   the payload and `local\projection::sync()` in one delegated transaction, as must any new writer.
 - Drift is repaired by the `user_updated`/`user_created` observers and the daily
-  `task\reproject_sets`, because auth_db sync fires no event and restored users have no rows.
+  `task\reproject_sets`. The observers are non-internal (`'internal' => false`): auth_ldap fires the
+  event before `profile_save_custom_fields()` writes, inside one delegated transaction per user, and
+  core buffers non-internal observers until that transaction commits. Outside a transaction the
+  event still precedes the write, and auth_db sync of existing users fires none, so the daily task
+  repairs those; restored users have no rows either. Tests that trigger these events call
+  `preventResetByRollback()`, because PostgreSQL runs every PHPUnit test inside a transaction.
 - `reproject_record()` re-reads inside its transaction and decides staleness again: the snapshot
   that selected the record may predate a user save, and writing from it would clobber that save.
 - `is_current()` compares sets as key-sorted JSON, because JSONB keeps neither key order nor spacing.
@@ -139,7 +146,8 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 
 ### Edit form
 
-- The value travels in a hidden input that `repeatable.js` keeps in step with the widget. The
+- The value travels in a hidden input that `repeatable.js` reads once on init and rewrites only on
+  form submit; the widget holds the state in between. The
   hidden input sits inside a form group named after the field, because QuickForm prints no error
   for a bare hidden element; the widget points at the error with `aria-describedby`.
 - Several repeatable fields can share one form: never assume a single instance in the JS.

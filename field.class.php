@@ -23,7 +23,11 @@
  */
 
 /**
- * Class profile_field_repeatable.
+ * Profile field holding repeatable sets of sub-item values.
+ *
+ * The canonical value is one JSON object in user_info_data.data, e.g.
+ * {"@@ID#1": {"Language": "pt", "Level": "B2"}}; the per-set rows in profilefield_repeatable_data
+ * are a projection for Report Builder ({@see \profilefield_repeatable\local\projection}).
  *
  * @package    profilefield_repeatable
  */
@@ -37,11 +41,11 @@ class profile_field_repeatable extends profile_field_base {
     /**
      * Adds elements for this field type to the edit form.
      *
-     * The value travels in a hidden input that the AMD module keeps in step with the widget.
-     * QuickForm prints no error for a hidden element, so the hidden input is wrapped in a
-     * group carrying the field's input name: the group is a visible form row placed under
-     * the widget, and a validation error keyed by the input name renders there. The widget
-     * points at that error with aria-describedby.
+     * The value travels in a hidden input that the AMD module reads on load and rewrites from
+     * the widget on submit. QuickForm prints no error for a hidden element, so the hidden input
+     * is wrapped in a group carrying the field's input name: the group is a visible form row
+     * placed under the widget, and a validation error keyed by the input name renders there.
+     * The widget points at that error with aria-describedby.
      *
      * @param moodleform $mform
      */
@@ -52,11 +56,12 @@ class profile_field_repeatable extends profile_field_base {
         $subitems = $this->get_subitems();
         $subitemdata = [];
         foreach ($subitems as $subitem) {
-            $subitemdata[] = ['name' => format_string($subitem, true, ['context' => $context])];
+            // The template escapes: format_string() must hand it the plain spelling.
+            $subitemdata[] = ['name' => format_string($subitem, true, ['context' => $context, 'escape' => false])];
         }
 
         $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
-            'fieldlabel' => format_string($this->field->name),
+            'fieldlabel' => format_string($this->field->name, true, ['context' => $context, 'escape' => false]),
             'labelid' => $this->get_wrapper_id() . '-label',
             'errorid' => $this->get_error_id(),
             'wrapperid' => $this->get_wrapper_id(),
@@ -127,6 +132,9 @@ class profile_field_repeatable extends profile_field_base {
 
     /**
      * Saves data coming from form and synchronises JSON-per-set rows.
+     *
+     * Replaces core's save so that user_info_data and the projection rows change in one delegated
+     * transaction ({@see \profilefield_repeatable\local\projection::sync()}).
      *
      * @param stdClass $usernew
      */
@@ -222,14 +230,15 @@ class profile_field_repeatable extends profile_field_base {
             return [$this->inputname => get_string('required')];
         }
 
-        // Keep parent uniqueness check semantics.
+        // The parent's uniqueness check compares this value with stored data: give it the canonical
+        // JSON, or '' so that an empty optional value is not checked.
         $usernew->{$this->inputname} = empty($payload) ? '' : \profilefield_repeatable\helper::encode_payload($payload);
 
         return parent::edit_validate_field($usernew);
     }
 
     /**
-     * Check raw payload against the configured set-count and value-length limits.
+     * Check raw payload against helper::MAX_SETS and helper::MAX_VALUE_LENGTH.
      *
      * Runs on the raw decoded JSON because normalisation silently enforces the
      * same caps; validating after normalising could never see the excess.
@@ -285,7 +294,8 @@ class profile_field_repeatable extends profile_field_base {
      * Prevent core from rendering this field inline in the "contact" category.
      *
      * Repeatable fields are rendered as a dedicated widget via
-     * {@see profilefield_repeatable_myprofile_navigation()} instead.
+     * {@see profilefield_repeatable_myprofile_navigation()} instead. Returning false also leaves
+     * the field out of the customfields that user_get_user_details() returns.
      *
      * @param \context|null $context
      * @return bool Always false.
@@ -315,16 +325,6 @@ class profile_field_repeatable extends profile_field_base {
      */
     public function get_field_properties() {
         return [PARAM_RAW, NULL_NOT_ALLOWED];
-    }
-
-    /**
-     * Normalise payload for the current field configuration.
-     *
-     * @param mixed $rawpayload
-     * @return array
-     */
-    private function normalise_payload($rawpayload): array {
-        return \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
     }
 
     /**

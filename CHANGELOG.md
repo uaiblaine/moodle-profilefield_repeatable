@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- The GIN `REINDEX` right after its `CREATE INDEX` (it rebuilt the same index under a write lock),
+  the unused PostgreSQL feature helpers, the per-run index-task `debugging()` line, the
+  unreachable `$set['raw']` fallback, the private `normalise_payload()` of the field class, and
+  the dead procedural wrappers and storage-table step in `db/lib.php` and `db/install.php`
+  (core creates the table from `install.xml` before the install hook).
+
+### Changed
+- Code comments audited against the code and Moodle's guidance: contracts stated, comments that
+  contradicted the code corrected, history moved out of the code. `amd/build` rebuilt for the
+  edited JSDoc of `amd/src/repeatable.js`.
+
 ### Security
 - **Stored XSS in Report Builder**: the sub-item value, code and resolved-name columns now
   escape their output, and the name filter escapes its option labels (core's autocomplete
@@ -13,6 +25,19 @@ All notable changes to this project will be documented in this file.
   profile-field columns (`is_visible()` at system level).
 
 ### Fixed
+- **auth_ldap sync reaches the projection**: the `user_updated` and `user_created` observers are
+  non-internal, so core buffers them until the sync's delegated transaction commits instead of
+  running them before `profile_save_custom_fields()` writes the payload. Outside a transaction,
+  and for auth_db sync of existing users, the daily `reproject_sets` task still repairs.
+- **Names were escaped twice**: field and sub-item names reach the Mustache double stashes (edit
+  form, plain list, accordion) and the Report Builder entity titles in the plain spelling.
+- **Indexed sub-items with `:`, `?` or `$`** are rejected at definition time (their index DDL
+  was read as a query placeholder and the index silently never created); the index task skips
+  any already saved.
+- **Report Builder resolved-name column**: labels are memoised per domain and code, misses
+  included, so unresolved codes no longer cost two queries per row.
+- **Accordion colours follow the theme**: the `--pfr-*` tokens read the theme's `--bs-*` tokens
+  (Moodle 5.x dark mode), with the previous colours as fallbacks for Moodle 4.5.
 - **Profile reads follow the canonical payload**: the edit form, `is_empty()` and the profile
   display read `user_info_data.data`. Values written by core's `profile_save_custom_fields()`
   (auth_db and auth_ldap attribute sync) no longer hide behind stale per-set rows.

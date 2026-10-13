@@ -21,6 +21,7 @@ defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/user/profile/lib.php');
 require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
+require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
 
 /**
  * Tests for profile_field_repeatable.
@@ -104,7 +105,7 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * Ensure preprocessing persists normalised strict JSON.
+     * Ensure preprocessing drops empty sets and renumbers the remaining ones from @@ID#1.
      */
     public function test_edit_save_data_preprocess_normalises_payload(): void {
         $this->resetAfterTest();
@@ -170,17 +171,10 @@ final class field_class_test extends \advanced_testcase {
     public function test_normalise_payload_discards_empty_sets_after_completion(): void {
         $this->resetAfterTest();
 
-        $field = $this->create_field([
-            'param1' => self::SUBITEMS_DIR_ESC_TUR_DISC,
-        ]);
-
-        $method = new \ReflectionMethod(\profile_field_repeatable::class, 'normalise_payload');
-        $method->setAccessible(true);
-
-        $payload = $method->invoke(
-            $field,
+        $payload = helper::normalise_payload(
             '{"@@ID#10":{"diretoria":"","escola":"","turma":"","disciplina":""},' .
-            '"@@ID#20":{"diretoria":"16154","escola":"45","turma":"3"}}'
+            '"@@ID#20":{"diretoria":"16154","escola":"45","turma":"3"}}',
+            helper::parse_subitems(self::SUBITEMS_DIR_ESC_TUR_DISC)
         );
 
         $this->assertSame([
@@ -386,6 +380,72 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
+     * Assert that a name written with markup renders escaped exactly once.
+     *
+     * @param string $html Rendered output.
+     * @param string $label The plain label the name starts with.
+     * @param int $expected How many times the escaped label is expected.
+     */
+    private function assert_escaped_once(string $html, string $label, int $expected): void {
+        $this->assertSame($expected, substr_count($html, $label . ' R&amp;D'), $label . ' must appear escaped once');
+        $this->assertStringNotContainsString('&amp;amp;', $html);
+        $this->assertStringNotContainsString('<b>', $html);
+    }
+
+    /**
+     * The edit form escapes the field and sub-item names once: the template does it.
+     */
+    public function test_edit_form_escapes_names_once(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $field = $this->create_field([
+            'name' => 'Field R&D <b>x</b>',
+            'param1' => "Item R&D <b>x</b>\nrole",
+        ]);
+        $html = $this->submit_edit_form($field, '{}')->render();
+
+        $this->assert_escaped_once($html, 'Field', 1);
+        $this->assert_escaped_once($html, 'Item', 1);
+    }
+
+    /**
+     * Both display paths (plain list and profile accordion) escape the names once.
+     */
+    public function test_display_escapes_names_once(): void {
+        global $SCRIPT;
+
+        $this->resetAfterTest();
+
+        $field = $this->create_field([
+            'name' => 'Field R&D <b>x</b>',
+            'param1' => "role\nItem R&D <b>x</b>",
+        ]);
+        $field->data = '{"@@ID#1":{"role":"first","Item R&D <b>x</b>":"second"}}';
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $plain = $field->display_data();
+            $SCRIPT = '/user/view.php';
+            $accordion = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+
+        // The plain list prints the key of each filled sub-item; the accordion titles the set with the first
+        // sub-item's value, labels the other rows with their names and puts the field name in its aria-label.
+        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $accordion);
+        $this->assertSame(1, substr_count($plain, 'Item R&amp;D'));
+        $this->assertSame(1, substr_count($accordion, 'Item R&amp;D'));
+        $this->assertStringNotContainsString('&amp;amp;', $plain);
+        $this->assertStringNotContainsString('<b>', $plain);
+        $this->assertSame(1, substr_count($accordion, 'aria-label="Field R&amp;D'));
+        $this->assertStringNotContainsString('&amp;amp;', $accordion);
+        $this->assertStringNotContainsString('<b>', $accordion);
+    }
+
+    /**
      * Ensure profile accordion hides sync footer when timestamp is unavailable.
      */
     public function test_display_data_profile_context_hides_sync_footer_without_timestamp(): void {
@@ -407,7 +467,7 @@ final class field_class_test extends \advanced_testcase {
         }
 
         $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringNotContainsString('profilefield-repeatable-display-sync', $output);
+        $this->assertStringNotContainsString('profilefield-repeatable-sync', $output);
     }
 
     /**
@@ -636,7 +696,7 @@ final class field_class_test extends \advanced_testcase {
             'label' => 'EE Alpha',
         ]]);
 
-        // Simulate define_save_preprocess to canonicalise param3.
+        // Canonicalise param1 and param3 through define_save_preprocess, as the admin form does.
         $define = new \profile_define_repeatable();
         $preprocessed = $define->define_save_preprocess((object) [
             'param1' => "Codigo_Diretoria\nCodigo_Escola",

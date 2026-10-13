@@ -22,10 +22,10 @@ use profilefield_repeatable\local\projection;
 /**
  * Rebuild the per-set projection of every user whose canonical payload changed behind the plugin.
  *
- * Writers that change {user_info_data} without an event the observers can use (auth_db's
- * attribute sync, backup restore) leave {profilefield_repeatable_data} stale; profile pages are
- * unaffected because they read the payload, but Report Builder lists the stale sets until this
- * task runs.
+ * Writers that change {user_info_data} without a later user event the observers can use (auth_db's
+ * sync of existing users, any direct write) leave {profilefield_repeatable_data} stale; profile
+ * pages are unaffected because they read the payload, but Report Builder lists the stale sets
+ * until this task runs.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine

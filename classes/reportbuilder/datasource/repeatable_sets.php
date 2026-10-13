@@ -85,7 +85,11 @@ class repeatable_sets extends datasource {
 
         $fields = $DB->get_records('user_info_field', ['datatype' => 'repeatable'], 'id ASC');
         foreach ($fields as $field) {
-            $fieldname = format_string($field->name, true, ['context' => \context_system::instance()]);
+            // Core renders entity titles itself, as it does a custom field's: plain spelling in.
+            $fieldname = format_string($field->name, true, [
+                'context' => \context_system::instance(),
+                'escape' => false,
+            ]);
 
             $entity = new repeatable_set($field);
             $entity->set_entity_name('repeatable_' . $field->shortname);

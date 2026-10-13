@@ -62,6 +62,30 @@ final class reconcile_indexes_test extends \advanced_testcase {
     }
 
     /**
+     * A sub-item whose literal the DML placeholder scan would misread is never given an index.
+     *
+     * Runs on every database family: the desired map is built from the field record alone.
+     */
+    public function test_desired_indexes_skip_subitems_with_placeholder_characters(): void {
+        $this->resetAfterTest();
+
+        $field = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable',
+            'name' => 'Repeatable placeholders',
+            'shortname' => 'repeatable_placeholders',
+            'param1' => "plain\nStart:date\nName?",
+            'param2' => "Start:date\nplain\nName?",
+        ]);
+
+        $task = new reconcile_indexes();
+        $map = new \ReflectionMethod(reconcile_indexes::class, 'get_desired_index_map');
+        $desired = $map->invoke($task, (int)$field->id);
+
+        $this->assertSame(['plain'], array_values($desired));
+        $this->assertDebuggingCalledCount(2);
+    }
+
+    /**
      * Create an index with a task-owned name on the storage table.
      *
      * @param string $indexname

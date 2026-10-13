@@ -20,21 +20,19 @@ namespace profilefield_repeatable;
  * This plugin may not use Bootstrap 5 utilities, because it renders on core's pages.
  *
  * The bridging between Bootstrap 4 (Moodle 4.5) and Bootstrap 5 (5.0+) is asymmetric:
- * 4.5's forward bridge, theme/boost/scss/moodle/bs5-bridge.scss, is 116 lines covering
- * only g-0, btn-close, the ms/me/ps/pe spacers and float/text/border/rounded-start and
- * -end, while 5.x's backward bridge runs past a thousand. So BS4 names resolve on both
- * branches and BS5 names resolve only on 5.x.
+ * 4.5's forward bridge, theme/boost/scss/moodle/bs5-bridge.scss, covers only g-0,
+ * btn-close, the ms/me/ps/pe spacers and float/text/border/rounded-start and -end, while
+ * 5.x keeps the BS4 names in theme/boost/scss/moodle/bs4-compat.scss. So BS4 names resolve
+ * on both branches and BS5 names resolve only on 5.x.
  *
- * A sibling plugin with pages of its own answers that with a polyfill gated on a body
- * class it sets when $CFG->branch < 500. That option does not exist here: this field type
+ * A polyfill gated on a body class needs a page the plugin owns, and this field type
  * renders inside core's /user/edit.php and profile pages, where the plugin controls no
- * ancestor of the markup. So the rule is stricter — do not reach for a BS5 utility at all;
- * own the declaration under a profilefield-repeatable-* class, which is correct on both
- * branches with no version test involved.
+ * ancestor of the markup. So no BS5 utility at all: own the declaration under a
+ * profilefield-repeatable-* class, which is correct on both branches.
  *
- * Where a value genuinely differs between branches, read the theme's own token with a
- * fallback rather than testing the version: 5.x defines --bs-body-bg and 4.5 defines no
- * --bs-* custom property at all, so var(--bs-body-bg, #fff) resolves correctly on each.
+ * Where a value differs between branches, read the theme's own token with a fallback
+ * rather than testing the version: 5.x defines --bs-body-bg and 4.5 defines no --bs-*
+ * custom property, so var(--bs-body-bg, #fff) resolves correctly on each.
  *
  * @package    profilefield_repeatable
  * @category   test
@@ -46,10 +44,9 @@ final class bootstrap_compat_test extends \basic_testcase {
     /**
      * Bootstrap 5 utility families that resolve to nothing on Moodle 4.5.
      *
-     * Derived by diffing the compiled Boost CSS of a running 4.5 stack against a 5.2 one
-     * (8905 class selectors against 9601), then keeping the families a plugin would
-     * plausibly reach for. Not guesswork: guessing is what let fw-semibold and d-grid
-     * through an earlier sweep of this fleet.
+     * Taken from a diff of the class selectors in the compiled Boost CSS of 4.5 and 5.2,
+     * keeping the families a plugin would plausibly reach for. Extend it from such a diff,
+     * not from memory.
      *
      * @return array List of regular expressions matching a banned class token.
      */
@@ -81,8 +78,8 @@ final class bootstrap_compat_test extends \basic_testcase {
      * Backgrounds that need an explicit text colour beside them.
      *
      * Bootstrap 4's .badge sets no colour and Bootstrap 5's defaults it to white, so a
-     * badge that does not state its own fails WCAG AA on one branch or the other.
-     * Measured: bg-success 3.07:1 on 4.5, bg-secondary 1.49:1 on 5.2.
+     * badge that does not state its own fails WCAG AA on one branch or the other
+     * (bg-success 3.07:1 on 4.5, bg-secondary 1.49:1 on 5.2).
      *
      * @return array Background class => required text class.
      */
@@ -247,8 +244,8 @@ final class bootstrap_compat_test extends \basic_testcase {
     /**
      * The stylesheet must not declare custom properties in core's design-system namespace.
      *
-     * Moodle 5.2 ships theme/boost/scss/design-system/ with $mds-* tokens and 5.3 LTS brings
-     * MDS React, so an --mds-* declaration squats a namespace core is actively expanding.
+     * Moodle 5.2 ships theme/boost/scss/design-system/ with $mds-* tokens, so an --mds-*
+     * declaration in a plugin sheet can collide with core's own.
      *
      * @return void
      */

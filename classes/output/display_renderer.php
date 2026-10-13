@@ -19,7 +19,9 @@ namespace profilefield_repeatable\output;
 /**
  * Display renderer for repeatable profile fields.
  *
- * Extracted from profile_field_repeatable to reduce class complexity.
+ * Renders an accordion on /user/profile.php and /user/view.php and a plain list elsewhere. Values
+ * of a sub-item mapped to a dictionary domain (param3) show the companion dictionary plugin's
+ * label when that plugin is installed, and the raw code otherwise.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
@@ -38,13 +40,13 @@ class display_renderer {
     /** @var array|null Cached subitem/domain mapping. */
     private ?array $subitemdomainmap = null;
 
-    /** @var array Cached resolved labels by domain+code. */
+    /** @var array Resolved labels keyed "<domain>\n<code>"; null caches a code with no label. */
     private array $resolveddisplaycache = [];
 
-    /** @var core_renderer */
+    /** @var \core_renderer */
     private $output;
 
-    /** @var moodle_page */
+    /** @var \moodle_page */
     private $page;
 
     /** @var \stdClass[]|null Projection rows already fetched by the caller; null fetches them on demand. */
@@ -104,7 +106,7 @@ class display_renderer {
     }
 
     /**
-     * Render legacy plain display format.
+     * Render the plain list used outside the profile pages.
      *
      * @param array $displaysets
      * @return string
@@ -130,7 +132,7 @@ class display_renderer {
 
                 $parts[] = [
                     'hasseparator' => !empty($parts),
-                    'key' => format_string($subitem, true, ['context' => $context]),
+                    'key' => format_string($subitem, true, ['context' => $context, 'escape' => false]),
                     'value' => $this->resolve_reference_display_value($subitem, $value),
                 ];
             }
@@ -231,7 +233,7 @@ class display_renderer {
     }
 
     /**
-     * Build accordion row data excluding the first sub-item.
+     * Build accordion row data, one row per given sub-item (the caller leaves out the primary one).
      *
      * @param string[] $subitems
      * @param array $values
@@ -241,7 +243,10 @@ class display_renderer {
         $rows = [];
         foreach ($subitems as $subitem) {
             $rows[] = [
-                'label' => format_string($subitem, true, ['context' => \core\context\system::instance()]),
+                'label' => format_string($subitem, true, [
+                    'context' => \core\context\system::instance(),
+                    'escape' => false,
+                ]),
                 'value' => $this->resolve_reference_display_value($subitem, (string)($values[$subitem] ?? '')),
             ];
         }
@@ -300,10 +305,11 @@ class display_renderer {
             $items[] = $item;
         }
 
+        // The templates escape, so the plain spelling goes in.
         $fieldname = format_string(
             (string)($this->field->name ?? ''),
             true,
-            ['context' => \core\context\system::instance()]
+            ['context' => \core\context\system::instance(), 'escape' => false]
         );
 
         return [
@@ -420,7 +426,6 @@ class display_renderer {
      * @return bool
      */
     private function is_profile_page_context(): bool {
-        // Check script from globals if needed.
         $script = (string)($GLOBALS['SCRIPT'] ?? '');
         if ($script !== '') {
             return in_array($script, ['/user/profile.php', '/user/view.php'], true);
@@ -504,7 +509,7 @@ class display_renderer {
 
         $codesbydomain = [];
         foreach ($displaysets as $set) {
-            $values = (array)($set['values'] ?? $set['raw'] ?? []);
+            $values = (array)($set['values'] ?? []);
             foreach ($domainmap as $subitem => $domain) {
                 $rawvalue = trim((string)($values[$subitem] ?? ''));
                 if ($rawvalue === '') {
@@ -562,6 +567,8 @@ class display_renderer {
 
     /**
      * Get configured subline sub-items (param4), filtered against current subitems and primary.
+     *
+     * Capped at 3, the limit profile_define_repeatable::MAX_SUBLINE_SUBITEMS enforces; keep in step.
      *
      * @return string[]
      */

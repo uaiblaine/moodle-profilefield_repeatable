@@ -21,14 +21,18 @@ namespace profilefield_repeatable;
  *
  * Core deletes {user_info_data} directly when a user or a custom profile
  * field is removed, so {profilefield_repeatable_data} rows must be purged
- * here or they are retained forever and become invisible to the privacy
- * API (which discovers contexts through user_info_data).
+ * here: the privacy provider finds them only through {user_info_data} and
+ * would never see the orphans.
  *
  * Core's profile_save_custom_fields() also rewrites {user_info_data} directly. auth_ldap's
- * sync task does it inside a delegated transaction before user_updated is dispatched (or
- * user_created, for new accounts), so the observers below see the new payload and rebuild
- * the projection. auth_db's sync passes no event at all; the reproject_sets scheduled task
- * covers it ({@see \profilefield_repeatable\task\reproject_sets}).
+ * update_user_record() triggers user_updated (and sync_users() user_created, for new accounts)
+ * BEFORE it calls profile_save_custom_fields(), but inside the delegated transaction the sync
+ * opens around each user. The user_updated and user_created observers are therefore declared
+ * non-internal in db/events.php: core buffers them until that transaction commits, so they see
+ * the new payload and rebuild the projection. Outside a transaction a non-internal observer
+ * still runs at once, before profile_save_custom_fields(), and sees the old payload. The
+ * reproject_sets scheduled task covers that case and auth_db's sync, which updates existing
+ * users without any event ({@see \profilefield_repeatable\task\reproject_sets}).
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)

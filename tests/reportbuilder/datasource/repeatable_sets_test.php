@@ -230,6 +230,46 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
     }
 
     /**
+     * A code costs one resolver lookup however many rows show it, and an unresolved code too.
+     */
+    public function test_resolved_name_lookups_are_memoised_including_misses(): void {
+        $this->resetAfterTest();
+
+        $probe = new class (new \stdClass()) extends repeatable_set {
+            /** @var string[] Domain and code of every lookup that reached the resolver. */
+            public static array $lookups = [];
+
+            #[\Override]
+            protected static function lookup_label(string $domain, string $code): ?string {
+                self::$lookups[] = $domain . '|' . $code;
+                return $code === '16' ? 'Diretoria Centro' : null;
+            }
+
+            /**
+             * Expose the protected resolver entry point.
+             *
+             * @param string $domain
+             * @param string|null $code
+             * @return string
+             */
+            public static function label(string $domain, ?string $code): string {
+                return static::resolve_label($domain, $code);
+            }
+        };
+        repeatable_set::reset_label_memo();
+
+        for ($row = 0; $row < 3; $row++) {
+            $this->assertSame('Diretoria Centro', $probe::label('diretorias', '16'));
+            $this->assertSame('99', $probe::label('diretorias', '99'));
+            $this->assertSame('99', $probe::label('escolas', ' 99 '));
+            $this->assertSame('', $probe::label('diretorias', ' '));
+        }
+
+        $this->assertSame(['diretorias|16', 'diretorias|99', 'escolas|99'], $probe::$lookups);
+        repeatable_set::reset_label_memo();
+    }
+
+    /**
      * Mapped sub-items resolve to labels in the column, and the name filter filters by code.
      */
     public function test_mapped_name_resolution_and_filter(): void {
@@ -240,6 +280,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
             $this->markTestSkipped('local_profilefield_repeatable is not installed.');
         }
 
+        repeatable_set::reset_label_memo();
         $this->seed_domain('diretorias', ['16' => 'Diretoria Centro', '99' => 'Diretoria Norte']);
 
         $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
@@ -427,9 +468,9 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
     /**
      * Visibility is decided with the same capabilities as core's profile-field columns.
      *
-     * The field instance has no user, so a TEACHERS field follows moodle/site:viewuseridentity in
-     * the global course (moodle/user:viewalldetails opens only PRIVATE and NONE fields), and
-     * without a user (cron, CLI) a PRIVATE field is not available.
+     * The field instance is bound to \core\user::SUPPORT_USER, not a real user, so a TEACHERS field
+     * follows moodle/site:viewuseridentity in the global course (moodle/user:viewalldetails opens
+     * only PRIVATE and NONE fields), and without a user (cron, CLI) a PRIVATE field is not available.
      */
     public function test_visibility_uses_the_capabilities_core_checks(): void {
         global $COURSE;

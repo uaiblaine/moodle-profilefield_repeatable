@@ -3,11 +3,9 @@ name: ci
 # workflow_dispatch is the manual escape hatch: it lets a run be launched for
 # a push whose commits would otherwise skip CI, without pushing another commit.
 #
-# push is filtered to the branches that are merge targets. Without the filter
-# every push to a feature branch ran the whole pipeline AND the pull_request
-# event ran it again on the same commit - measured at 21 jobs and ~95 billable
-# minutes per run, so exactly double for no extra information. A branch with no
-# pull request open is covered by `mdl ci <repo> --matrix` locally.
+# push is filtered to the branches that are merge targets: a feature branch is
+# tested by its pull_request run, and a push run on top would test the same
+# commit twice.
 on:
   push:
     branches:

@@ -36,9 +36,11 @@ $observers = [
     [
         'eventname' => '\core\event\user_updated',
         'callback' => '\profilefield_repeatable\observer::user_updated',
+        'internal' => false,
     ],
     [
         'eventname' => '\core\event\user_created',
         'callback' => '\profilefield_repeatable\observer::user_created',
+        'internal' => false,
     ],
 ];

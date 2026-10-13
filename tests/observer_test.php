@@ -24,7 +24,7 @@ require_once($CFG->dirroot . '/user/profile/definelib.php');
 require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
 
 /**
- * Tests for event observers cleaning up storage rows.
+ * Tests for the event observers: projection cleanup on deletion and reprojection on user events.
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\observer
@@ -205,7 +205,10 @@ final class observer_test extends \advanced_testcase {
     }
 
     /**
-     * Event cases: event class, as dispatched after profile_save_custom_fields() by auth_ldap's sync.
+     * Event cases: the user event class whose observer reprojects the stored payload.
+     *
+     * Core triggers user_updated (user_create_user() user_created) before auth_ldap's
+     * profile_save_custom_fields() writes the payload, inside the delegated transaction its sync opens.
      *
      * @return array
      */
@@ -224,6 +227,9 @@ final class observer_test extends \advanced_testcase {
      */
     public function test_user_event_reprojects_direct_write(string $eventclass): void {
         $this->resetAfterTest();
+        // The observers are non-internal: core holds them while a transaction is open, and PostgreSQL runs
+        // every test inside one.
+        $this->preventResetByRollback();
         $this->setAdminUser();
 
         $this->create_repeatable_field('repeatable_obs_sync');
@@ -253,12 +259,54 @@ final class observer_test extends \advanced_testcase {
     }
 
     /**
+     * Inside a transaction the event fires before the payload is written and still sees the new one.
+     *
+     * This is auth_ldap's order: user_updated (or user_created) first, profile_save_custom_fields()
+     * after, both inside one delegated transaction. The observers are non-internal, so core holds
+     * them until the commit.
+     *
+     * @dataProvider user_event_provider
+     * @param string $eventclass
+     */
+    public function test_user_event_inside_a_transaction_sees_the_payload_written_after_it(string $eventclass): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        // The observers are non-internal: core holds them while a transaction is open, and PostgreSQL runs
+        // every test inside one.
+        $this->preventResetByRollback();
+        $this->setAdminUser();
+
+        $this->create_repeatable_field('repeatable_obs_ldap');
+        $user = $this->getDataGenerator()->create_user();
+        $userid = (int)$user->id;
+        profile_save_data((object) [
+            'id' => $userid,
+            'profile_field_repeatable_obs_ldap' => '{"@@ID#1":{"name":"Alice","role":"Manager"}}',
+        ]);
+
+        $transaction = $DB->start_delegated_transaction();
+        $eventclass::create_from_userid($userid)->trigger();
+        profile_save_custom_fields($userid, [
+            'repeatable_obs_ldap' => '{"@@ID#1":{"name":"Bob","role":"Teacher"}}',
+        ]);
+        // The observer has not run yet: the projection is still the old one.
+        $this->assertSame([1 => ['name' => 'Alice', 'role' => 'Manager']], $this->projected_sets($userid));
+
+        $transaction->allow_commit();
+        $this->assertSame([1 => ['name' => 'Bob', 'role' => 'Teacher']], $this->projected_sets($userid));
+    }
+
+    /**
      * A user event leaves a projection that still matches the payload untouched.
      */
     public function test_user_updated_keeps_current_projection(): void {
         global $DB;
 
         $this->resetAfterTest();
+        // The observers are non-internal: core holds them while a transaction is open, and PostgreSQL runs
+        // every test inside one.
+        $this->preventResetByRollback();
         $this->setAdminUser();
 
         $fieldid = $this->create_repeatable_field('repeatable_obs_current');

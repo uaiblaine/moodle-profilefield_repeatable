@@ -38,6 +38,7 @@ $string['errordomainmapinvaliddomain'] = 'Nomes de domínio inválidos: {$a}. Pa
 $string['errordomainmapmissingdomain'] = 'Domínio(s) de referência não encontrado(s) em local_profilefield_repeatable: {$a}.';
 $string['errordomainmapunknownsubitem'] = 'Subiten(s) de mapeamento de referência não encontrado(s) em Subitens: {$a}.';
 $string['errorindexedsubitemlimit'] = 'Você pode indexar no máximo {$a} subitens para este campo.';
+$string['errorindexedsubitemplaceholder'] = 'Subitens indexados não podem conter ":", "?" ou "$": {$a}.';
 $string['errorindexedsubitemunknown'] = 'Subiten(s) indexado(s) não encontrado(s) em Subitens: {$a}.';
 $string['errorinvalidjson'] = 'Payload repetível inválido; esperado um objeto JSON.';
 $string['errorsubitemsduplicate'] = 'Os subitens devem ser únicos (sem distinção entre maiúsculas e minúsculas).';

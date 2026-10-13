@@ -23,12 +23,17 @@ use profilefield_repeatable\helper;
 /**
  * Reconcile dynamic PostgreSQL indexes for configured repeatable sub-items.
  *
+ * Creates and drops one expression index per indexed sub-item (param2) of a field. It is an adhoc
+ * task, outside any transaction, because CREATE/DROP INDEX CONCURRENTLY cannot run inside one and
+ * may take long on a large table. Every run also drops the indexes of any field that no longer
+ * exists ({@see self::sweep_orphaned_indexes()}).
+ *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class reconcile_indexes extends adhoc_task {
-    /** Maximum number of indexed sub-items per field. */
+    /** Maximum number of indexed sub-items per field; keep in step with profile_define_repeatable. */
     private const MAX_INDEXED_SUBITEMS = 3;
 
     /** Name of every index this task owns: field id, then the hash from {@see build_index_name()}. */
@@ -57,11 +62,6 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
-        $pgmajor = helper::postgres_major_version($DB);
-        if ($pgmajor !== null) {
-            debugging('profilefield_repeatable: reconcile indexes running on PostgreSQL ' . $pgmajor, DEBUG_DEVELOPER);
-        }
-
         $desired = $this->get_desired_index_map((int)$fieldid);
         $existing = $this->get_existing_indexes((int)$fieldid);
 
@@ -85,6 +85,8 @@ class reconcile_indexes extends adhoc_task {
     /**
      * Schedule task for one profile field.
      *
+     * Queued with checkforexisting, so repeated saves of a field before cron runs queue one task.
+     *
      * @param int $fieldid
      */
     public static function schedule_for_field(int $fieldid): void {
@@ -100,8 +102,8 @@ class reconcile_indexes extends adhoc_task {
     /**
      * Immediately drop all managed indexes for a field.
      *
-     * Unlike {@see schedule_for_field()}, this runs synchronously and does not
-     * require the field record to still exist in the database.
+     * Runs synchronously, unlike {@see schedule_for_field()}. DROP INDEX CONCURRENTLY fails inside
+     * a transaction; a failed drop is reported through debugging() and left to the orphan sweep.
      *
      * @param int $fieldid
      */
@@ -130,7 +132,7 @@ class reconcile_indexes extends adhoc_task {
      * Resolve desired indexes for a field from param2.
      *
      * @param int $fieldid
-     * @return array<string, string>
+     * @return array<string, string> Index name => canonical sub-item; empty once the field is gone.
      */
     private function get_desired_index_map(int $fieldid): array {
         global $DB;
@@ -178,6 +180,15 @@ class reconcile_indexes extends adhoc_task {
 
         $desired = [];
         foreach ($indexedsubitems as $subitem) {
+            if (!helper::is_indexable_subitem($subitem)) {
+                // Its literal would be read as a query placeholder, see helper::is_indexable_subitem().
+                debugging(
+                    'profilefield_repeatable: not indexing sub-item "' . $subitem . '" of field ' . $fieldid .
+                    ': it contains ":", "?" or "$"',
+                    DEBUG_DEVELOPER
+                );
+                continue;
+            }
             $indexname = $this->build_index_name($fieldid, $subitem);
             $desired[$indexname] = $subitem;
         }
@@ -262,8 +273,8 @@ class reconcile_indexes extends adhoc_task {
     /**
      * Create one expression index for a flagged sub-item.
      *
-     * Note: CREATE INDEX CONCURRENTLY cannot run inside a transaction.
-     * Adhoc tasks are executed outside explicit transactions by the Moodle cron runner.
+     * CREATE INDEX CONCURRENTLY cannot run inside a transaction; the cron runner starts none
+     * around an adhoc task.
      *
      * @param int $fieldid
      * @param string $subitem
@@ -282,9 +293,8 @@ class reconcile_indexes extends adhoc_task {
                WHERE fieldid = $fieldid
                  AND jsonb_exists(data, $literal)";
 
-        // Current baseline keeps expression indexes compatible with PostgreSQL 13+.
-        // Optional PostgreSQL 14+ features (for example GIN deduplication tuning) are
-        // intentionally documented but not activated automatically in this release.
+        // The function jsonb_exists() stands in for the jsonb ? operator, which Moodle's DML
+        // would count as a query placeholder.
 
         try {
             $DB->execute($sql);
@@ -349,7 +359,6 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
-        // Map each owned index to its field ID.
         $indexfieldmap = [];
         foreach ($allindexes as $indexname) {
             $owner = self::owned_index_fieldid($indexname);
@@ -362,7 +371,6 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
-        // Determine which field IDs still exist as repeatable fields.
         $uniqueids = array_values(array_unique(array_values($indexfieldmap)));
         [$insql, $params] = $DB->get_in_or_equal($uniqueids, SQL_PARAMS_NAMED, 'fid');
         $activeids = $DB->get_fieldset_sql(
@@ -371,7 +379,6 @@ class reconcile_indexes extends adhoc_task {
         );
         $activeset = array_flip($activeids);
 
-        // Drop indexes belonging to deleted fields.
         foreach ($indexfieldmap as $indexname => $fid) {
             if (!isset($activeset[$fid])) {
                 $this->drop_index_concurrently($indexname);
@@ -382,8 +389,11 @@ class reconcile_indexes extends adhoc_task {
     /**
      * Quote SQL literal.
      *
+     * For DDL, which takes no bound parameters; DML stays on placeholders.
+     *
      * @param string $value
      * @return string
+     * @throws \coding_exception When the value contains a NUL byte.
      */
     private function quote_literal(string $value): string {
         if (strpos($value, "\0") !== false) {

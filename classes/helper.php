@@ -24,20 +24,32 @@ namespace profilefield_repeatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class helper {
-    /** PostgreSQL feature flag: SQL/JSON path operators. */
-    public const POSTGRES_FEATURE_JSONPATH = 'jsonpath';
-
-    /** PostgreSQL feature flag: GIN deduplication parameter. */
-    public const POSTGRES_FEATURE_GIN_DEDUP = 'gin_dedup';
-
     /** Maximum number of sets accepted per field value. */
     public const MAX_SETS = 200;
 
     /** Maximum length of one sub-item value in characters. */
     public const MAX_VALUE_LENGTH = 1024;
 
-    /** Domain shortname pattern for reference mapping. */
+    /**
+     * Domain shortname pattern for param3 reference mappings.
+     *
+     * Keep in step with the copy in define.class.php and with the companion dictionary plugin's
+     * resolver, which rejects any other domain shortname.
+     */
     public const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
+
+    /**
+     * Whether an indexed sub-item can be written into the index DDL.
+     *
+     * The DDL runs through moodle_database::execute(), whose placeholder scan also reads quoted
+     * literals: a sub-item holding ':', '?' or '$' makes CREATE INDEX throw, so it cannot be indexed.
+     *
+     * @param string $subitem
+     * @return bool
+     */
+    public static function is_indexable_subitem(string $subitem): bool {
+        return !preg_match('/[:?$]/', $subitem);
+    }
 
     /**
      * Check if the active DB family is PostgreSQL.
@@ -51,6 +63,9 @@ class helper {
 
     /**
      * Parse sub-item labels into unique canonical list.
+     *
+     * One label per line (any line ending), trimmed, blank lines skipped. Duplicates are compared
+     * case-insensitively and the first spelling wins.
      *
      * @param string $rawsubitems
      * @return string[]
@@ -163,7 +178,12 @@ class helper {
     /**
      * Normalise repeatable payload keeping only configured sub-items.
      *
-     * @param mixed $rawpayload
+     * Returns the sets keyed '@@ID#1', '@@ID#2', ... in input order, each holding every configured
+     * sub-item as a string. Silently drops sets with no non-blank value, keeps only the first
+     * MAX_SETS remaining sets and truncates values to MAX_VALUE_LENGTH: callers that must reject excess
+     * check the raw payload first ({@see \profile_field_repeatable::validate_payload_limits()}).
+     *
+     * @param mixed $rawpayload JSON string, object or array; anything else yields [].
      * @param string[] $subitems
      * @return array
      */
@@ -237,7 +257,7 @@ class helper {
      * Encode payload as strict JSON object.
      *
      * @param array $payload
-     * @return string
+     * @return string JSON, or '{}' when the payload is empty or cannot be encoded.
      */
     public static function encode_payload(array $payload): string {
         if (empty($payload)) {
@@ -293,7 +313,6 @@ class helper {
         }
 
         $indexname = 'pfrd_' . substr(sha1($rawtablename), 0, 8) . '_gin_ix';
-        $created = false;
         if (!static::postgres_index_exists($db, $rawtablename, $indexname)) {
             $quotedindex = static::quote_identifier($indexname);
             $db->execute(
@@ -301,11 +320,6 @@ class helper {
                    ON $tablename
                 USING gin ($columnname jsonb_path_ops)"
             );
-            $created = true;
-        }
-
-        if ($created) {
-            static::maybe_optimize_gin_deduplication($db, $indexname);
         }
     }
 
@@ -335,84 +349,11 @@ class helper {
     }
 
     /**
-     * Return PostgreSQL major version number or null when unavailable.
-     *
-     * @param \moodle_database $db
-     * @return int|null
-     */
-    public static function postgres_major_version(\moodle_database $db): ?int {
-        if (!static::is_postgres($db)) {
-            return null;
-        }
-
-        $version = $db->get_field_sql('SHOW server_version_num');
-        if (!is_numeric($version)) {
-            return null;
-        }
-
-        $versionnum = (int)$version;
-        if ($versionnum <= 0) {
-            return null;
-        }
-
-        return (int)floor($versionnum / 10000);
-    }
-
-    /**
-     * Check support for a PostgreSQL feature by server major version.
-     *
-     * @param \moodle_database $db
-     * @param string $feature
-     * @return bool
-     */
-    public static function postgres_supports_feature(\moodle_database $db, string $feature): bool {
-        $major = static::postgres_major_version($db);
-        if ($major === null) {
-            return false;
-        }
-
-        switch ($feature) {
-            case self::POSTGRES_FEATURE_JSONPATH:
-                return $major >= 12;
-            case self::POSTGRES_FEATURE_GIN_DEDUP:
-                return $major >= 14;
-            default:
-                return false;
-        }
-    }
-
-    /**
-     * Apply PostgreSQL 14+ GIN deduplication optimization to an index.
-     *
-     * PostgreSQL 14+ includes improved GIN posting list/storage behavior.
-     * Reindexing after creation helps ensure the index is built with the
-     * best available implementation for the running server version.
-     *
-     * @param \moodle_database $db
-     * @param string $indexname
-     */
-    public static function maybe_optimize_gin_deduplication(\moodle_database $db, string $indexname): void {
-        if (!static::postgres_supports_feature($db, self::POSTGRES_FEATURE_GIN_DEDUP)) {
-            return;
-        }
-
-        $quotedindex = static::quote_identifier($indexname);
-        try {
-            $db->execute("REINDEX INDEX $quotedindex");
-        } catch (\Throwable $e) {
-            debugging(
-                'profilefield_repeatable: could not optimize GIN deduplication for index ' .
-                $indexname . ': ' . $e->getMessage(),
-                DEBUG_DEVELOPER
-            );
-        }
-    }
-
-    /**
      * Quote a SQL identifier for PostgreSQL.
      *
      * @param string $identifier
      * @return string
+     * @throws \coding_exception When the identifier contains a NUL byte.
      */
     public static function quote_identifier(string $identifier): string {
         if (strpos($identifier, "\0") !== false) {

@@ -23,18 +23,22 @@
  */
 
 /**
- * Class profile_define_repeatable.
+ * Admin definition of a repeatable profile field.
+ *
+ * param1 lists the sub-items, one per line; param2 the indexed sub-items (PostgreSQL expression
+ * indexes); param3 the "subitem|domain" reference mappings; param4 the sub-items shown on the
+ * collapsed accordion subline. defaultdata is always '{}'.
  *
  * @package    profilefield_repeatable
  */
 class profile_define_repeatable extends profile_define_base {
-    /** @var int Maximum number of indexed sub-items allowed per field. */
+    /** @var int Maximum number of indexed sub-items allowed per field; reconcile_indexes repeats it. */
     private const MAX_INDEXED_SUBITEMS = 3;
 
-    /** @var int Maximum number of sub-items allowed in the collapsed subline. */
+    /** @var int Maximum number of sub-items allowed in the collapsed subline; display_renderer repeats it. */
     private const MAX_SUBLINE_SUBITEMS = 3;
 
-    /** @var string Domain shortname pattern for reference mapping. */
+    /** @var string Same as {@see \profilefield_repeatable\helper::DOMAIN_PATTERN}; keep in step. */
     private const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
 
     /**
@@ -104,8 +108,10 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Validate sub-items configuration (param1).
      *
+     * Duplicates are compared case-insensitively, as {@see \profilefield_repeatable\helper::parse_subitems()} does.
+     *
      * @param object $data
-     * @return array
+     * @return array ['subitems' => string[] parsed so far, 'errors' => array keyed by form element].
      */
     private function validate_subitems_config(object $data): array {
         $lines = preg_split('/\R/u', (string)($data->param1 ?? '')) ?: [];
@@ -156,6 +162,18 @@ class profile_define_repeatable extends profile_define_base {
             $errors['param2'] = get_string('errorindexedsubitemunknown', 'profilefield_repeatable', implode(', ', $unknown));
         } else if (count($indexedsubitems) > self::MAX_INDEXED_SUBITEMS) {
             $errors['param2'] = get_string('errorindexedsubitemlimit', 'profilefield_repeatable', self::MAX_INDEXED_SUBITEMS);
+        } else {
+            $unindexable = array_filter(
+                $indexedsubitems,
+                static fn(string $subitem): bool => !\profilefield_repeatable\helper::is_indexable_subitem($subitem)
+            );
+            if (!empty($unindexable)) {
+                $errors['param2'] = get_string(
+                    'errorindexedsubitemplaceholder',
+                    'profilefield_repeatable',
+                    implode(', ', $unindexable)
+                );
+            }
         }
 
         return $errors;
@@ -276,6 +294,9 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Preprocess field configuration before save.
      *
+     * Rewrites param1-param4 in canonical form (the sub-item spelling of param1, one per line,
+     * deduplicated, limits applied) and forces defaultdata to '{}'.
+     *
      * @param array|stdClass $data
      * @return array|stdClass
      */
@@ -294,7 +315,7 @@ class profile_define_repeatable extends profile_define_base {
     }
 
     /**
-     * Save repeatable field configuration and enqueue index reconciliation.
+     * Save repeatable field configuration and, on PostgreSQL, enqueue index reconciliation.
      *
      * @param array|stdClass $data
      */
@@ -312,10 +333,9 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Clean up PostgreSQL indexes after a repeatable field is deleted.
      *
-     * Standard Moodle does not call this automatically. The sweep in
-     * {@see \profilefield_repeatable\task\reconcile_indexes::execute()} provides
-     * resilient cleanup; call this method for immediate removal when integrating
-     * with custom deletion workflows.
+     * Core never calls this: on a normal deletion the observer queues
+     * {@see \profilefield_repeatable\task\reconcile_indexes}, which drops them. Call it for
+     * immediate removal from a custom deletion workflow, outside any transaction.
      *
      * @param int $fieldid
      */
@@ -326,9 +346,11 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Parse indexed sub-items and return canonical labels from param1.
      *
+     * Duplicates are dropped silently; the limit is left to the caller.
+     *
      * @param string $rawindexedsubitems
      * @param string[] $subitems
-     * @param array $unknown
+     * @param array $unknown Receives the lines that name no configured sub-item.
      * @return string[]
      */
     private function parse_indexed_subitems(string $rawindexedsubitems, array $subitems, array &$unknown = []): array {
@@ -374,8 +396,8 @@ class profile_define_repeatable extends profile_define_base {
      *
      * @param string $rawsublinesubitems
      * @param string[] $subitems
-     * @param array $unknown
-     * @param array $duplicates
+     * @param array $unknown Receives the lines that name no configured sub-item.
+     * @param array $duplicates Receives the canonical sub-items listed more than once.
      * @return string[]
      */
     private function parse_subline_subitems(
@@ -427,13 +449,15 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Parse sub-item/domain mapping definitions (subitem|domain).
      *
+     * The four by-reference arrays receive the offending values of each error category.
+     *
      * @param string $rawmappings
      * @param string[] $subitems
      * @param array $unknownsubitems
      * @param array $invaliddomains
      * @param array $duplicatesubitems
      * @param array $formaterrors
-     * @return array
+     * @return array Canonical sub-item => lower-case domain shortname.
      */
     private function parse_reference_mappings(
         string $rawmappings,
@@ -490,9 +514,10 @@ class profile_define_repeatable extends profile_define_base {
      * Parse a single mapping line and either add to mappings or return an error descriptor.
      *
      * @param string $line
-     * @param array $canonicalmap
-     * @param array $mappings
-     * @return array|null Null on success or skip, error descriptor on failure.
+     * @param array $canonicalmap Lower-case sub-item => canonical sub-item.
+     * @param array $mappings Receives canonical sub-item => domain on success.
+     * @return array|null Null on success or for a blank line; otherwise
+     *                    ['category' => 'format'|'unknown'|'duplicate'|'invalid', 'value' => string].
      */
     private function parse_single_mapping_line(string $line, array $canonicalmap, array &$mappings): ?array {
         $line = trim($line);
@@ -551,7 +576,7 @@ class profile_define_repeatable extends profile_define_base {
     }
 
     /**
-     * Return whether local reference plugin is present.
+     * Return whether the companion dictionary plugin is present: its resolver class and domain table.
      *
      * @return bool
      */
