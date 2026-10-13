@@ -56,7 +56,7 @@ final class define_class_test extends \advanced_testcase {
         $errors = $define->define_validate_specific((object)[
             'param1' => json_encode(['version' => 2, 'columns' => [
                 ['key' => 'name', 'label' => 'Name', 'mode' => 'free'],
-                ['key' => 'Bad', 'label' => 'Role', 'mode' => 'pattern'],
+                ['key' => 'Bad', 'label' => 'Role', 'mode' => 'select'],
             ]]),
         ], []);
 

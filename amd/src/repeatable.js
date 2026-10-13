@@ -18,8 +18,8 @@
  *
  * Dictionary columns the server marks "autocomplete" are a select enhanced by core/form-autocomplete
  * over the companion's search (profilefield_repeatable/dictionary_transport); every other column is
- * a text input. Either way the value of a control is a code, and the hidden input stays the one
- * submitted value.
+ * a text input, a pattern column's carrying customfield_pattern's mask attributes. Either way the
+ * hidden input stays the one submitted value.
  *
  * @module     profilefield_repeatable/repeatable
  * @copyright  2026 Anderson Blaine
@@ -57,6 +57,32 @@ let selectcounter = 0;
 const renderSetTitle = (template, index) => template.replace('{no}', String(index));
 
 /**
+ * Attributes a pattern column's input may take from the server: exactly the ones
+ * \customfield_pattern\api::input_attributes() emits. Anything else is dropped, whatever the server sends.
+ */
+const INPUT_ATTRIBUTES = ['data-customfield-pattern-mask', 'placeholder', 'inputmode', 'maxlength'];
+
+/**
+ * Give a pattern column's input the attributes customfield_pattern asks for.
+ *
+ * The data-customfield-pattern-mask attribute is what the formatter of customfield_pattern/mask
+ * reads: it listens on the document, so the inputs of a set added later are formatted too.
+ *
+ * @param {HTMLInputElement} control
+ * @param {Object|undefined} attributes Name => value, from profile_field_repeatable::pattern_widget_properties().
+ */
+const applyInputAttributes = (control, attributes) => {
+    if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+        return;
+    }
+    Object.entries(attributes).forEach(([name, value]) => {
+        if (INPUT_ATTRIBUTES.includes(name)) {
+            control.setAttribute(name, String(value));
+        }
+    });
+};
+
+/**
  * Build the control of one column: a select to enhance, or a text input.
  *
  * @param {Object} column From the wrapper's data-columns.
@@ -79,6 +105,7 @@ const createControl = (column, readonly) => {
         control = document.createElement('input');
         control.type = 'text';
         control.className = 'form-control';
+        applyInputAttributes(control, column.inputattributes);
     }
     control.dataset.key = column.key;
     control.dataset.label = column.label;

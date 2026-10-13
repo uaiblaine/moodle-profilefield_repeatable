@@ -15,6 +15,15 @@ All notable changes to this project will be documented in this file.
   key equals another column's 2.x label, which would cross-wire the reads of label-keyed sets.
 
 ### Added
+- **Pattern columns (schema v2, stage C)**: with `customfield_pattern` installed (Moodle 5.1 or
+  later, a version with `\customfield_pattern\api`), a column can be a *Pattern*: a preset (CPF,
+  CNPJ, CEP, Brazilian phone), a custom mask and/or an anchored regular expression, stored masked
+  or raw. The column editor offers the mode and its panel; the edit form formats the value while
+  the user types and refuses a value that does not fit (wrong CPF or CNPJ check digit included),
+  naming the set and the column; values are stored as configured, also through web services and
+  sync; the profile page, Report Builder and the privacy export show them masked. The plugin is a
+  soft dependency: without it (Moodle 4.5 and 5.0 always) the mode is not offered, a new pattern
+  column is refused, and a stored one keeps its settings while its values are kept as typed.
 - **Autocomplete and strict codes (schema v2, stage B)**: with `local_dictionaries` installed
   (a version with `api::lookup()`), a dictionary column on the edit form is a search box over its
   dictionary (`core/form-autocomplete` through the companion's transport): a name or a code finds
@@ -31,7 +40,7 @@ All notable changes to this project will be documented in this file.
   the dictionary holding the parents of the column's dictionary (when the companion knows it).
 - **Column schema v2**: a field's columns are one JSON schema in `param1`
   (`{"version": 2, "columns": [...]}`), each column with a stable key, a label, a mode (`free`,
-  `dictionary`, `dictionary_open`; `pattern` is reserved), an optional domain and parent column,
+  `dictionary`, `dictionary_open`, `pattern`), an optional domain and parent column,
   and its role (title, subline, required, indexed). Values, Report Builder identifiers and index
   names follow the key, so renaming a column no longer orphans its data.
 - A column editor in the field definition form (`amd/src/columneditor.js`) replaces the four text

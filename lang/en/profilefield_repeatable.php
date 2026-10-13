@@ -42,7 +42,7 @@ $string['columnparenthint'] = 'An earlier dictionary column whose code narrows t
 $string['columnrole'] = 'Role in the set';
 $string['columns'] = 'Columns';
 $string['columns_help'] =
-    'The columns each set has, as a JSON schema: {"version": 2, "columns": [{"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. With JavaScript the column editor writes it. Modes: free, dictionary (codes of a local_dictionaries domain only), dictionary_open (any code). Exactly one column is the title; up to 3 are shown in the subline and up to 3 are indexed. A column whose key holds stored values can be neither removed nor re-keyed; rename its label instead.';
+    'The columns each set has, as a JSON schema: {"version": 2, "columns": [{"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. With JavaScript the column editor writes it. Modes: free, dictionary (codes of a local_dictionaries domain only), dictionary_open (any code), pattern (a mask and/or regular expression from customfield_pattern, Moodle 5.1 or later; a "pattern" object with preset, mask, regex, regexerror and storeformat). Exactly one column is the title; up to 3 are shown in the subline and up to 3 are indexed. A column whose key holds stored values can be neither removed nor re-keyed; rename its label instead.';
 $string['columnsindata'] =
     '{$a} users have data in this field. Columns holding stored values cannot be removed and their keys are locked: renaming such a column changes only its name.';
 $string['columnsubitem'] = '{$a}';
@@ -76,6 +76,10 @@ $string['errorlabelrequired'] = 'Column {$a} has no name.';
 $string['errormodeinvalid'] = 'Column "{$a}": choose free text or a dictionary mode.';
 $string['errorparentinvalid'] = 'Column "{$a}" can only depend on an earlier dictionary column.';
 $string['errorparentmismatch'] = 'Column "{$a->column}": the parent column does not use "{$a->parentdomain}", the dictionary holding the parents of "{$a->domain}".';
+$string['errorpattern'] = 'Set {$a->set}, {$a->column}: {$a->error}';
+$string['errorpatternconfig'] = 'Column "{$a->column}": {$a->error}';
+$string['errorpatternunavailable'] =
+    'Column "{$a}": pattern columns need the customfield_pattern plugin (Moodle 5.1 or later). Without it, a stored pattern column is kept unchanged and no new one can be added.';
 $string['errorschemainvalid'] = 'The columns are not a valid version 2 schema.';
 $string['errorsublinelimit'] = 'At most {$a} columns can be shown in the subline.';
 $string['errorsublinetitle'] = 'Column "{$a}" is the title and cannot also be in the subline.';
@@ -88,6 +92,10 @@ $string['modedictionaryopen'] = 'Dictionary, any code';
 $string['modedictionaryopenhelp'] = 'Suggests from the dictionary but accepts a new code.';
 $string['modefree'] = 'Free text';
 $string['modefreehelp'] = 'Any text up to 1,024 characters.';
+$string['modepattern'] = 'Pattern';
+$string['modepatternhelp'] = 'Mask and/or regular expression (customfield_pattern).';
+$string['modepatternunavailable'] = 'Pattern (plugin not installed)';
+$string['modepatternunavailablehelp'] = 'Values are kept as typed.';
 $string['movedown'] = 'Move {$a} down';
 $string['moveup'] = 'Move {$a} up';
 $string['newcode'] = 'New code, no name yet';
@@ -95,6 +103,18 @@ $string['newcolumn'] = 'Column {$a}';
 $string['nomatchstrict'] = 'No match. This column accepts listed codes only.';
 $string['parentmismatch'] = 'The chosen parent column does not use "{$a->parentdomain}", the dictionary holding the parents of "{$a->domain}".';
 $string['parentnone'] = 'None';
+$string['patternmask'] = 'Mask';
+$string['patternpreset'] = 'Preset';
+$string['patternregex'] = 'Regular expression';
+$string['patternregexerror'] = 'Message when the expression does not match';
+$string['patternregexerrorhint'] = 'Optional; a generic message is shown otherwise.';
+$string['patternregexhint'] = '(optional, anchored to the whole value)';
+$string['patternregexplaceholder'] = 'e.g. [A-Z]{3}-\d{6}';
+$string['patternstoreformat'] = 'Store as';
+$string['patternstoremasked'] = 'Masked (123.456.789-09)';
+$string['patternstoreraw'] = 'Raw (12345678909)';
+$string['patterntokens'] =
+    'Tokens: 9 digit · A letter · * letter or digit · alternatives separated by |. Rules come from customfield_pattern; on Moodle 4.5 and 5.0 this mode is not offered.';
 $string['pluginname'] = 'Repeatable set';
 $string['privacy:metadata:profilefield_repeatable:data'] = 'Repeatable set user profile field user data';
 $string['privacy:metadata:profilefield_repeatable:dataformat'] =

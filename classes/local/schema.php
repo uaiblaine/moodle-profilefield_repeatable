@@ -66,10 +66,13 @@ final class schema {
     /** @var string Suggestions from a domain, any code accepted. */
     public const MODE_DICTIONARY_OPEN = 'dictionary_open';
 
-    /** @var string Mask or regular expression; reserved in the shape, not offered yet. */
+    /** @var string Mask and/or regular expression, from customfield_pattern ({@see pattern_columns}). */
     public const MODE_PATTERN = 'pattern';
 
-    /** @var string[] Modes a column may be saved with. */
+    /**
+     * @var string[] Modes a column may always be saved with; {@see self::MODE_PATTERN} only as
+     *               {@see self::validate()} allows it.
+     */
     public const ENABLED_MODES = [self::MODE_FREE, self::MODE_DICTIONARY, self::MODE_DICTIONARY_OPEN];
 
     /** @var string Report Builder identifier of the set number, which no column may produce. */
@@ -404,13 +407,23 @@ final class schema {
      *                             domains whose parent domain the companion knows
      *                             (\local_dictionaries\api::list_domains()): a column whose
      *                             parent column uses another domain is rejected. Empty skips the check.
+     * @param callable|null $patternerrors fn(array $config): array, the problems of a pattern
+     *                                     column's configuration ({@see pattern_columns::config_errors()});
+     *                                     null when customfield_pattern is absent, which refuses every
+     *                                     pattern column but the stored ones.
+     * @param array $storedpatterns Key => raw "pattern" object of the stored field's pattern
+     *                              columns ({@see self::pattern_objects()}). Without
+     *                              customfield_pattern such a column may be saved again, unchanged:
+     *                              its configuration cannot be checked, only kept.
      * @return string[] Error messages; empty when the schema may be saved.
      */
     public static function validate(
         $document,
         ?callable $domainexists = null,
         array $lockedlabels = [],
-        array $parentdomains = []
+        array $parentdomains = [],
+        ?callable $patternerrors = null,
+        array $storedpatterns = []
     ): array {
         $rawcolumns = is_array($document) ? ($document['columns'] ?? null) : null;
         if (!is_array($rawcolumns) || ($document['version'] ?? null) !== self::VERSION || !array_is_list($rawcolumns)) {
@@ -430,7 +443,7 @@ final class schema {
 
         $columns = (new self($rawcolumns))->columns();
         $errors = array_merge(
-            self::validate_columns($columns, $domainexists, $parentdomains),
+            self::validate_columns($columns, $domainexists, $parentdomains, $patternerrors, $storedpatterns),
             self::validate_roles($columns),
             self::validate_identifiers($columns)
         );
@@ -445,14 +458,22 @@ final class schema {
     }
 
     /**
-     * Per-column rules: label, key, mode, domain and parent.
+     * Per-column rules: label, key, mode, domain and parent, pattern configuration.
      *
      * @param array[] $columns Normalised columns.
      * @param callable|null $domainexists
      * @param array $parentdomains Domain => parent domain ({@see self::validate()}).
+     * @param callable|null $patternerrors ({@see self::validate()}).
+     * @param array $storedpatterns ({@see self::validate()}).
      * @return string[]
      */
-    private static function validate_columns(array $columns, ?callable $domainexists, array $parentdomains): array {
+    private static function validate_columns(
+        array $columns,
+        ?callable $domainexists,
+        array $parentdomains,
+        ?callable $patternerrors,
+        array $storedpatterns
+    ): array {
         $errors = [];
         $keys = [];
         $labels = [];
@@ -477,6 +498,10 @@ final class schema {
             $keys[$key] = true;
 
             $name = $label === '' ? $key : $label;
+            if ($column['mode'] === self::MODE_PATTERN) {
+                $errors = array_merge($errors, self::validate_pattern($column, $name, $patternerrors, $storedpatterns));
+                continue;
+            }
             if (!in_array($column['mode'], self::ENABLED_MODES, true)) {
                 $errors[] = self::error('errormodeinvalid', $name);
                 continue;
@@ -510,6 +535,68 @@ final class schema {
         }
 
         return $errors;
+    }
+
+    /**
+     * The rules of one pattern column.
+     *
+     * With customfield_pattern, the configuration must pass its checks; each problem is reported
+     * with the column's name. Without it, only a column the stored field already has, under the
+     * same key and with the same configuration, may be saved: nothing could check a new or changed
+     * one, and the stored one is kept so that its rules apply again once the plugin is back.
+     *
+     * @param array $column Normalised column.
+     * @param string $name The column's label, or its key when it has none.
+     * @param callable|null $patternerrors ({@see self::validate()}).
+     * @param array $storedpatterns ({@see self::validate()}).
+     * @return string[]
+     */
+    private static function validate_pattern(
+        array $column,
+        string $name,
+        ?callable $patternerrors,
+        array $storedpatterns
+    ): array {
+        $object = $column['pattern'] ?? [];
+        if ($patternerrors === null) {
+            $key = $column['key'];
+            // Strict, on both sides' settings in key order: the order is not part of the configuration,
+            // but a loose == would take "1000" for "1e3" and let a changed setting through.
+            if (
+                !array_key_exists($key, $storedpatterns)
+                || self::sorted_by_key($storedpatterns[$key]) !== self::sorted_by_key($object)
+            ) {
+                return [self::error('errorpatternunavailable', $name)];
+            }
+            return [];
+        }
+
+        $errors = [];
+        foreach ($patternerrors(pattern_columns::config($column)) as $message) {
+            $errors[] = get_string('errorpatternconfig', 'profilefield_repeatable', (object)[
+                'column' => s($name),
+                'error' => $message,
+            ]);
+        }
+        return $errors;
+    }
+
+    /**
+     * A value with the keys of every array in it sorted, recursively, so that two decoded JSON
+     * objects that differ only in key order compare identical with ===.
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private static function sorted_by_key($value) {
+        if (!is_array($value)) {
+            return $value;
+        }
+        ksort($value, SORT_STRING);
+        foreach ($value as $name => $item) {
+            $value[$name] = self::sorted_by_key($item);
+        }
+        return $value;
     }
 
     /**
@@ -764,6 +851,36 @@ final class schema {
             }
         }
         return $keys;
+    }
+
+    /**
+     * The "pattern" object of every pattern column, as stored.
+     *
+     * @return array Key => the column's raw pattern object (empty when it has none).
+     */
+    public function pattern_objects(): array {
+        $objects = [];
+        foreach ($this->columns as $column) {
+            if ($column['mode'] === self::MODE_PATTERN) {
+                $objects[$column['key']] = $column['pattern'] ?? [];
+            }
+        }
+        return $objects;
+    }
+
+    /**
+     * The customfield_pattern configuration of a pattern column.
+     *
+     * @param string $key
+     * @return array|null The configuration ({@see pattern_columns::config()}), or null when the
+     *                    key is not a pattern column.
+     */
+    public function pattern_config(string $key): ?array {
+        $column = $this->column($key);
+        if ($column === null || $column['mode'] !== self::MODE_PATTERN) {
+            return null;
+        }
+        return pattern_columns::config($column);
     }
 
     /**

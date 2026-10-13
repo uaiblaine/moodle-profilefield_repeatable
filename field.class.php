@@ -70,7 +70,7 @@ class profile_field_repeatable extends profile_field_base {
                 'mode' => $column['mode'],
                 'required' => !empty($column['required']),
             ];
-            $columns[] = $entry + $this->dictionary_widget_properties($column);
+            $columns[] = $entry + $this->dictionary_widget_properties($column) + $this->pattern_widget_properties($column);
         }
 
         $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
@@ -98,6 +98,73 @@ class profile_field_repeatable extends profile_field_base {
             false
         );
         $mform->setType($this->inputname, PARAM_RAW_TRIMMED);
+    }
+
+    /**
+     * Whether customfield_pattern offers the API pattern columns need.
+     *
+     * The one seam between this field and {@see \profilefield_repeatable\local\pattern_columns::available()},
+     * so tests can run the field as if the plugin were absent: a pattern column is then plain text,
+     * validated by nothing and stored as typed.
+     *
+     * @return bool
+     */
+    protected function pattern_available(): bool {
+        return \profilefield_repeatable\local\pattern_columns::available();
+    }
+
+    /**
+     * What the widget needs to offer a pattern column: the attributes of its text input.
+     *
+     * The attributes ({@see \customfield_pattern\api::input_attributes()}: the mask the
+     * formatter reads, placeholder, inputmode, maxlength) ride in the columns JSON, because the
+     * widget builds its inputs in JavaScript; the formatter listens on the document, so inputs
+     * added with a new set are covered too ({@see self::edit_after_data()}).
+     *
+     * @param array $column Normalised schema column.
+     * @return array Empty for a column of another mode, or without the plugin.
+     */
+    protected function pattern_widget_properties(array $column): array {
+        $config = $this->get_schema()->pattern_config($column['key']);
+        if ($config === null || !$this->pattern_available()) {
+            return [];
+        }
+        return ['inputattributes' => \profilefield_repeatable\local\pattern_columns::input_attributes($config)];
+    }
+
+    /**
+     * Apply a function of the customfield_pattern API to every pattern value of a payload.
+     *
+     * @param array $payload Normalised payload.
+     * @param callable $function fn(array $config, string $value): string.
+     * @return array The payload with each non-empty pattern value replaced; unchanged without
+     *               the plugin or without pattern columns.
+     */
+    protected function map_pattern_values(array $payload, callable $function): array {
+        if (!$this->pattern_available()) {
+            return $payload;
+        }
+        $schema = $this->get_schema();
+        $configs = [];
+        foreach ($schema->keys() as $key) {
+            $config = $schema->pattern_config($key);
+            if ($config !== null) {
+                $configs[$key] = $config;
+            }
+        }
+        if (empty($configs)) {
+            return $payload;
+        }
+
+        foreach ($payload as $setkey => $set) {
+            foreach ($configs as $key => $config) {
+                $value = (string)($set[$key] ?? '');
+                if (trim($value) !== '') {
+                    $payload[$setkey][$key] = $function($config, $value);
+                }
+            }
+        }
+        return $payload;
     }
 
     /**
@@ -215,12 +282,15 @@ class profile_field_repeatable extends profile_field_base {
      * Load user data for this profile field, ready for editing.
      *
      * Reads the canonical payload in user_info_data.data, never the per-set projection:
-     * core's profile_save_custom_fields() can change the payload without touching it.
+     * core's profile_save_custom_fields() can change the payload without touching it. Pattern
+     * values are put in their displayed (masked) shape.
      *
      * @param stdClass $user
      */
     public function edit_load_user_data($user) {
         $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_schema());
+        // A pattern value is edited as it is shown: a raw-stored value gets its mask back, and is stored raw again on save.
+        $payload = $this->map_pattern_values($payload, [\profilefield_repeatable\local\pattern_columns::class, 'format']);
 
         $user->{$this->inputname} = \profilefield_repeatable\helper::encode_payload($payload);
     }
@@ -270,6 +340,10 @@ class profile_field_repeatable extends profile_field_base {
         ];
 
         $PAGE->requires->js_call_amd('profilefield_repeatable/repeatable', 'init', [$config]);
+        if (!$config['readonly'] && $this->get_schema()->pattern_objects() && $this->pattern_available()) {
+            // The formatter listens on the document, so it also formats the inputs of sets added later.
+            \profilefield_repeatable\local\pattern_columns::js_init();
+        }
 
         return true;
     }
@@ -331,7 +405,11 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Process incoming data before save.
+     * Process incoming data before save: the canonical payload, pattern values normalised.
+     *
+     * Pattern values are stored as customfield_pattern stores them (fitted into the mask, masked
+     * or raw per the column's "Store as"), also when a web service or CSV upload skips the
+     * validation; a value that does not fit is stored trimmed, as typed.
      *
      * @param string|null $data
      * @param stdClass $datarecord
@@ -339,6 +417,7 @@ class profile_field_repeatable extends profile_field_base {
      */
     public function edit_save_data_preprocess($data, $datarecord) {
         $payload = \profilefield_repeatable\helper::normalise_payload($data, $this->get_schema());
+        $payload = $this->map_pattern_values($payload, [\profilefield_repeatable\local\pattern_columns::class, 'normalise']);
         return \profilefield_repeatable\helper::encode_payload($payload);
     }
 
@@ -381,9 +460,14 @@ class profile_field_repeatable extends profile_field_base {
         if ($codeerror !== null) {
             return [$this->inputname => $codeerror];
         }
+        $patternerror = $this->validate_pattern_values($payload);
+        if ($patternerror !== null) {
+            return [$this->inputname => $patternerror];
+        }
 
         // The parent's uniqueness check compares this value with stored data: give it the canonical
-        // JSON, or '' so that an empty optional value is not checked.
+        // JSON as it would be stored, or '' so that an empty optional value is not checked.
+        $payload = $this->map_pattern_values($payload, [\profilefield_repeatable\local\pattern_columns::class, 'normalise']);
         $usernew->{$this->inputname} = empty($payload) ? '' : \profilefield_repeatable\helper::encode_payload($payload);
 
         return parent::edit_validate_field($usernew);
@@ -461,6 +545,48 @@ class profile_field_repeatable extends profile_field_base {
                         'column' => format_string($schema->label($key), true, [
                             'context' => \core\context\system::instance(),
                         ]),
+                    ]);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check every non-empty value of the pattern columns against customfield_pattern.
+     *
+     * Like the required and code checks, web services and sync skip it. Without the plugin the
+     * values are kept as typed.
+     *
+     * @param array $payload Normalised payload.
+     * @return string|null Error naming the first set and column that fail, with the plugin's
+     *                     message, or null.
+     */
+    protected function validate_pattern_values(array $payload): ?string {
+        if (empty($payload) || !$this->pattern_available()) {
+            return null;
+        }
+        $schema = $this->get_schema();
+
+        $setnumber = 0;
+        foreach ($payload as $set) {
+            $setnumber++;
+            foreach ($schema->keys() as $key) {
+                $config = $schema->pattern_config($key);
+                $value = (string)($set[$key] ?? '');
+                if ($config === null || trim($value) === '') {
+                    continue;
+                }
+                $error = \profilefield_repeatable\local\pattern_columns::validate($config, $value);
+                if ($error !== null) {
+                    // The message is customfield_pattern's, already safe HTML like get_string()'s.
+                    return get_string('errorpattern', 'profilefield_repeatable', (object)[
+                        'set' => $setnumber,
+                        'column' => format_string($schema->label($key), true, [
+                            'context' => \core\context\system::instance(),
+                        ]),
+                        'error' => $error,
                     ]);
                 }
             }

@@ -121,14 +121,33 @@ class profile_define_repeatable extends profile_define_base {
         }
 
         $domains = \profilefield_repeatable\helper::companion_domains();
+        $pattern = $this->pattern_available();
         $element->updateAttributes([
             'data-lockedkeys' => json_encode($usage['keys']),
             'data-users' => $usage['users'],
             'data-domains' => json_encode($domains ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
             'data-companion' => $domains === null ? 0 : 1,
+            // The pattern mode is offered only with customfield_pattern; its presets come from there.
+            'data-pattern' => $pattern ? 1 : 0,
+            'data-presets' => json_encode(
+                $pattern ? \profilefield_repeatable\local\pattern_columns::presets() : [],
+                JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+            ),
         ]);
 
         $PAGE->requires->js_call_amd('profilefield_repeatable/columneditor', 'init');
+    }
+
+    /**
+     * Whether pattern columns can be configured: customfield_pattern offers its API.
+     *
+     * The one seam between the definition and {@see \profilefield_repeatable\local\pattern_columns::available()},
+     * so tests can run it as if the plugin were absent.
+     *
+     * @return bool
+     */
+    protected function pattern_available(): bool {
+        return \profilefield_repeatable\local\pattern_columns::available();
     }
 
     /**
@@ -137,7 +156,8 @@ class profile_define_repeatable extends profile_define_base {
      * Every broken rule is listed under the schema, which the column editor shows with the
      * error region of the form row ({@see \profilefield_repeatable\local\schema::validate()}).
      * The keys holding values are read from the stored field's payloads, whatever the editor
-     * sent: a schema that drops one is rejected.
+     * sent: a schema that drops one is rejected. Pattern columns are checked by customfield_pattern;
+     * without it, only the stored field's pattern columns may be submitted, unchanged.
      *
      * @param stdClass|array $data
      * @param array $files
@@ -152,12 +172,18 @@ class profile_define_repeatable extends profile_define_base {
         }
 
         $lockedlabels = [];
+        $storedpatterns = [];
         $stored = $this->stored_field((int)($data->id ?? 0));
         if ($stored) {
             $context = \core\context\system::instance();
             foreach (\profilefield_repeatable\local\stored_values::locked_labels($stored) as $key => $label) {
                 $lockedlabels[$key] = format_string($label, true, ['context' => $context, 'escape' => false]);
             }
+            $storedpatterns = \profilefield_repeatable\local\schema::from_field($stored)->pattern_objects();
+        }
+        $patternerrors = null;
+        if ($this->pattern_available()) {
+            $patternerrors = [\profilefield_repeatable\local\pattern_columns::class, 'config_errors'];
         }
 
         // Domain => the domain holding its parents, where the companion knows it.
@@ -168,7 +194,14 @@ class profile_define_repeatable extends profile_define_base {
             }
         }
 
-        $errors = \profilefield_repeatable\local\schema::validate($document, $domainexists, $lockedlabels, $parentdomains);
+        $errors = \profilefield_repeatable\local\schema::validate(
+            $document,
+            $domainexists,
+            $lockedlabels,
+            $parentdomains,
+            $patternerrors,
+            $storedpatterns
+        );
         if (empty($errors)) {
             return [];
         }

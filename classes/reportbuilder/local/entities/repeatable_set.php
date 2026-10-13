@@ -25,6 +25,7 @@ use core_reportbuilder\local\report\column;
 use core_reportbuilder\local\report\filter;
 use lang_string;
 use profilefield_repeatable\helper;
+use profilefield_repeatable\local\pattern_columns;
 use profilefield_repeatable\local\schema;
 
 /**
@@ -32,7 +33,8 @@ use profilefield_repeatable\local\schema;
  *
  * Every column of the field's schema yields columns and filters named after its key, so renaming
  * a column keeps saved reports working: a free column "<key>"; a dictionary column "<key>_name"
- * (the companion's label, with an autocomplete filter over the codes present) and "<key>_code".
+ * (the companion's label, with an autocomplete filter over the codes present) and "<key>_code";
+ * a pattern column "<key>", shown as customfield_pattern formats it, filtered on the stored value.
  * {@see schema::report_identifiers()} names them; the 2.x upgrade maps the index-based names of
  * version 1 onto them ({@see \profilefield_repeatable\local\migration}). The owning datasource
  * joins the storage table per field so a user with N sets yields N rows.
@@ -201,6 +203,21 @@ class repeatable_set extends base {
                     ->set_is_sortable(true)
                     ->add_callback(static function (?string $value): string {
                         return s($value);
+                    });
+            } else if ($schema->pattern_config($key) !== null) {
+                // A pattern value is shown as customfield_pattern formats it (as stored without it), then escaped.
+                $patternconfig = $schema->pattern_config($key);
+                $columns[] = (new column(
+                    $identifiers['value'],
+                    new lang_string('columnsubitem', 'profilefield_repeatable', $label),
+                    $this->get_entity_name()
+                ))
+                    ->add_joins($this->get_joins())
+                    ->set_type(column::TYPE_TEXT)
+                    ->add_field($valuesql, 'val' . $index, $valueparams)
+                    ->set_is_sortable(true)
+                    ->add_callback(static function (?string $value) use ($patternconfig): string {
+                        return s(pattern_columns::format($patternconfig, (string)$value));
                     });
             } else {
                 $columns[] = (new column(

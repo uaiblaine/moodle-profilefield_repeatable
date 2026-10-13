@@ -79,6 +79,7 @@ define.class.php       profile_define_repeatable: admin definition (schema JSON 
 classes/helper.php     payload normalise/encode, caps, PG helpers, sql_column_value()
 classes/local/schema.php           column schema v2: parse, from_v1(), validate(), keys, accessors
 classes/local/migration.php        re-keying of payloads after the v2 upgrade (shared with the task)
+classes/local/pattern_columns.php  the one door to customfield_pattern's api (pattern columns), soft dependency
 classes/local/projection.php       per-set rows: sync(), is_current(), reproject_*(), keys_in_use()
 classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
 classes/output/display_renderer.php  accordion (profile pages) or plain list, bulk label prefetch
@@ -114,7 +115,8 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   required?,indexed?}]}`; `param2`..`param4` are cleared on save; `defaultdata` is forced to `'{}'`.
   `local\schema::validate()` is the only gate (exactly one title, subline/indexed ≤ 3, ≤ 20 columns,
   parent = an earlier dictionary column, no two columns producing one Report Builder identifier);
-  the constructor normalises and never rejects. `pattern` is reserved and rejected until stage C.
+  the constructor normalises and never rejects. A `pattern` column is checked by customfield_pattern
+  (see below) and keeps its `pattern` object verbatim.
 - **Payloads and Report Builder identifiers are keyed by column key**, never by label. A key is
   `[a-z][a-z0-9_]{0,39}`; `generate_key()` and `amd/src/columneditor.js` `generateKey()` must stay
   in step. Keys holding values (`local\stored_values`, read from the stored field's
@@ -241,6 +243,27 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 - `ci.yml` installs the companion's `main` (`plugin-dependencies`): a contract change in either repo
   turns the other's CI red. The renderer prefetches labels once per domain: keep it N+1-free.
 
+### customfield_pattern (soft dependency, pattern columns)
+
+- Every call goes through `local\pattern_columns`, whose `available()` probes `\customfield_pattern\api`,
+  its methods and `api::CONFIG_VERSION === pattern_columns::CONFIG_VERSION` (another version may read
+  a stored setting differently, so it counts as absent). The plugin installs on 5.1+ only: on 4.5 and
+  5.0 the field always runs "absent", with no branching beyond that probe.
+- Absent means: the mode is not offered, `schema::validate()` refuses a new or changed pattern column
+  (`$patternerrors === null`) and accepts a stored one only with the same `pattern` object (strict
+  `===` after a recursive key sort, never a loose `==`, which reads "1000" as "1e3"), read from
+  `pattern_objects()` of the STORED field; values are validated by nothing, stored as typed, shown
+  as stored.
+- Present: `edit_validate_field()` → `validate_pattern_values()` (the plugin's message is already safe
+  HTML, passed into `errorpattern` unescaped); `edit_save_data_preprocess()` normalises (raw/masked),
+  so web services and sync store the configured shape too; `edit_load_user_data()` formats, so a raw
+  value is edited masked; renderer, Report Builder value callback (`s()` after formatting) and privacy
+  export (plain text) format. `pattern_available()` on the field and the definition is the test seam.
+- The widget builds inputs in JS, so the plugin's `input_attributes()` ride in the columns JSON
+  (`inputattributes`; `repeatable.js` sets only the four names the API emits) and `api::js_init()`
+  loads the formatter, whose document-level listener covers inputs of sets added later. The editor gets availability and
+  presets (with their masks) from the textarea's `data-pattern` / `data-presets`.
+
 ### Display and styles
 
 - `show_field_content()` returns false: the field renders as its own profile category through
@@ -257,7 +280,9 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   upgrade is tested by calling `xmldb_profilefield_repeatable_upgrade()` on v1 rows
   (`tests/upgrade_test.php`).
 - PG-only behaviour is asserted behind a dbfamily check or `markTestSkipped()`, and
-  companion-dependent tests skip when its classes or tables are absent.
+  companion-dependent tests skip when its classes or tables are absent. Pattern tests that need
+  customfield_pattern skip without it; those describing its absence either use the
+  `pattern_available()` seam (every leg) or skip when it IS installed (the 4.5/5.0 legs run them).
 - Behat: scope profile-form locators to the category fieldset (`in the "Testing" "fieldset"`),
   because a bare "Language" also matches "Preferred language".
 - `.mdlshield/config.yml` pins `versions: ["5.2"]`: read core-API findings knowing 4.5 is supported.

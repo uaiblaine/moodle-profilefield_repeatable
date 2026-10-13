@@ -33,12 +33,16 @@ import Notification from 'core/notification';
 /** Limits, in step with \profilefield_repeatable\local\schema. */
 const LIMITS = {columns: 20, subline: 3, indexed: 3, keylength: 40};
 
-/** Modes offered; "pattern" is reserved in the schema and not offered yet. */
+/** Modes; "pattern" is offered only when the server says customfield_pattern is installed. */
 const MODES = [
     {value: 'free', label: 'modefree', help: 'modefreehelp'},
     {value: 'dictionary', label: 'modedictionary', help: 'modedictionaryhelp'},
     {value: 'dictionary_open', label: 'modedictionaryopen', help: 'modedictionaryopenhelp'},
+    {value: 'pattern', label: 'modepattern', help: 'modepatternhelp'},
 ];
+
+/** The configuration of a new pattern column, in the order the server writes it. */
+const PATTERN_DEFAULTS = {preset: 'none', mask: '', regex: '', regexerror: '', storeformat: 'masked'};
 
 /** Strings fetched once, raw; their placeholders are filled by fill(). */
 const STRINGKEYS = [
@@ -46,8 +50,11 @@ const STRINGKEYS = [
     'columnkeyhint', 'columnkeylocked', 'columnlabel', 'columnlabelhint', 'columnmode', 'columnnew', 'columnparent',
     'columnparenthint', 'columnrole', 'columnsindata', 'domainoption', 'domainrestricted', 'domainvisible',
     'modedictionary', 'modedictionaryhelp', 'modedictionaryopen', 'modedictionaryopenhelp', 'modefree', 'modefreehelp',
-    'movedown', 'moveup', 'newcolumn', 'parentmismatch', 'parentnone', 'removecolumn', 'removecolumnlocked', 'roleindexed',
-    'roleindexedlabel', 'rolerequired', 'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel',
+    'modepattern', 'modepatternhelp', 'modepatternunavailable', 'modepatternunavailablehelp', 'movedown', 'moveup',
+    'newcolumn', 'parentmismatch', 'parentnone', 'patternmask', 'patternpreset', 'patternregex', 'patternregexerror',
+    'patternregexerrorhint', 'patternregexhint', 'patternregexplaceholder', 'patternstoreformat', 'patternstoremasked',
+    'patternstoreraw', 'patterntokens', 'removecolumn', 'removecolumnlocked', 'roleindexed', 'roleindexedlabel',
+    'rolerequired', 'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel',
     'summaryindexed', 'summarysubline', 'summarytitle',
 ];
 
@@ -121,6 +128,14 @@ const takenBy = (columns, except) => {
 const isDictionary = (mode) => mode === 'dictionary' || mode === 'dictionary_open';
 
 /**
+ * Whether a value is a plain object (a JSON object, not an array).
+ *
+ * @param {*} value
+ * @returns {Boolean}
+ */
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
  * The schema document of the editor state, in the property order the server writes.
  *
  * @param {Array} columns
@@ -170,6 +185,7 @@ const parseColumns = (json) => {
             domain: String(column.domain ?? ''),
             parent: String(column.parent ?? ''),
             pattern: column.pattern ?? null,
+            storedpattern: column.mode === 'pattern',
             title: !!column.title,
             subline: !!column.subline,
             required: !!column.required,
@@ -240,6 +256,9 @@ class Editor {
         this.users = parseInt(textarea.dataset.users || '0', 10) || 0;
         this.domains = readData(textarea, 'domains', []);
         this.companion = textarea.dataset.companion === '1';
+        // Without customfield_pattern a stored pattern column is kept as it is: no panel, no change.
+        this.pattern = textarea.dataset.pattern === '1';
+        this.presets = readData(textarea, 'presets', []);
         this.open = columns.length ? -1 : 0;
         this.uid = textarea.id || textarea.name;
 
@@ -408,6 +427,18 @@ class Editor {
     modeSummary(column) {
         const mode = MODES.find((candidate) => candidate.value === column.mode);
         const label = mode ? this.str(mode.label) : column.mode;
+        if (column.mode === 'pattern' && !this.pattern) {
+            return this.str('modepatternunavailable');
+        }
+        if (column.mode === 'pattern' && isObject(column.pattern)) {
+            const preset = column.pattern.preset || 'none';
+            const known = this.presets.find((candidate) => candidate.value === preset);
+            let shape = known ? known.label : preset;
+            if (preset === 'custom') {
+                shape = column.pattern.mask;
+            }
+            return shape ? `${label} · ${shape}` : label;
+        }
         return isDictionary(column.mode) && column.domain ? `${label} · ${column.domain}` : label;
     }
 
@@ -452,6 +483,9 @@ class Editor {
         if (isDictionary(column.mode)) {
             children.push(this.renderDictionary(column, index, id, field));
         }
+        if (column.mode === 'pattern' && this.pattern) {
+            children.push(this.renderPattern(column, index, id));
+        }
         children.push(this.renderRoles(column, index, id));
         // A column holding stored values cannot be removed; the server rejects it as well.
         children.push(make('div', {className: 'profilefield-repeatable-ce-actions'}, [
@@ -474,9 +508,16 @@ class Editor {
      * @returns {HTMLElement}
      */
     renderModes(column, index, id) {
+        const modes = MODES.filter((mode) => mode.value !== 'pattern' || this.pattern).map((mode) => ({
+            value: mode.value, name: this.str(mode.label), help: this.str(mode.help),
+        }));
+        if (!this.pattern && column.storedpattern) {
+            // A stored pattern column without the plugin: it can go back to its stored configuration, never to a new one.
+            modes.push({value: 'pattern', name: this.str('modepatternunavailable'), help: this.str('modepatternunavailablehelp')});
+        }
         return make('fieldset', {className: 'profilefield-repeatable-ce-fieldset'}, [
             make('legend', {}, [this.str('columnmode')]),
-            make('div', {className: 'profilefield-repeatable-ce-modes'}, MODES.map((mode) => make('div', {
+            make('div', {className: 'profilefield-repeatable-ce-modes'}, modes.map((mode) => make('div', {
                 className: 'form-check profilefield-repeatable-ce-mode' + (column.mode === mode.value ? ' is-checked' : ''),
             }, [
                 make('input', {
@@ -484,11 +525,96 @@ class Editor {
                     value: mode.value, checked: column.mode === mode.value, dataset: {field: 'mode', index: String(index)},
                 }),
                 make('label', {className: 'form-check-label', htmlFor: id('mode-' + mode.value)}, [
-                    make('span', {className: 'profilefield-repeatable-ce-modename'}, [this.str(mode.label)]),
-                    make('span', {className: 'profilefield-repeatable-ce-muted'}, [this.str(mode.help)]),
+                    make('span', {className: 'profilefield-repeatable-ce-modename'}, [mode.name]),
+                    make('span', {className: 'profilefield-repeatable-ce-muted'}, [mode.help]),
                 ]),
             ]))),
         ]);
+    }
+
+    /**
+     * Preset, mask, storage and regular expression of a pattern column (customfield_pattern).
+     *
+     * The mask of a preset is shown read-only; only "Custom mask" takes a mask of its own. The
+     * server checks the configuration with customfield_pattern on save.
+     *
+     * @param {Object} column
+     * @param {Number} index
+     * @param {Function} id
+     * @returns {HTMLElement}
+     */
+    renderPattern(column, index, id) {
+        const pattern = this.patternOf(column);
+        const custom = pattern.preset === 'custom';
+        const preset = this.presets.find((candidate) => candidate.value === pattern.preset);
+        const field = (name, label, control, hint, wide = false) => make('div', {
+            className: 'profilefield-repeatable-ce-field ' + (wide ? 'is-wide' : 'is-third'),
+        }, [
+            make('label', {htmlFor: id(name)}, [label]),
+            control,
+            ...(hint ? [make('span', {className: 'profilefield-repeatable-ce-muted', id: id(name) + '-hint'}, [hint])] : []),
+        ]);
+        const select = (name, options, value) => make('select', {
+            className: 'form-control', id: id(name), dataset: {field: name, index: String(index)},
+        }, options.map((option) => make('option', {value: option.value, selected: option.value === value}, [option.label])));
+
+        const presets = this.presets.map((candidate) => ({value: candidate.value, label: candidate.label}));
+        if (!preset) {
+            // A preset this version of the plugin does not offer; the server reports it on save.
+            presets.push({value: pattern.preset, label: pattern.preset});
+        }
+        // A preset's mask is shown for reference; only "Custom mask" is typed.
+        let maskvalue = preset ? preset.mask : '';
+        if (custom) {
+            maskvalue = pattern.mask;
+        }
+        const mask = make('input', {
+            type: 'text', className: 'form-control profilefield-repeatable-ce-code', id: id('mask'),
+            value: maskvalue, readOnly: !custom,
+            dataset: {field: 'mask', index: String(index)},
+        });
+        const regex = make('input', {
+            type: 'text', className: 'form-control profilefield-repeatable-ce-code', id: id('regex'), value: pattern.regex,
+            placeholder: this.str('patternregexplaceholder'), dataset: {field: 'regex', index: String(index)},
+            attrs: {'aria-describedby': id('regex') + '-hint'},
+        });
+        const regexerror = make('input', {
+            type: 'text', className: 'form-control', id: id('regexerror'), value: pattern.regexerror,
+            dataset: {field: 'regexerror', index: String(index)}, attrs: {'aria-describedby': id('regexerror') + '-hint'},
+        });
+
+        return make('div', {className: 'profilefield-repeatable-ce-pair profilefield-repeatable-ce-box'}, [
+            field('preset', this.str('patternpreset'), select('preset', presets, pattern.preset), ''),
+            field('mask', this.str('patternmask'), mask, ''),
+            field('storeformat', this.str('patternstoreformat'), select('storeformat', [
+                {value: 'masked', label: this.str('patternstoremasked')},
+                {value: 'raw', label: this.str('patternstoreraw')},
+            ], pattern.storeformat), ''),
+            field('regex', this.str('patternregex'), regex, this.str('patternregexhint'), true),
+            field('regexerror', this.str('patternregexerror'), regexerror, this.str('patternregexerrorhint'), true),
+            make('p', {className: 'profilefield-repeatable-ce-muted profilefield-repeatable-ce-tokens'},
+                [this.str('patterntokens')]),
+        ]);
+    }
+
+    /**
+     * The pattern configuration of a column, created with the defaults when it has none.
+     *
+     * Settings the editor does not know are kept, so the server receives them back.
+     *
+     * @param {Object} column
+     * @returns {Object}
+     */
+    patternOf(column) {
+        if (!isObject(column.pattern)) {
+            column.pattern = {...PATTERN_DEFAULTS};
+        }
+        Object.entries(PATTERN_DEFAULTS).forEach(([name, value]) => {
+            if (typeof column.pattern[name] !== 'string') {
+                column.pattern[name] = value;
+            }
+        });
+        return column.pattern;
     }
 
     /**
@@ -674,7 +800,17 @@ class Editor {
         const control = event.target;
         const index = parseInt(control.dataset.index ?? '-1', 10);
         const column = this.columns[index];
-        if (!column || !['label', 'key', 'domain'].includes(control.dataset.field) || control.tagName === 'SELECT') {
+        if (!column || control.tagName === 'SELECT') {
+            return;
+        }
+        if (['mask', 'regex', 'regexerror'].includes(control.dataset.field)) {
+            if (!control.readOnly) {
+                this.patternOf(column)[control.dataset.field] = control.value;
+                this.write();
+            }
+            return;
+        }
+        if (!['label', 'key', 'domain'].includes(control.dataset.field)) {
             return;
         }
 
@@ -721,7 +857,20 @@ class Editor {
 
         if (name === 'mode') {
             column.mode = control.value;
+            if (column.mode === 'pattern' && this.pattern) {
+                this.patternOf(column);
+            }
             this.dropInvalidParents();
+        } else if (name === 'preset') {
+            const pattern = this.patternOf(column);
+            if (pattern.preset === 'custom') {
+                // Kept aside, so that going back to "Custom mask" restores what was typed.
+                column.custommask = pattern.mask;
+            }
+            pattern.preset = control.value;
+            pattern.mask = control.value === 'custom' ? (column.custommask ?? '') : '';
+        } else if (name === 'storeformat') {
+            this.patternOf(column).storeformat = control.value;
         } else if (name === 'domain' || name === 'parent') {
             column[name] = control.value.trim();
         } else if (name === 'title') {

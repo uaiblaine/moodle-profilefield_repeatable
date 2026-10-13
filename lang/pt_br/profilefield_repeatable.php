@@ -45,7 +45,7 @@ $string['columnparenthint'] =
 $string['columnrole'] = 'Papel no conjunto';
 $string['columns'] = 'Colunas';
 $string['columns_help'] =
-    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma coluna cuja chave tem valores armazenados não pode ser removida nem ter a chave alterada; renomeie o nome da coluna.';
+    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código), pattern (máscara e/ou expressão regular do customfield_pattern, Moodle 5.1 ou posterior; um objeto "pattern" com preset, mask, regex, regexerror e storeformat). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma coluna cuja chave tem valores armazenados não pode ser removida nem ter a chave alterada; renomeie o nome da coluna.';
 $string['columnsindata'] =
     '{$a} usuários têm dados neste campo. Colunas com valores armazenados não podem ser removidas e suas chaves estão bloqueadas: renomear essa coluna muda apenas o nome.';
 $string['columnsubitem'] = '{$a}';
@@ -79,6 +79,10 @@ $string['errorlabelrequired'] = 'A coluna {$a} não tem nome.';
 $string['errormodeinvalid'] = 'Coluna "{$a}": escolha texto livre ou um modo de dicionário.';
 $string['errorparentinvalid'] = 'A coluna "{$a}" só pode depender de uma coluna de dicionário anterior.';
 $string['errorparentmismatch'] = 'Coluna "{$a->column}": a coluna pai não usa "{$a->parentdomain}", o dicionário que contém os pais de "{$a->domain}".';
+$string['errorpattern'] = 'Conjunto {$a->set}, {$a->column}: {$a->error}';
+$string['errorpatternconfig'] = 'Coluna "{$a->column}": {$a->error}';
+$string['errorpatternunavailable'] =
+    'Coluna "{$a}": colunas de padrão precisam do plugin customfield_pattern (Moodle 5.1 ou posterior). Sem ele, uma coluna de padrão já salva é mantida sem alterações e nenhuma nova pode ser adicionada.';
 $string['errorschemainvalid'] = 'As colunas não formam um esquema versão 2 válido.';
 $string['errorsublinelimit'] = 'No máximo {$a} colunas podem aparecer na linha auxiliar.';
 $string['errorsublinetitle'] = 'A coluna "{$a}" é o título e não pode estar também na linha auxiliar.';
@@ -91,6 +95,10 @@ $string['modedictionaryopen'] = 'Dicionário, qualquer código';
 $string['modedictionaryopenhelp'] = 'Sugere do dicionário, mas aceita um código novo.';
 $string['modefree'] = 'Texto livre';
 $string['modefreehelp'] = 'Qualquer texto de até 1.024 caracteres.';
+$string['modepattern'] = 'Padrão';
+$string['modepatternhelp'] = 'Máscara e/ou expressão regular (customfield_pattern).';
+$string['modepatternunavailable'] = 'Padrão (plugin não instalado)';
+$string['modepatternunavailablehelp'] = 'Os valores são mantidos como digitados.';
 $string['movedown'] = 'Mover {$a} para baixo';
 $string['moveup'] = 'Mover {$a} para cima';
 $string['newcode'] = 'Código novo, ainda sem nome';
@@ -98,6 +106,18 @@ $string['newcolumn'] = 'Coluna {$a}';
 $string['nomatchstrict'] = 'Nenhum resultado. Esta coluna aceita apenas códigos da lista.';
 $string['parentmismatch'] = 'A coluna pai escolhida não usa "{$a->parentdomain}", o dicionário que contém os pais de "{$a->domain}".';
 $string['parentnone'] = 'Nenhuma';
+$string['patternmask'] = 'Máscara';
+$string['patternpreset'] = 'Formato';
+$string['patternregex'] = 'Expressão regular';
+$string['patternregexerror'] = 'Mensagem quando a expressão não corresponde';
+$string['patternregexerrorhint'] = 'Opcional; caso contrário, é exibida uma mensagem genérica.';
+$string['patternregexhint'] = '(opcional, ancorada no valor inteiro)';
+$string['patternregexplaceholder'] = 'ex.: [A-Z]{3}-\d{6}';
+$string['patternstoreformat'] = 'Armazenar como';
+$string['patternstoremasked'] = 'Com máscara (123.456.789-09)';
+$string['patternstoreraw'] = 'Sem máscara (12345678909)';
+$string['patterntokens'] =
+    'Símbolos: 9 dígito · A letra · * letra ou dígito · alternativas separadas por |. As regras vêm do customfield_pattern; no Moodle 4.5 e 5.0 este modo não é oferecido.';
 $string['pluginname'] = 'Conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:data'] = 'Dados do usuário do campo de perfil de conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:dataformat'] =

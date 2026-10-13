@@ -376,6 +376,29 @@
     padding: 12px 4px 0;
 }
 
+/* The pattern panel: preset, mask and storage side by side, then the regular expression. */
+.profilefield-repeatable-columneditor .profilefield-repeatable-ce-field.is-third {
+    flex: 1 1 28%;
+    min-width: 10rem;
+}
+
+.profilefield-repeatable-columneditor .profilefield-repeatable-ce-field.is-wide {
+    flex: 1 1 100%;
+}
+
+.profilefield-repeatable-columneditor .profilefield-repeatable-ce-code {
+    font-family: var(--bs-font-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+
+.profilefield-repeatable-columneditor .profilefield-repeatable-ce-code[readonly] {
+    background: var(--pfr-bg-soft);
+}
+
+.profilefield-repeatable-columneditor .profilefield-repeatable-ce-tokens {
+    flex: 1 1 100%;
+    margin: 0 8px 12px;
+}
+
 .profilefield-repeatable-columneditor .profilefield-repeatable-ce-warning {
     color: var(--bs-danger, var(--danger, #ca3120));
     flex: 1 1 100%;

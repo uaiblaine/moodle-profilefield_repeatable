@@ -11,6 +11,9 @@ Requirements
 
 - Moodle 4.5 or later (tested up to Moodle 5.3).
 - Optional: [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries) for reference resolution.
+- Optional, Moodle 5.1 or later: [moodle-customfield_pattern](https://github.com/uaiblaine/moodle-customfield_pattern)
+  (a version with `\customfield_pattern\api`) for pattern columns: masks and validation such as
+  CPF, CNPJ, CEP and Brazilian phone numbers.
 
 Database baseline follows Moodle requirements:
 
@@ -63,7 +66,8 @@ After installing, navigate to **Site Administration > Plugins > Moodle plugins >
    - **Key**: generated from the name (lowercase, accents folded, other characters as `_`;
      `[a-z][a-z0-9_]{0,39}`). Values and saved reports are stored under the key, so renaming a
      column later changes only its name. Once users have values under a key, the key is locked.
-   - **How users fill it**: *Free text*; *Dictionary, codes only*; or *Dictionary, any code*.
+   - **How users fill it**: *Free text*; *Dictionary, codes only*; *Dictionary, any code*; or,
+     with `customfield_pattern` installed, *Pattern* (see "Pattern columns" under Editing).
      A dictionary column names a domain of the companion plugin `local_dictionaries` (picked from
      its list when installed) and may **depend on** an earlier dictionary column whose code
      narrows its items (cities of the chosen state); the editor warns, and saving refuses, a
@@ -88,7 +92,8 @@ Without JavaScript the columns are edited as the JSON schema the editor writes t
 {"version": 2, "columns": [
   {"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true, "indexed": true},
   {"key": "level", "label": "Level", "mode": "dictionary_open", "domain": "cefr", "subline": true, "required": true},
-  {"key": "certificate_number", "label": "Certificate number", "mode": "free"}
+  {"key": "certificate_number", "label": "Certificate number", "mode": "free"},
+  {"key": "cpf", "label": "CPF", "mode": "pattern", "pattern": {"preset": "cpf", "mask": "", "regex": "", "regexerror": "", "storeformat": "raw"}}
 ]}
 ```
 
@@ -149,6 +154,33 @@ the dictionary to logged-in users, when users fill such a column themselves.
 Without the companion (or with one older than `api::lookup()`), dictionary columns are text boxes
 and their codes are not checked.
 
+#### Pattern columns
+
+A pattern column takes its rules from the custom field type `customfield_pattern`, which installs on
+Moodle 5.1 and later. Its settings in the column editor are those of a Pattern custom field:
+
+- **Preset**: None (regular expression only), CPF, CNPJ (alphanumeric), CEP, Brazilian phone, or
+  Custom mask. A preset shows its mask read-only; Custom mask takes a mask of your own (`9` digit,
+  `A` letter, `*` letter or digit, alternatives separated by `|`).
+- **Store as**: masked (`529.982.247-25`) or raw (`52998224725`). Values are always shown masked.
+- **Regular expression** (optional, anchored to the whole stored value) and the message shown when
+  it does not match.
+
+The edit form formats the value while the user types (the plugin's typing aid also covers the
+inputs of a set added later). On save every non-empty value is checked (mask, CPF and CNPJ check
+digits, regular expression): a wrong one is refused under the widget, naming the set and the
+column. Values are stored as "Store as" says, also when a web service, CSV upload or sync writes
+them (those skip the check, like the required and code checks). The profile page, Report Builder
+and the privacy export show them masked; Report Builder filters match the stored shape. Changing a
+column's mask or storage does not rewrite stored values: a value that does not fit is shown as
+stored.
+
+**customfield_pattern is optional.** Without it (always on Moodle 4.5 and 5.0) the Pattern mode is
+not offered and the definition form refuses a new pattern column. A pattern column saved while the
+plugin was installed stays: its stored settings are kept unchanged (the editor shows it as "Pattern
+(plugin not installed)"), its values are kept as typed and shown as stored, and its rules apply again
+once the plugin is back.
+
 
 Advanced Features
 -----------------
@@ -202,8 +234,8 @@ The field calls the static class `\local_dictionaries\resolver` (`resolve()`, `r
 ### Report Builder
 
 The "Repeatable profile field sets" source has one row per set. For each repeatable field it
-offers "Set number" and, per column, the value (free columns) or the name and the code
-(dictionary columns). Their identifiers follow the column key (`repeatable_<shortname>:<key>`,
+offers "Set number" and, per column, the value (free and pattern columns; pattern values shown
+masked) or the name and the code (dictionary columns). Their identifiers follow the column key (`repeatable_<shortname>:<key>`,
 `<key>_name`, `<key>_code`), so renaming a column keeps saved reports working.
 
 
