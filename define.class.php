@@ -25,287 +25,166 @@
 /**
  * Admin definition of a repeatable profile field.
  *
- * param1 lists the sub-items, one per line; param2 the indexed sub-items (PostgreSQL expression
- * indexes); param3 the "subitem|domain" reference mappings; param4 the sub-items shown on the
- * collapsed accordion subline. defaultdata is always '{}'.
+ * param1 holds the column schema as JSON ({@see \profilefield_repeatable\local\schema}), edited
+ * through the column editor (amd/src/columneditor.js) or, without JavaScript, as text;
+ * param2..param4 are unused since version 2 and cleared on save. defaultdata is always '{}'.
  *
  * @package    profilefield_repeatable
  */
 class profile_define_repeatable extends profile_define_base {
-    /** @var int Maximum number of indexed sub-items allowed per field; reconcile_indexes repeats it. */
-    private const MAX_INDEXED_SUBITEMS = 3;
-
-    /** @var int Maximum number of sub-items allowed in the collapsed subline; display_renderer repeats it. */
-    private const MAX_SUBLINE_SUBITEMS = 3;
-
     /**
      * Add elements for creating/editing a repeatable profile field.
      *
      * @param MoodleQuickForm $form
      */
     public function define_form_specific($form) {
-        $form->addElement('textarea', 'param1', get_string('subitems', 'profilefield_repeatable'), [
-            'rows' => 8,
+        $form->addElement('textarea', 'param1', get_string('columns', 'profilefield_repeatable'), [
+            'rows' => 12,
             'cols' => 60,
+            'data-region' => 'profilefield-repeatable-schema',
+            'class' => 'profilefield-repeatable-schema-json',
         ]);
-        $form->setType('param1', PARAM_TEXT);
-        $form->addHelpButton('param1', 'subitems', 'profilefield_repeatable');
-
-        $form->addElement('textarea', 'param2', get_string('indexedsubitems', 'profilefield_repeatable'), [
-            'rows' => 5,
-            'cols' => 60,
-        ]);
-        $form->setType('param2', PARAM_TEXT);
-        $form->addHelpButton('param2', 'indexedsubitems', 'profilefield_repeatable');
-
-        $form->addElement('textarea', 'param3', get_string('referencesubitemdomains', 'profilefield_repeatable'), [
-            'rows' => 5,
-            'cols' => 60,
-        ]);
-        $form->setType('param3', PARAM_TEXT);
-        $form->addHelpButton('param3', 'referencesubitemdomains', 'profilefield_repeatable');
-
-        $form->addElement('textarea', 'param4', get_string('sublinesubitems', 'profilefield_repeatable'), [
-            'rows' => 4,
-            'cols' => 60,
-        ]);
-        $form->setType('param4', PARAM_TEXT);
-        $form->addHelpButton('param4', 'sublinesubitems', 'profilefield_repeatable');
+        $form->setType('param1', PARAM_RAW);
+        $form->addHelpButton('param1', 'columns', 'profilefield_repeatable');
 
         $form->addElement('hidden', 'defaultdata', '{}');
         $form->setType('defaultdata', PARAM_RAW_TRIMMED);
     }
 
     /**
-     * Validate repeatable profile field configuration.
+     * The stored repeatable field a submitted id names, or null.
+     *
+     * @param int $fieldid
+     * @return stdClass|null
+     */
+    private function stored_field(int $fieldid): ?stdClass {
+        global $DB;
+
+        if ($fieldid <= 0) {
+            return null;
+        }
+        return $DB->get_record('user_info_field', ['id' => $fieldid, 'datatype' => 'repeatable']) ?: null;
+    }
+
+    /**
+     * The submitted schema, normalised but with every column kept, so errors name what was typed.
+     *
+     * @param string $json
+     * @return \profilefield_repeatable\local\schema|null Null when the text is not a version 2 schema.
+     */
+    private function submitted_schema(string $json): ?\profilefield_repeatable\local\schema {
+        $document = \profilefield_repeatable\local\schema::decode($json);
+        if ($document === null || !is_array($document['columns'] ?? null)) {
+            return null;
+        }
+        return \profilefield_repeatable\local\schema::from_columns(array_values($document['columns']));
+    }
+
+    /**
+     * Hand the column editor what it needs: locked keys, the users with data and the domains.
+     *
+     * Everything travels in data attributes of the schema textarea, not in the js_call_amd()
+     * arguments, which core warns about past 1024 characters. The locked keys come from the
+     * stored field, never from the submitted schema; {@see self::define_validate_specific()}
+     * enforces them. A field still on the version 1 parameters is shown as its version 2 schema.
+     *
+     * @param MoodleQuickForm $mform
+     */
+    public function define_after_data(&$mform) {
+        global $PAGE;
+
+        if (!$mform->elementExists('param1')) {
+            return;
+        }
+
+        $element = $mform->getElement('param1');
+        $usage = ['users' => 0, 'keys' => []];
+        $stored = $this->stored_field((int)$mform->getElementValue('id'));
+        if ($stored) {
+            $usage = \profilefield_repeatable\local\stored_values::keys_in_use(
+                (int)$stored->id,
+                \profilefield_repeatable\local\schema::from_field($stored)
+            );
+            $isv1 = \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
+            if ($isv1 && trim((string)$element->getValue()) === trim((string)$stored->param1)) {
+                $element->setValue(\profilefield_repeatable\local\schema::from_field($stored)->to_json());
+            }
+        }
+
+        // Shown pretty-printed, so the schema stays editable without JavaScript.
+        $schema = $this->submitted_schema((string)$element->getValue());
+        if ($schema !== null) {
+            $element->setValue(json_encode(
+                $schema->to_document(),
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+            ));
+        }
+
+        $domains = \profilefield_repeatable\helper::companion_domains();
+        $element->updateAttributes([
+            'data-lockedkeys' => json_encode($usage['keys']),
+            'data-users' => $usage['users'],
+            'data-domains' => json_encode($domains ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            'data-companion' => $domains === null ? 0 : 1,
+        ]);
+
+        $PAGE->requires->js_call_amd('profilefield_repeatable/columneditor', 'init');
+    }
+
+    /**
+     * Validate the submitted column schema.
+     *
+     * Every broken rule is listed under the schema, which the column editor shows with the
+     * error region of the form row ({@see \profilefield_repeatable\local\schema::validate()}).
+     * The keys holding values are read from the stored field's payloads, whatever the editor
+     * sent: a schema that drops one is rejected.
      *
      * @param stdClass|array $data
      * @param array $files
      * @return array
      */
     public function define_validate_specific($data, $files) {
-        $result = $this->validate_subitems_config($data);
-        if (!empty($result['errors'])) {
-            return $result['errors'];
+        $data = (object)$data;
+        $document = \profilefield_repeatable\local\schema::decode((string)($data->param1 ?? ''));
+        $domainexists = null;
+        if (class_exists('\local_dictionaries\resolver')) {
+            $domainexists = static fn(string $domain): bool => \local_dictionaries\resolver::domain_exists($domain);
         }
 
-        $errors = $this->validate_indexed_subitems_config((string)($data->param2 ?? ''), $result['subitems']);
-        if (!empty($errors)) {
-            return $errors;
-        }
-
-        $errors = $this->validate_reference_mappings_config((string)($data->param3 ?? ''), $result['subitems']);
-        if (!empty($errors)) {
-            return $errors;
-        }
-
-        return $this->validate_subline_subitems_config((string)($data->param4 ?? ''), $result['subitems']);
-    }
-
-    /**
-     * Validate sub-items configuration (param1).
-     *
-     * Duplicates are compared case-insensitively, as {@see \profilefield_repeatable\helper::parse_subitems()} does.
-     *
-     * @param object $data
-     * @return array ['subitems' => string[] parsed so far, 'errors' => array keyed by form element].
-     */
-    private function validate_subitems_config(object $data): array {
-        $lines = preg_split('/\R/u', (string)($data->param1 ?? '')) ?: [];
-        $subitems = [];
-        $seen = [];
-
-        foreach ($lines as $line) {
-            $subitem = trim($line);
-            if ($subitem === '') {
-                continue;
-            }
-
-            $normalised = core_text::strtolower($subitem);
-            if (isset($seen[$normalised])) {
-                return [
-                    'subitems' => $subitems,
-                    'errors' => ['param1' => get_string('errorsubitemsduplicate', 'profilefield_repeatable')],
-                ];
-            }
-
-            $seen[$normalised] = true;
-            $subitems[] = $subitem;
-        }
-
-        if (empty($subitems)) {
-            return [
-                'subitems' => [],
-                'errors' => ['param1' => get_string('errorsubitemsrequired', 'profilefield_repeatable')],
-            ];
-        }
-
-        return ['subitems' => $subitems, 'errors' => []];
-    }
-
-    /**
-     * Validate indexed sub-items configuration (param2).
-     *
-     * @param string $raw
-     * @param string[] $subitems
-     * @return array
-     */
-    private function validate_indexed_subitems_config(string $raw, array $subitems): array {
-        $errors = [];
-        $unknown = [];
-        $indexedsubitems = $this->parse_indexed_subitems($raw, $subitems, $unknown);
-
-        if (!empty($unknown)) {
-            $errors['param2'] = get_string('errorindexedsubitemunknown', 'profilefield_repeatable', implode(', ', $unknown));
-        } else if (count($indexedsubitems) > self::MAX_INDEXED_SUBITEMS) {
-            $errors['param2'] = get_string('errorindexedsubitemlimit', 'profilefield_repeatable', self::MAX_INDEXED_SUBITEMS);
-        } else {
-            $unindexable = array_filter(
-                $indexedsubitems,
-                static fn(string $subitem): bool => !\profilefield_repeatable\helper::is_indexable_subitem($subitem)
-            );
-            if (!empty($unindexable)) {
-                $errors['param2'] = get_string(
-                    'errorindexedsubitemplaceholder',
-                    'profilefield_repeatable',
-                    implode(', ', $unindexable)
-                );
+        $lockedlabels = [];
+        $stored = $this->stored_field((int)($data->id ?? 0));
+        if ($stored) {
+            $context = \core\context\system::instance();
+            foreach (\profilefield_repeatable\local\stored_values::locked_labels($stored) as $key => $label) {
+                $lockedlabels[$key] = format_string($label, true, ['context' => $context, 'escape' => false]);
             }
         }
 
-        return $errors;
-    }
-
-    /**
-     * Validate subline sub-items configuration (param4).
-     *
-     * @param string $raw
-     * @param string[] $subitems
-     * @return array
-     */
-    private function validate_subline_subitems_config(string $raw, array $subitems): array {
-        $errors = [];
-        $unknown = [];
-        $duplicates = [];
-        $sublinesubitems = $this->parse_subline_subitems($raw, $subitems, $unknown, $duplicates);
-
-        if (!empty($unknown)) {
-            $errors['param4'] = get_string(
-                'errorsublinesubitemunknown',
-                'profilefield_repeatable',
-                implode(', ', array_values(array_unique($unknown)))
-            );
-            return $errors;
+        $errors = \profilefield_repeatable\local\schema::validate($document, $domainexists, $lockedlabels);
+        if (empty($errors)) {
+            return [];
         }
 
-        if (!empty($duplicates)) {
-            $errors['param4'] = get_string(
-                'errorsublinesubitemduplicate',
-                'profilefield_repeatable',
-                implode(', ', array_values(array_unique($duplicates)))
-            );
-            return $errors;
-        }
-
-        if (!empty($sublinesubitems) && !empty($subitems)) {
-            $primarynormalised = \core_text::strtolower($subitems[0]);
-            foreach ($sublinesubitems as $candidate) {
-                if (\core_text::strtolower($candidate) === $primarynormalised) {
-                    $errors['param4'] = get_string(
-                        'errorsublineincludesprimary',
-                        'profilefield_repeatable',
-                        $subitems[0]
-                    );
-                    return $errors;
-                }
-            }
-        }
-
-        if (count($sublinesubitems) > self::MAX_SUBLINE_SUBITEMS) {
-            $errors['param4'] = get_string(
-                'errorsublinesubitemlimit',
-                'profilefield_repeatable',
-                self::MAX_SUBLINE_SUBITEMS
-            );
-        }
-
-        return $errors;
-    }
-
-    /**
-     * Validate reference domain mappings configuration (param3).
-     *
-     * @param string $raw
-     * @param string[] $subitems
-     * @return array
-     */
-    private function validate_reference_mappings_config(string $raw, array $subitems): array {
-        $errors = [];
-        $unknownsubitems = [];
-        $invaliddomains = [];
-        $duplicatesubitems = [];
-        $formaterrors = [];
-        $referencemappings = $this->parse_reference_mappings(
-            $raw,
-            $subitems,
-            $unknownsubitems,
-            $invaliddomains,
-            $duplicatesubitems,
-            $formaterrors
-        );
-
-        if (!empty($formaterrors)) {
-            $errors['param3'] = get_string('errordomainmapformat', 'profilefield_repeatable', implode(', ', $formaterrors));
-        } else if (!empty($unknownsubitems)) {
-            $errors['param3'] = get_string(
-                'errordomainmapunknownsubitem',
-                'profilefield_repeatable',
-                implode(', ', array_values(array_unique($unknownsubitems)))
-            );
-        } else if (!empty($duplicatesubitems)) {
-            $errors['param3'] = get_string(
-                'errordomainmapduplicatesubitem',
-                'profilefield_repeatable',
-                implode(', ', array_values(array_unique($duplicatesubitems)))
-            );
-        } else if (!empty($invaliddomains)) {
-            $errors['param3'] = get_string(
-                'errordomainmapinvaliddomain',
-                'profilefield_repeatable',
-                implode(', ', array_values(array_unique($invaliddomains)))
-            );
-        } else if (!empty($referencemappings) && $this->is_local_reference_plugin_available()) {
-            $missingdomains = $this->get_missing_reference_domains(array_values($referencemappings));
-            if (!empty($missingdomains)) {
-                $errors['param3'] = get_string(
-                    'errordomainmapmissingdomain',
-                    'profilefield_repeatable',
-                    implode(', ', $missingdomains)
-                );
-            }
-        }
-
-        return $errors;
+        return ['param1' => implode('<br>', $errors)];
     }
 
     /**
      * Preprocess field configuration before save.
      *
-     * Rewrites param1-param4 in canonical form (the sub-item spelling of param1, one per line,
-     * deduplicated, limits applied) and forces defaultdata to '{}'.
+     * Rewrites param1 as the canonical schema JSON, clears the version 1 parameters
+     * param2..param4 and forces defaultdata to '{}'.
      *
      * @param array|stdClass $data
      * @return array|stdClass
      */
     public function define_save_preprocess($data) {
-        $subitems = \profilefield_repeatable\helper::parse_subitems((string)($data->param1 ?? ''));
-        $data->param1 = implode("\n", $subitems);
-        $indexedsubitems = $this->parse_indexed_subitems((string)($data->param2 ?? ''), $subitems);
-        $data->param2 = implode("\n", array_slice($indexedsubitems, 0, self::MAX_INDEXED_SUBITEMS));
-        $referencemappings = $this->parse_reference_mappings((string)($data->param3 ?? ''), $subitems);
-        $data->param3 = $this->encode_reference_mappings($referencemappings, $subitems);
-        $sublinesubitems = $this->parse_subline_subitems((string)($data->param4 ?? ''), $subitems);
-        $data->param4 = implode("\n", array_slice($sublinesubitems, 0, self::MAX_SUBLINE_SUBITEMS));
+        $schema = $this->submitted_schema((string)($data->param1 ?? ''));
+        if ($schema !== null) {
+            $data->param1 = $schema->to_json();
+        }
+        $data->param2 = '';
+        $data->param3 = '';
+        $data->param4 = '';
         $data->defaultdata = '{}';
 
         return $data;
@@ -314,12 +193,30 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Save repeatable field configuration and, on PostgreSQL, enqueue index reconciliation.
      *
+     * Saving a field still on the version 1 parameters converts it as the upgrade does: its
+     * key => label map is written before param1 changes, so the label-keyed payloads keep
+     * reading, and {@see \profilefield_repeatable\task\rekey_payloads} re-keys them.
+     *
      * @param array|stdClass $data
      */
     public function define_save($data) {
         global $DB;
 
+        $stored = $this->stored_field((int)($data->id ?? 0));
+        $convert = $stored && \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
+        if ($convert) {
+            $legacy = \profilefield_repeatable\local\schema::from_field($stored)->legacy_labels();
+            set_config(
+                \profilefield_repeatable\local\schema::legacy_config_name((int)$stored->id),
+                json_encode((object)$legacy, JSON_UNESCAPED_UNICODE),
+                'profilefield_repeatable'
+            );
+        }
+
         parent::define_save($data);
+        if ($convert) {
+            \profilefield_repeatable\task\rekey_payloads::queue_for_field((int)$stored->id);
+        }
         if ($DB->get_dbfamily() !== 'postgres' || empty($data->id)) {
             return;
         }
@@ -338,270 +235,5 @@ class profile_define_repeatable extends profile_define_base {
      */
     public static function define_after_delete(int $fieldid): void {
         \profilefield_repeatable\task\reconcile_indexes::drop_all_for_field($fieldid);
-    }
-
-    /**
-     * Parse indexed sub-items and return canonical labels from param1.
-     *
-     * Duplicates are dropped silently; the limit is left to the caller.
-     *
-     * @param string $rawindexedsubitems
-     * @param string[] $subitems
-     * @param array $unknown Receives the lines that name no configured sub-item.
-     * @return string[]
-     */
-    private function parse_indexed_subitems(string $rawindexedsubitems, array $subitems, array &$unknown = []): array {
-        $unknown = [];
-        if (empty($subitems)) {
-            return [];
-        }
-
-        $canonicalmap = [];
-        foreach ($subitems as $subitem) {
-            $canonicalmap[core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $indexedsubitems = [];
-        $seen = [];
-        $lines = preg_split('/\R/u', $rawindexedsubitems) ?: [];
-
-        foreach ($lines as $line) {
-            $candidate = trim($line);
-            if ($candidate === '') {
-                continue;
-            }
-
-            $normalised = core_text::strtolower($candidate);
-            if (isset($seen[$normalised])) {
-                continue;
-            }
-            $seen[$normalised] = true;
-
-            if (!isset($canonicalmap[$normalised])) {
-                $unknown[] = $candidate;
-                continue;
-            }
-
-            $indexedsubitems[] = $canonicalmap[$normalised];
-        }
-
-        return $indexedsubitems;
-    }
-
-    /**
-     * Parse subline sub-items (param4) into canonical labels from param1.
-     *
-     * @param string $rawsublinesubitems
-     * @param string[] $subitems
-     * @param array $unknown Receives the lines that name no configured sub-item.
-     * @param array $duplicates Receives the canonical sub-items listed more than once.
-     * @return string[]
-     */
-    private function parse_subline_subitems(
-        string $rawsublinesubitems,
-        array $subitems,
-        array &$unknown = [],
-        array &$duplicates = []
-    ): array {
-        $unknown = [];
-        $duplicates = [];
-        if (empty($subitems)) {
-            return [];
-        }
-
-        $canonicalmap = [];
-        foreach ($subitems as $subitem) {
-            $canonicalmap[\core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $sublinesubitems = [];
-        $seen = [];
-        $lines = preg_split('/\R/u', $rawsublinesubitems) ?: [];
-
-        foreach ($lines as $line) {
-            $candidate = trim($line);
-            if ($candidate === '') {
-                continue;
-            }
-
-            $normalised = \core_text::strtolower($candidate);
-            if (!isset($canonicalmap[$normalised])) {
-                $unknown[] = $candidate;
-                continue;
-            }
-
-            $canonical = $canonicalmap[$normalised];
-            if (isset($seen[$normalised])) {
-                $duplicates[] = $canonical;
-                continue;
-            }
-            $seen[$normalised] = true;
-
-            $sublinesubitems[] = $canonical;
-        }
-
-        return $sublinesubitems;
-    }
-
-    /**
-     * Parse sub-item/domain mapping definitions (subitem|domain).
-     *
-     * The four by-reference arrays receive the offending values of each error category.
-     *
-     * @param string $rawmappings
-     * @param string[] $subitems
-     * @param array $unknownsubitems
-     * @param array $invaliddomains
-     * @param array $duplicatesubitems
-     * @param array $formaterrors
-     * @return array Canonical sub-item => lower-case domain shortname.
-     */
-    private function parse_reference_mappings(
-        string $rawmappings,
-        array $subitems,
-        array &$unknownsubitems = [],
-        array &$invaliddomains = [],
-        array &$duplicatesubitems = [],
-        array &$formaterrors = []
-    ): array {
-        $unknownsubitems = [];
-        $invaliddomains = [];
-        $duplicatesubitems = [];
-        $formaterrors = [];
-
-        if (empty($subitems)) {
-            return [];
-        }
-
-        $canonicalmap = [];
-        foreach ($subitems as $subitem) {
-            $canonicalmap[core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $mappings = [];
-        $lines = preg_split('/\R/u', $rawmappings) ?: [];
-        foreach ($lines as $line) {
-            $error = $this->parse_single_mapping_line($line, $canonicalmap, $mappings);
-            if ($error === null) {
-                continue;
-            }
-
-            switch ($error['category']) {
-                case 'format':
-                    $formaterrors[] = $error['value'];
-                    break;
-                case 'unknown':
-                    $unknownsubitems[] = $error['value'];
-                    break;
-                case 'duplicate':
-                    $duplicatesubitems[] = $error['value'];
-                    break;
-                case 'invalid':
-                    $invaliddomains[] = $error['value'];
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        return $mappings;
-    }
-
-    /**
-     * Parse a single mapping line and either add to mappings or return an error descriptor.
-     *
-     * @param string $line
-     * @param array $canonicalmap Lower-case sub-item => canonical sub-item.
-     * @param array $mappings Receives canonical sub-item => domain on success.
-     * @return array|null Null on success or for a blank line; otherwise
-     *                    ['category' => 'format'|'unknown'|'duplicate'|'invalid', 'value' => string].
-     */
-    private function parse_single_mapping_line(string $line, array $canonicalmap, array &$mappings): ?array {
-        $line = trim($line);
-        if ($line === '') {
-            return null;
-        }
-
-        $validformat = (substr_count($line, '|') === 1);
-        if ($validformat) {
-            [$rawsubitem, $rawdomain] = array_map('trim', explode('|', $line, 2));
-            $validformat = ($rawsubitem !== '' && $rawdomain !== '');
-        }
-        if (!$validformat) {
-            return ['category' => 'format', 'value' => $line];
-        }
-
-        $normalisedsubitem = core_text::strtolower($rawsubitem);
-        $canonicalsubitem = $canonicalmap[$normalisedsubitem] ?? null;
-        $domain = core_text::strtolower($rawdomain);
-
-        $error = null;
-        if ($canonicalsubitem === null) {
-            $error = ['category' => 'unknown', 'value' => $rawsubitem];
-        } else if (isset($mappings[$canonicalsubitem])) {
-            $error = ['category' => 'duplicate', 'value' => $canonicalsubitem];
-        } else if (!preg_match(\profilefield_repeatable\helper::domain_pattern(), $domain)) {
-            $error = ['category' => 'invalid', 'value' => $rawdomain];
-        } else {
-            $mappings[$canonicalsubitem] = $domain;
-        }
-
-        return $error;
-    }
-
-    /**
-     * Encode mappings preserving sub-item declaration order.
-     *
-     * @param array $mappings
-     * @param string[] $subitems
-     * @return string
-     */
-    private function encode_reference_mappings(array $mappings, array $subitems): string {
-        if (empty($mappings) || empty($subitems)) {
-            return '';
-        }
-
-        $lines = [];
-        foreach ($subitems as $subitem) {
-            if (!isset($mappings[$subitem])) {
-                continue;
-            }
-            $lines[] = $subitem . '|' . $mappings[$subitem];
-        }
-
-        return implode("\n", $lines);
-    }
-
-    /**
-     * Return whether the companion dictionary plugin is present.
-     *
-     * @return bool
-     */
-    private function is_local_reference_plugin_available(): bool {
-        return class_exists('\local_dictionaries\resolver');
-    }
-
-    /**
-     * Return missing domain shortnames for current mapping.
-     *
-     * Asks the companion's public API; its visibility setting is irrelevant here, as the field only
-     * resolves codes and never lets anyone browse a domain.
-     *
-     * @param string[] $domains
-     * @return string[]
-     */
-    private function get_missing_reference_domains(array $domains): array {
-        $domains = array_values(array_unique(array_map(
-            static fn(string $domain): string => core_text::strtolower(trim($domain)),
-            $domains
-        )));
-        if (!class_exists('\local_dictionaries\resolver')) {
-            return $domains;
-        }
-
-        return array_values(array_filter(
-            $domains,
-            static fn(string $domain): bool => !\local_dictionaries\resolver::domain_exists($domain)
-        ));
     }
 }

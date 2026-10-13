@@ -4,11 +4,50 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- Columns holding stored values are locked on the server too: the definition form reads the
+  keys in use from the stored payloads (not the projection) and rejects a schema that removes or
+  re-keys one; the editor disables "Remove column" for them.
+- A stored schema is re-checked when read: a column with a bad or colliding key is dropped before
+  any SQL, index name or Report Builder identifier is built from it.
+- The 2.x upgrade is resumable (a half-converted field is finished on the next run), its
+  compare-and-set is exact on MariaDB's case- and accent-insensitive collation, and no generated
+  key equals another column's 2.x label, which would cross-wire the reads of label-keyed sets.
+
 ### Added
+- **Column schema v2**: a field's columns are one JSON schema in `param1`
+  (`{"version": 2, "columns": [...]}`), each column with a stable key, a label, a mode (`free`,
+  `dictionary`, `dictionary_open`; `pattern` is reserved), an optional domain and parent column,
+  and its role (title, subline, required, indexed). Values, Report Builder identifiers and index
+  names follow the key, so renaming a column no longer orphans its data.
+- A column editor in the field definition form (`amd/src/columneditor.js`) replaces the four text
+  lists: name, key (locked once users hold values under it), mode, dictionary picked from
+  `local_dictionaries`, parent column, roles with their limits, reordering. Without JavaScript the
+  schema is edited as JSON. Every broken rule is listed under it.
+- Per-column **required**: every set that has a value must fill the required columns; the field's
+  own "required" setting still means "at least one set".
+- Report Builder: free columns are `repeatable_<shortname>:<key>`, dictionary columns
+  `<key>_name` and `<key>_code`; column titles use the column name.
+- Privacy export lists each set's values under the column names, with the key appended when two
+  names collide, and exports values under names no current column reads under those names.
+- A field still on the 2.x lists opens in the definition form as its schema; saving it converts
+  it the way the upgrade does. The column editor lists domains through
+  `\local_dictionaries\api::list_domains()` (an older companion gives an empty list).
+- Upgrade step (3.0): converts every field's four lists into the schema (keys from the labels,
+  mapped columns as strict dictionaries, the first column as title), re-keys the stored payloads and
+  the projection, queues the index reconciliation, and renames the identifiers of saved reports,
+  filters, conditions and users' filter values. Fields with more than 500 values are finished by
+  the new ad hoc task `rekey_payloads`; until then readers accept both payload shapes.
+- A test data generator for repeatable fields.
 - Moodle 5.3 support: `$plugin->supported` is now `[405, 503]`, and CI runs the full PHP x database
   matrix on 5.3 (5.2 runs one database).
 
 ### Changed
+- `param2`..`param4` are no longer used and are cleared when a field is saved; the strings of the
+  four lists, of their errors and the unused `displaytableinfo`/`displaytablevalue` are removed.
+- The edit widget receives its columns (key, label, mode, required) in a data attribute and marks
+  required columns in the table header.
+- Indexed columns no longer need the ":", "?" and "$" check: keys cannot contain them.
 - Copyright headers carry the name only (no e-mail address); `amd/build` rebuilt for the edited
   module docblocks.
 - `.gitattributes` and `.stylelintrc.json` follow the fleet templates.

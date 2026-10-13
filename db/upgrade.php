@@ -25,6 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 require_once(__DIR__ . '/lib.php');
+require_once(__DIR__ . '/upgradelib.php');
 
 /**
  * Upgrade the plugin.
@@ -33,6 +34,11 @@ require_once(__DIR__ . '/lib.php');
  * @return bool
  */
 function xmldb_profilefield_repeatable_upgrade(int $oldversion): bool {
-    // No upgrade steps yet: install.xml and db/install.php create the table and its indexes.
+    if ($oldversion < 2026101301) {
+        // Column schema v2: one JSON schema in param1, payloads and report identifiers keyed by column key.
+        profilefield_repeatable_upgrade_to_schema_v2();
+        upgrade_plugin_savepoint(true, 2026101301, 'profilefield', 'repeatable');
+    }
+
     return true;
 }

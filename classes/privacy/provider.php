@@ -122,7 +122,8 @@ class provider implements
     /**
      * Export all user data in approved contexts.
      *
-     * Exports the JSON payload of each field; the projection rows are derived from it and are not
+     * Exports the sets of each field, each set's values under the column labels
+     * ({@see self::export_sets()}); the projection rows are derived from the payload and are not
      * exported.
      *
      * @param approved_contextlist $contextlist
@@ -139,7 +140,7 @@ class provider implements
                 $data = (object) [
                     'name' => $result->name,
                     'description' => $result->description,
-                    'data' => $result->data,
+                    'sets' => static::export_sets($result),
                 ];
 
                 /* One subcontext per field: a shared subcontext would make each
@@ -150,6 +151,90 @@ class provider implements
                 ], $data);
             }
         }
+    }
+
+    /**
+     * The sets of one stored payload, keyed "Set N", each mapping a column name to its value.
+     *
+     * Every stored set with a value is exported, read through the field's schema (so a payload
+     * not yet re-keyed exports the same way). Values stored under a name the schema no longer
+     * reads (a removed column) are exported under that raw name. A name already used in the set
+     * gets the key or the raw name appended, so no value overwrites another.
+     *
+     * @param \stdClass $record A {@see self::get_records()} row: data, fieldid, param1..param4.
+     * @return array
+     */
+    protected static function export_sets(\stdClass $record): array {
+        $schema = \profilefield_repeatable\local\schema::from_field((object)[
+            'id' => $record->fieldid,
+            'param1' => $record->param1,
+            'param2' => $record->param2,
+            'param3' => $record->param3,
+            'param4' => $record->param4,
+        ]);
+        $legacy = $schema->legacy_labels();
+        $context = \core\context\system::instance();
+        $decoded = json_decode((string)$record->data, true);
+
+        $sets = [];
+        foreach (is_array($decoded) ? $decoded : [] as $rawset) {
+            if (!is_array($rawset)) {
+                continue;
+            }
+            $values = [];
+            $read = [];
+            foreach ($schema->keys() as $key) {
+                $read[$key] = true;
+                if (isset($legacy[$key])) {
+                    $read[$legacy[$key]] = true;
+                }
+                $label = format_string($schema->label($key), true, ['context' => $context, 'escape' => false]);
+                $value = \profilefield_repeatable\helper::column_value($rawset, $key, $legacy[$key] ?? null);
+                $values[self::unique_name($values, $label, $key)] = self::export_value($value);
+            }
+            foreach ($rawset as $name => $value) {
+                if (!isset($read[$name])) {
+                    $values[self::unique_name($values, (string)$name, (string)$name)] = self::export_value($value);
+                }
+            }
+
+            if (array_filter($values, static fn(string $value): bool => trim($value) !== '')) {
+                $sets[get_string('repeatableset', 'profilefield_repeatable', count($sets) + 1)] = $values;
+            }
+        }
+
+        return $sets;
+    }
+
+    /**
+     * A name not yet used in an exported set: the name itself, else "name (suffix)", numbered if needed.
+     *
+     * @param array $values The set built so far.
+     * @param string $name
+     * @param string $suffix The column key or raw name.
+     * @return string
+     */
+    private static function unique_name(array $values, string $name, string $suffix): string {
+        $candidate = $name;
+        $counter = 1;
+        while (array_key_exists($candidate, $values)) {
+            $candidate = $name . ' (' . $suffix . ($counter > 1 ? ' ' . $counter : '') . ')';
+            $counter++;
+        }
+        return $candidate;
+    }
+
+    /**
+     * One stored value as exported text.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private static function export_value($value): string {
+        if ($value === null) {
+            return '';
+        }
+        return is_scalar($value) ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE);
     }
 
     /**
@@ -264,7 +349,7 @@ class provider implements
         global $DB;
 
         $sql = "SELECT uda.id, uda.userid, uda.fieldid, uda.data, uda.dataformat,
-                       uif.shortname, uif.name, uif.description
+                       uif.shortname, uif.name, uif.description, uif.param1, uif.param2, uif.param3, uif.param4
                   FROM {user_info_data} uda
                   JOIN {user_info_field} uif ON uda.fieldid = uif.id
                  WHERE uda.userid = :userid

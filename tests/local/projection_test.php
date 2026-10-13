@@ -86,7 +86,7 @@ final class projection_test extends \advanced_testcase {
             'name' => 'Record',
             'shortname' => 'record',
             'defaultdata' => '{}',
-            'param1' => "name\nrole",
+            'param1' => $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->schema_json(['name', 'role']),
         ]);
         $userid = (int)$this->getDataGenerator()->create_user()->id;
         $dataid = (int)$DB->insert_record('user_info_data', (object) [
@@ -111,7 +111,7 @@ final class projection_test extends \advanced_testcase {
         global $DB;
 
         $this->resetAfterTest();
-        $subitems = ['name', 'role'];
+        $subitems = schema::from_columns([['key' => 'name', 'label' => 'Name'], ['key' => 'role', 'label' => 'Role']]);
         [$dataid, $userid, $fieldid] = $this->user_with_payload('{"@@ID#1":{"name":"Old","role":""}}');
         $this->assertTrue(projection::reproject_record($dataid, $subitems));
 
@@ -138,7 +138,7 @@ final class projection_test extends \advanced_testcase {
         global $DB;
 
         $this->resetAfterTest();
-        $subitems = ['name', 'role'];
+        $subitems = schema::from_columns([['key' => 'name', 'label' => 'Name'], ['key' => 'role', 'label' => 'Role']]);
         [$dataid] = $this->user_with_payload('{"@@ID#1":{"name":"Same","role":""}}');
 
         $this->assertTrue(projection::reproject_record($dataid, $subitems));
@@ -156,7 +156,7 @@ final class projection_test extends \advanced_testcase {
         global $DB;
 
         $this->resetAfterTest();
-        $subitems = ['name', 'role'];
+        $subitems = schema::from_columns([['key' => 'name', 'label' => 'Name'], ['key' => 'role', 'label' => 'Role']]);
         [$dataid] = $this->user_with_payload('{"@@ID#1":{"name":"Same","role":""}}');
         $this->assertTrue(projection::reproject_record($dataid, $subitems));
         $before = $DB->get_records('profilefield_repeatable_data', ['dataid' => $dataid], 'id ASC');

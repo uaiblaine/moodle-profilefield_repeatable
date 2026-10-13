@@ -49,7 +49,12 @@ class reproject_sets extends scheduled_task {
     public function execute() {
         global $DB;
 
-        $fields = $DB->get_records('user_info_field', ['datatype' => 'repeatable'], 'id ASC', 'id, shortname, param1');
+        $fields = $DB->get_records(
+            'user_info_field',
+            ['datatype' => 'repeatable'],
+            'id ASC',
+            'id, shortname, param1, param2, param3, param4'
+        );
         foreach ($fields as $field) {
             $count = projection::reproject_field($field);
             if ($count > 0) {

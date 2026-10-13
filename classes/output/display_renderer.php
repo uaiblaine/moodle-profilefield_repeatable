@@ -20,8 +20,9 @@ namespace profilefield_repeatable\output;
  * Display renderer for repeatable profile fields.
  *
  * Renders an accordion on /user/profile.php and /user/view.php and a plain list elsewhere. Values
- * of a sub-item mapped to a dictionary domain (param3) show the companion dictionary plugin's
- * label when that plugin is installed, and the raw code otherwise.
+ * of a dictionary column show the companion dictionary plugin's label when that plugin is
+ * installed, and the raw code otherwise. Columns are read by key and shown under their label
+ * ({@see \profilefield_repeatable\local\schema}).
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine
@@ -37,8 +38,8 @@ class display_renderer {
     /** @var string Raw field data. */
     private string $data;
 
-    /** @var array|null Cached subitem/domain mapping. */
-    private ?array $subitemdomainmap = null;
+    /** @var \profilefield_repeatable\local\schema|null Column schema, read once. */
+    private ?\profilefield_repeatable\local\schema $schema = null;
 
     /** @var array Resolved labels keyed "<domain>\n<code>"; null caches a code with no label. */
     private array $resolveddisplaycache = [];
@@ -113,7 +114,7 @@ class display_renderer {
      */
     private function render_display_data_plain(array $displaysets): string {
         $context = \core\context\system::instance();
-        $subitems = $this->get_subitems();
+        $schema = $this->get_schema();
         $sets = [];
 
         foreach ($displaysets as $displayset) {
@@ -124,16 +125,16 @@ class display_renderer {
             }
 
             $parts = [];
-            foreach ($subitems as $subitem) {
-                $value = (string)($values[$subitem] ?? '');
+            foreach ($schema->keys() as $key) {
+                $value = (string)($values[$key] ?? '');
                 if (trim($value) === '') {
                     continue;
                 }
 
                 $parts[] = [
                     'hasseparator' => !empty($parts),
-                    'key' => format_string($subitem, true, ['context' => $context, 'escape' => false]),
-                    'value' => $this->resolve_reference_display_value($subitem, $value),
+                    'key' => format_string($schema->label($key), true, ['context' => $context, 'escape' => false]),
+                    'value' => $this->resolve_reference_display_value($key, $value),
                 ];
             }
 
@@ -182,14 +183,14 @@ class display_renderer {
      * Build accordion title data for one set.
      *
      * @param int $setnumber
-     * @param string $primarysubitem
+     * @param string $titlekey Key of the title column.
      * @param array $values
      * @return array
      */
-    private function build_accordion_title_data(int $setnumber, string $primarysubitem, array $values): array {
+    private function build_accordion_title_data(int $setnumber, string $titlekey, array $values): array {
         $primaryvalue = $this->resolve_reference_display_value(
-            $primarysubitem,
-            (string)($values[$primarysubitem] ?? '')
+            $titlekey,
+            (string)($values[$titlekey] ?? '')
         );
         $primaryvalue = trim($primaryvalue);
         if ($primaryvalue === '') {
@@ -208,14 +209,14 @@ class display_renderer {
     /**
      * Build subline parts (collapsed-only secondary line).
      *
-     * @param string[] $sublinesubitems
+     * @param string[] $sublinekeys
      * @param array $values
      * @return array{hassubline: bool, parts: array}
      */
-    private function build_accordion_subline(array $sublinesubitems, array $values): array {
+    private function build_accordion_subline(array $sublinekeys, array $values): array {
         $parts = [];
-        foreach ($sublinesubitems as $subitem) {
-            $value = $this->resolve_reference_display_value($subitem, (string)($values[$subitem] ?? ''));
+        foreach ($sublinekeys as $key) {
+            $value = $this->resolve_reference_display_value($key, (string)($values[$key] ?? ''));
             $value = trim($value);
             if ($value === '') {
                 continue;
@@ -233,21 +234,22 @@ class display_renderer {
     }
 
     /**
-     * Build accordion row data, one row per given sub-item (the caller leaves out the primary one).
+     * Build accordion row data, one row per given column (the caller leaves out the title one).
      *
-     * @param string[] $subitems
+     * @param string[] $keys
      * @param array $values
      * @return array
      */
-    private function build_accordion_rows(array $subitems, array $values): array {
+    private function build_accordion_rows(array $keys, array $values): array {
+        $schema = $this->get_schema();
         $rows = [];
-        foreach ($subitems as $subitem) {
+        foreach ($keys as $key) {
             $rows[] = [
-                'label' => format_string($subitem, true, [
+                'label' => format_string($schema->label($key), true, [
                     'context' => \core\context\system::instance(),
                     'escape' => false,
                 ]),
-                'value' => $this->resolve_reference_display_value($subitem, (string)($values[$subitem] ?? '')),
+                'value' => $this->resolve_reference_display_value($key, (string)($values[$key] ?? '')),
             ];
         }
 
@@ -261,14 +263,14 @@ class display_renderer {
      * @return array
      */
     private function build_accordion_template_context(array $displaysets): array {
-        $subitems = $this->get_subitems();
-        if (empty($subitems)) {
+        $schema = $this->get_schema();
+        $titlekey = $schema->title_key();
+        if ($titlekey === null) {
             return [];
         }
 
-        $primarysubitem = $subitems[0];
-        $othersubitems = array_slice($subitems, 1);
-        $sublinesubitems = $this->get_subline_subitems();
+        $otherkeys = array_values(array_diff($schema->keys(), [$titlekey]));
+        $sublinekeys = $schema->subline_keys();
         $accordionid = $this->get_display_accordion_id();
         $items = [];
 
@@ -283,9 +285,9 @@ class display_renderer {
 
             $bodyid = $accordionid . '-body-' . $setnumber;
             $isopen = ($index === 0);
-            $titledata = $this->build_accordion_title_data($setnumber, $primarysubitem, $values);
-            $sublinedata = $this->build_accordion_subline($sublinesubitems, $values);
-            $rows = $this->build_accordion_rows($othersubitems, $values);
+            $titledata = $this->build_accordion_title_data($setnumber, $titlekey, $values);
+            $sublinedata = $this->build_accordion_subline($sublinekeys, $values);
+            $rows = $this->build_accordion_rows($otherkeys, $values);
 
             $item = [
                 'setnumber' => $setnumber,
@@ -330,7 +332,7 @@ class display_renderer {
      * @return array
      */
     private function get_display_sets(): array {
-        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
+        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_schema());
         $displaysets = $this->convert_payload_to_display_sets($payload);
         if (empty($displaysets)) {
             return [];
@@ -440,23 +442,23 @@ class display_renderer {
     }
 
     /**
-     * Resolve a display value via local reference dictionary when mapped.
+     * Resolve a display value via local reference dictionary for a dictionary column.
      *
-     * @param string $subitem
+     * @param string $key Column key.
      * @param string $rawvalue
      * @return string
      */
-    private function resolve_reference_display_value(string $subitem, string $rawvalue): string {
+    private function resolve_reference_display_value(string $key, string $rawvalue): string {
         if (trim($rawvalue) === '') {
             return '';
         }
 
-        $domainmap = $this->get_subitem_domain_map();
-        if (!isset($domainmap[$subitem])) {
+        $domainmap = $this->get_schema()->domain_map();
+        if (!isset($domainmap[$key])) {
             return $rawvalue;
         }
 
-        $resolved = $this->try_resolve_from_domain($domainmap[$subitem], trim($rawvalue));
+        $resolved = $this->try_resolve_from_domain($domainmap[$key], trim($rawvalue));
         return $resolved ?? $rawvalue;
     }
 
@@ -502,7 +504,7 @@ class display_renderer {
             return;
         }
 
-        $domainmap = $this->get_subitem_domain_map();
+        $domainmap = $this->get_schema()->domain_map();
         if (empty($domainmap)) {
             return;
         }
@@ -510,8 +512,8 @@ class display_renderer {
         $codesbydomain = [];
         foreach ($displaysets as $set) {
             $values = (array)($set['values'] ?? []);
-            foreach ($domainmap as $subitem => $domain) {
-                $rawvalue = trim((string)($values[$subitem] ?? ''));
+            foreach ($domainmap as $key => $domain) {
+                $rawvalue = trim((string)($values[$key] ?? ''));
                 if ($rawvalue === '') {
                     continue;
                 }
@@ -539,75 +541,14 @@ class display_renderer {
     }
 
     /**
-     * Get configured subitem/domain mapping from param3.
+     * The field's column schema, read once.
      *
-     * @return array
+     * @return \profilefield_repeatable\local\schema
      */
-    private function get_subitem_domain_map(): array {
-        if ($this->subitemdomainmap !== null) {
-            return $this->subitemdomainmap;
+    private function get_schema(): \profilefield_repeatable\local\schema {
+        if ($this->schema === null) {
+            $this->schema = \profilefield_repeatable\local\schema::from_field((object)(array)$this->field);
         }
-
-        $rawmappings = (string)($this->field->param3 ?? '');
-        $this->subitemdomainmap = \profilefield_repeatable\helper::parse_subitem_domain_map(
-            $rawmappings,
-            $this->get_subitems()
-        );
-        return $this->subitemdomainmap;
-    }
-
-    /**
-     * Get configured sub-items.
-     *
-     * @return string[]
-     */
-    private function get_subitems(): array {
-        return \profilefield_repeatable\helper::parse_subitems((string)($this->field->param1 ?? ''));
-    }
-
-    /**
-     * Get configured subline sub-items (param4), filtered against current subitems and primary.
-     *
-     * Capped at 3, the limit profile_define_repeatable::MAX_SUBLINE_SUBITEMS enforces; keep in step.
-     *
-     * @return string[]
-     */
-    private function get_subline_subitems(): array {
-        $rawsubline = (string)($this->field->param4 ?? '');
-        if (trim($rawsubline) === '') {
-            return [];
-        }
-
-        $subitems = $this->get_subitems();
-        if (empty($subitems)) {
-            return [];
-        }
-
-        $canonicalmap = [];
-        foreach ($subitems as $subitem) {
-            $canonicalmap[\core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $primarynormalised = \core_text::strtolower($subitems[0]);
-        $sublinesubitems = [];
-        $seen = [];
-        $lines = preg_split('/\R/u', $rawsubline) ?: [];
-        foreach ($lines as $line) {
-            $candidate = trim($line);
-            if ($candidate === '') {
-                continue;
-            }
-            $normalised = \core_text::strtolower($candidate);
-            if ($normalised === $primarynormalised || isset($seen[$normalised]) || !isset($canonicalmap[$normalised])) {
-                continue;
-            }
-            $seen[$normalised] = true;
-            $sublinesubitems[] = $canonicalmap[$normalised];
-            if (count($sublinesubitems) >= 3) {
-                break;
-            }
-        }
-
-        return $sublinesubitems;
+        return $this->schema;
     }
 }

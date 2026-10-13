@@ -31,7 +31,7 @@ Motivation for this plugin
 Standard Moodle profile fields support only simple text values. This plugin provides:
 
 1. **Repeatable sets** — Store multiple related data values as structured records (e.g., language proficiencies, certifications, work experience)
-2. **Efficient indexing** — PostgreSQL GIN expression indexes on selected sub-items for fast queries
+2. **Efficient indexing** — PostgreSQL expression indexes on selected columns for fast queries
 3. **Reference resolution** — Optional mapping to external domains (via local_dictionaries) for rich display values
 4. **Backward compatibility** — Falls back to JSON storage in user_info_data when storage table unavailable
 5. **Privacy compliance** — Full GDPR export/delete support
@@ -56,26 +56,53 @@ After installing, navigate to **Site Administration > Plugins > Moodle plugins >
 ### Creating a Repeatable Field
 
 1. Click "Create a new profile field"
-2. Select type **Repeatable**
-3. Configure:
-   - **Field name** — Unique identifier (e.g., `languages`, `certifications`)
-   - **Field description** — Shown when editing profile
-   - **Sub-items** — Newline-delimited list of column names (required)
-     ```
-     Language
-     Proficiency
-     Certification
-     ```
-   - **Indexed sub-items** — (Optional) Mark up to 3 sub-items for PostgreSQL GIN indexing, for faster filtering
-     ```
-     Language
-     Proficiency
-     ```
-   - **Reference field mappings** — (Optional) Map sub-items to external domains for rich display
-     ```
-     Certification|local_certifications
-     Language|iso639
-     ```
+2. Select type **Repeatable set**
+3. Fill the common settings (short name, name, description, visibility) and define the
+   **Columns** in the column editor. Each column has:
+   - **Column name**: shown to users; multilang tags are allowed.
+   - **Key**: generated from the name (lowercase, accents folded, other characters as `_`;
+     `[a-z][a-z0-9_]{0,39}`). Values and saved reports are stored under the key, so renaming a
+     column later changes only its name. Once users have values under a key, the key is locked.
+   - **How users fill it**: *Free text*; *Dictionary, codes only*; or *Dictionary, any code*.
+     A dictionary column names a domain of the companion plugin `local_dictionaries` (picked from
+     its list when installed) and may **depend on** an earlier dictionary column. In this release
+     both dictionary modes are still typed as text; codes are shown with their names.
+   - **Role in the set**: exactly one column is the **title** of the set (the accordion header);
+     up to 3 others are shown in the **subline**; **required** columns must be filled in every set
+     that has any value; up to 3 columns are **indexed** on PostgreSQL.
+
+   Columns are reordered with the arrows, added with "Add column" (20 at most) and removed with
+   "Remove column". A column whose key holds stored values cannot be removed, and its key cannot
+   change: the form rejects such a schema, whatever was submitted.
+
+   **Required columns are checked by the profile form only.** Web services
+   (`core_user_create_users`, `core_user_update_users`), CSV upload and auth plugin sync save
+   through the field without its form validation, so a set they write may leave a required
+   column empty.
+
+Without JavaScript the columns are edited as the JSON schema the editor writes to `param1`:
+
+```json
+{"version": 2, "columns": [
+  {"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true, "indexed": true},
+  {"key": "level", "label": "Level", "mode": "dictionary_open", "domain": "cefr", "subline": true, "required": true},
+  {"key": "certificate_number", "label": "Certificate number", "mode": "free"}
+]}
+```
+
+A user's value is one JSON object of sets keyed by column key, e.g.
+`{"@@ID#1": {"language": "pt", "level": "C2", "certificate_number": "CEL-204871"}}`.
+
+### Upgrading from 2.x
+
+Version 2.x configured a field with four lists (sub-items, indexed sub-items, `subitem|domain`
+mappings, subline sub-items) and stored values under the sub-item labels. The upgrade to 3.0
+converts every field once: keys are generated from the labels, mapped sub-items become strict
+dictionary columns and the others free text, the first sub-item becomes the title, and the
+stored values, the Report Builder projection and saved reports (columns, filters, conditions and
+users' filter values) move to the keys. A field with more than 500 stored values is finished by an
+ad hoc task ("Re-key repeatable profile field values by column key"); until it runs, values stored
+under the old labels still show everywhere.
 
 ### Display Modes
 
@@ -97,13 +124,13 @@ Advanced Features
 
 ### PostgreSQL Expression Indexes
 
-On PostgreSQL, the plugin automatically creates expression indexes on indexed sub-items (up to 3 per field):
+On PostgreSQL, the plugin automatically creates expression indexes on the indexed columns (up to 3 per field):
 
 ```sql
-CREATE INDEX CONCURRENTLY pfrd_f{fieldid}_{subitem_hash}
-ON mdl_profilefield_repeatable_data (fieldid, ((data ->> '{subitem}')))
+CREATE INDEX CONCURRENTLY pfrd_f{fieldid}_{key_hash}
+ON mdl_profilefield_repeatable_data (fieldid, ((data ->> '{key}')))
 WHERE fieldid = {fieldid}
-  AND jsonb_exists(data, '{subitem}')
+  AND jsonb_exists(data, '{key}')
 ```
 
 The plugin also ensures a base JSONB GIN index for generic JSONB lookups:
@@ -128,14 +155,23 @@ This release keeps compatibility with the Moodle baseline while documenting newe
 
 ### Reference Resolution
 
-Sub-items can be mapped to reference domains kept by the companion plugin `local_dictionaries`:
+Dictionary columns store codes of a domain kept by the companion plugin `local_dictionaries`; the
+profile page and Report Builder show their names:
 
 ```text
-Language|iso639              → resolve('en', 'iso639') → 'English'
-Proficiency|cefrframework    → resolve('B2', 'cefrframework') → 'Upper-Intermediate'
+language (domain iso639): 'en' → 'English'
+level (domain cefr):      'B2' → 'Upper-Intermediate'
 ```
 
-The field calls the static class `\local_dictionaries\resolver` (`resolve()`, `resolve_bulk()`, `domain_exists()`); it is a class, not an interface.
+The field calls the static class `\local_dictionaries\resolver` (`resolve()`, `resolve_bulk()`,
+`domain_exists()`); the column editor lists the companion's domains.
+
+### Report Builder
+
+The "Repeatable profile field sets" source has one row per set. For each repeatable field it
+offers "Set number" and, per column, the value (free columns) or the name and the code
+(dictionary columns). Their identifiers follow the column key (`repeatable_<shortname>:<key>`,
+`<key>_name`, `<key>_code`), so renaming a column keeps saved reports working.
 
 
 API
@@ -151,8 +187,9 @@ split layout shown; drop `public/` on older layouts):
 vendor/bin/phpunit public/user/profile/field/repeatable/tests/
 ```
 
-Covered areas: field definition, storage upsert/read, display rendering,
-privacy export/delete, and deletion-cleanup observers.
+Covered areas: column schema and its validation, field definition, the 2.x upgrade, storage
+upsert/read, display rendering, Report Builder, privacy export/delete, and deletion-cleanup
+observers.
 
 
 Troubleshooting
@@ -164,7 +201,7 @@ Ensure the `profilefield_repeatable_data` table was created. Check upgrade logs 
 #### Indexes not created on PostgreSQL
 Index reconciliation runs as an **ad hoc task** queued whenever the field configuration is saved
 (it is not listed under Scheduled tasks). Check Site Administration > Server > Tasks > Ad hoc tasks
-(and the task logs) for recent runs, ensure the field has configured "Indexed sub-items" values,
+(and the task logs) for recent runs, ensure the field has columns marked "Index for reports",
 and verify PostgreSQL 13+ connectivity. Running cron processes the queue.
 
 #### MySQL/MariaDB behavior
@@ -176,7 +213,7 @@ expression indexes.
 #### Reference resolution not working
 1. Verify `moodle-local_dictionaries` is installed and the domain exists there
 2. Ensure the code exists in that domain (codes are matched case-insensitively)
-3. Check field's Third-party domain mappings configuration
+3. Check that the column is a dictionary column naming that domain
 
 
 Capabilities

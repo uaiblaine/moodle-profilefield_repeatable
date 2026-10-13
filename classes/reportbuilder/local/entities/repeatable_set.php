@@ -25,15 +25,17 @@ use core_reportbuilder\local\report\column;
 use core_reportbuilder\local\report\filter;
 use lang_string;
 use profilefield_repeatable\helper;
+use profilefield_repeatable\local\schema;
 
 /**
  * Report Builder entity exposing one repeatable profile field as one row per set.
  *
- * Each configured sub-item becomes a column and a filter; sub-items mapped to a
- * reference domain (param3) additionally expose a resolved-name column plus a
- * name filter whose options are the labels present in the data (filtering on the
- * stored code). The owning datasource joins the storage table per field so a user
- * with N sets yields N rows.
+ * Every column of the field's schema yields columns and filters named after its key, so renaming
+ * a column keeps saved reports working: a free column "<key>"; a dictionary column "<key>_name"
+ * (the companion's label, with an autocomplete filter over the codes present) and "<key>_code".
+ * {@see schema::report_identifiers()} names them; the 2.x upgrade maps the index-based names of
+ * version 1 onto them ({@see \profilefield_repeatable\local\migration}). The owning datasource
+ * joins the storage table per field so a user with N sets yields N rows.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine
@@ -79,15 +81,14 @@ class repeatable_set extends base {
      * @return base
      */
     public function initialise(): base {
-        $subitems = helper::parse_subitems((string)($this->field->param1 ?? ''));
-        $domainmap = helper::parse_subitem_domain_map((string)($this->field->param3 ?? ''), $subitems);
+        $schema = schema::from_field($this->field);
         $available = $this->is_field_visible();
 
-        foreach ($this->get_all_columns($subitems, $domainmap) as $column) {
+        foreach ($this->get_all_columns($schema) as $column) {
             $this->add_column($column->set_is_available($available));
         }
 
-        foreach ($this->get_all_filters($subitems, $domainmap) as $filter) {
+        foreach ($this->get_all_filters($schema) as $filter) {
             $this->add_filter($filter->set_is_available($available));
         }
 
@@ -116,20 +117,34 @@ class repeatable_set extends base {
     }
 
     /**
-     * Build all columns for the configured sub-items.
+     * The plain column title of a key: its label through format_string(), which core escapes.
      *
-     * @param string[] $subitems Canonical configured sub-items.
-     * @param array $domainmap Map of sub-item to reference domain (canonical sub-item => domain).
+     * @param schema $schema
+     * @param string $key
+     * @return string
+     */
+    private function column_label(schema $schema, string $key): string {
+        return format_string($schema->label($key), true, [
+            'context' => \core\context\system::instance(),
+            'escape' => false,
+        ]);
+    }
+
+    /**
+     * Build all columns for the schema's columns.
+     *
+     * @param schema $schema
      * @return column[]
      */
-    protected function get_all_columns(array $subitems, array $domainmap): array {
+    protected function get_all_columns(schema $schema): array {
         global $DB;
 
         $tablealias = $this->get_table_alias('profilefield_repeatable_data');
+        $domainmap = $schema->domain_map();
         $columns = [];
 
         $columns[] = (new column(
-            'setnumber',
+            schema::SETNUMBER_IDENTIFIER,
             new lang_string('setnumber', 'profilefield_repeatable'),
             $this->get_entity_name()
         ))
@@ -138,22 +153,24 @@ class repeatable_set extends base {
             ->add_field("{$tablealias}.set_id")
             ->set_is_sortable(true);
 
-        $index = 0;
-        foreach ($subitems as $subitem) {
-            $index++;
-            [$valuesql, $valueparams] = helper::sql_subitem_value(
+        foreach ($schema->keys() as $index => $key) {
+            $label = $this->column_label($schema, $key);
+            $identifiers = $schema->report_identifiers($key);
+            [$valuesql, $valueparams] = helper::sql_column_value(
                 $DB,
                 "{$tablealias}.data",
-                $subitem,
+                $schema,
+                $key,
+                database::generate_param_name(),
                 database::generate_param_name()
             );
 
-            if (isset($domainmap[$subitem])) {
-                $domain = $domainmap[$subitem];
+            if (!isset($identifiers['value'])) {
+                $domain = $domainmap[$key] ?? '';
 
                 $columns[] = (new column(
-                    'subitemname' . $index,
-                    new lang_string('columnsubitem', 'profilefield_repeatable', $subitem),
+                    $identifiers['name'],
+                    new lang_string('columnsubitemname', 'profilefield_repeatable', $label),
                     $this->get_entity_name()
                 ))
                     ->add_joins($this->get_joins())
@@ -161,19 +178,21 @@ class repeatable_set extends base {
                     ->add_field($valuesql, 'val' . $index, $valueparams)
                     ->set_is_sortable(true)
                     ->add_callback(static function (?string $value) use ($domain): string {
-                        return s(self::resolve_label($domain, $value));
+                        return s($domain === '' ? (string)$value : self::resolve_label($domain, $value));
                     });
 
-                [$codesql, $codeparams] = helper::sql_subitem_value(
+                [$codesql, $codeparams] = helper::sql_column_value(
                     $DB,
                     "{$tablealias}.data",
-                    $subitem,
+                    $schema,
+                    $key,
+                    database::generate_param_name(),
                     database::generate_param_name()
                 );
 
                 $columns[] = (new column(
-                    'subitemcode' . $index,
-                    new lang_string('columnsubitemcode', 'profilefield_repeatable', $subitem),
+                    $identifiers['code'],
+                    new lang_string('columnsubitemcode', 'profilefield_repeatable', $label),
                     $this->get_entity_name()
                 ))
                     ->add_joins($this->get_joins())
@@ -185,8 +204,8 @@ class repeatable_set extends base {
                     });
             } else {
                 $columns[] = (new column(
-                    'subitem' . $index,
-                    new lang_string('columnsubitem', 'profilefield_repeatable', $subitem),
+                    $identifiers['value'],
+                    new lang_string('columnsubitem', 'profilefield_repeatable', $label),
                     $this->get_entity_name()
                 ))
                     ->add_joins($this->get_joins())
@@ -203,65 +222,69 @@ class repeatable_set extends base {
     }
 
     /**
-     * Build all filters for the configured sub-items.
+     * Build all filters for the schema's columns.
      *
-     * @param string[] $subitems Canonical configured sub-items.
-     * @param array $domainmap Map of sub-item to reference domain (canonical sub-item => domain).
+     * @param schema $schema
      * @return filter[]
      */
-    protected function get_all_filters(array $subitems, array $domainmap): array {
+    protected function get_all_filters(schema $schema): array {
         global $DB;
 
         $tablealias = $this->get_table_alias('profilefield_repeatable_data');
         $fieldid = (int)$this->field->id;
+        $domainmap = $schema->domain_map();
         $filters = [];
 
         $filters[] = (new filter(
             number::class,
-            'setnumber',
+            schema::SETNUMBER_IDENTIFIER,
             new lang_string('setnumber', 'profilefield_repeatable'),
             $this->get_entity_name(),
             "{$tablealias}.set_id"
         ))
             ->add_joins($this->get_joins());
 
-        $index = 0;
-        foreach ($subitems as $subitem) {
-            $index++;
-            [$valuesql, $valueparams] = helper::sql_subitem_value(
+        foreach ($schema->keys() as $key) {
+            $label = $this->column_label($schema, $key);
+            $identifiers = $schema->report_identifiers($key);
+            [$valuesql, $valueparams] = helper::sql_column_value(
                 $DB,
                 "{$tablealias}.data",
-                $subitem,
+                $schema,
+                $key,
+                database::generate_param_name(),
                 database::generate_param_name()
             );
 
-            if (isset($domainmap[$subitem])) {
-                $domain = $domainmap[$subitem];
+            if (!isset($identifiers['value'])) {
+                $domain = $domainmap[$key] ?? '';
 
                 $filters[] = (new filter(
                     autocomplete::class,
-                    'subitemname' . $index,
-                    new lang_string('columnsubitemname', 'profilefield_repeatable', $subitem),
+                    $identifiers['name'],
+                    new lang_string('columnsubitemname', 'profilefield_repeatable', $label),
                     $this->get_entity_name(),
                     $valuesql,
                     $valueparams
                 ))
                     ->add_joins($this->get_joins())
-                    ->set_options_callback(static function () use ($fieldid, $subitem, $domain): array {
-                        return self::name_filter_options($fieldid, $subitem, $domain);
+                    ->set_options_callback(static function () use ($fieldid, $schema, $key, $domain): array {
+                        return self::name_filter_options($fieldid, $schema, $key, $domain);
                     });
 
-                [$codesql, $codeparams] = helper::sql_subitem_value(
+                [$codesql, $codeparams] = helper::sql_column_value(
                     $DB,
                     "{$tablealias}.data",
-                    $subitem,
+                    $schema,
+                    $key,
+                    database::generate_param_name(),
                     database::generate_param_name()
                 );
 
                 $filters[] = (new filter(
                     text::class,
-                    'subitemcode' . $index,
-                    new lang_string('columnsubitemcode', 'profilefield_repeatable', $subitem),
+                    $identifiers['code'],
+                    new lang_string('columnsubitemcode', 'profilefield_repeatable', $label),
                     $this->get_entity_name(),
                     $codesql,
                     $codeparams
@@ -270,8 +293,8 @@ class repeatable_set extends base {
             } else {
                 $filters[] = (new filter(
                     text::class,
-                    'subitem' . $index,
-                    new lang_string('columnsubitem', 'profilefield_repeatable', $subitem),
+                    $identifiers['value'],
+                    new lang_string('columnsubitem', 'profilefield_repeatable', $label),
                     $this->get_entity_name(),
                     $valuesql,
                     $valueparams
@@ -345,14 +368,22 @@ class repeatable_set extends base {
      * Labels are escaped here: core's autocomplete element prints option text unescaped.
      *
      * @param int $fieldid The profile field id.
-     * @param string $subitem Sub-item key whose codes are listed.
-     * @param string $domain Reference domain shortname.
+     * @param schema $schema The field's schema.
+     * @param string $key Column key whose codes are listed.
+     * @param string $domain Reference domain shortname; '' lists the codes unresolved.
      * @return array<string, string> Map of code to display label.
      */
-    protected static function name_filter_options(int $fieldid, string $subitem, string $domain): array {
+    protected static function name_filter_options(int $fieldid, schema $schema, string $key, string $domain): array {
         global $DB;
 
-        [$valuesql, $params] = helper::sql_subitem_value($DB, 'data', $subitem, database::generate_param_name());
+        [$valuesql, $params] = helper::sql_column_value(
+            $DB,
+            'data',
+            $schema,
+            $key,
+            database::generate_param_name(),
+            database::generate_param_name()
+        );
         $params['fieldid'] = $fieldid;
 
         $codes = $DB->get_fieldset_sql(
@@ -375,7 +406,7 @@ class repeatable_set extends base {
         }
 
         $labels = [];
-        if (class_exists('\local_dictionaries\resolver')) {
+        if ($domain !== '' && class_exists('\local_dictionaries\resolver')) {
             try {
                 $labels = \local_dictionaries\resolver::resolve_bulk($domain, array_values($cleancodes));
             } catch (\Throwable $e) {

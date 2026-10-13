@@ -25,9 +25,10 @@
 /**
  * Profile field holding repeatable sets of sub-item values.
  *
- * The canonical value is one JSON object in user_info_data.data, e.g.
- * {"@@ID#1": {"Language": "pt", "Level": "B2"}}; the per-set rows in profilefield_repeatable_data
- * are a projection for Report Builder ({@see \profilefield_repeatable\local\projection}).
+ * The canonical value is one JSON object in user_info_data.data, keyed by column key
+ * ({@see \profilefield_repeatable\local\schema}), e.g. {"@@ID#1": {"language": "pt", "level": "B2"}};
+ * the per-set rows in profilefield_repeatable_data are a projection for Report Builder
+ * ({@see \profilefield_repeatable\local\projection}).
  *
  * @package    profilefield_repeatable
  */
@@ -38,6 +39,9 @@ class profile_field_repeatable extends profile_field_base {
     /** @var string Hidden element identifier used by AMD init. */
     protected $hiddenid = '';
 
+    /** @var \profilefield_repeatable\local\schema|null Column schema, read once from the field record. */
+    protected $schema = null;
+
     /**
      * Adds elements for this field type to the edit form.
      *
@@ -47,17 +51,25 @@ class profile_field_repeatable extends profile_field_base {
      * placed under the widget, and a validation error keyed by the input name renders there.
      * The widget points at that error with aria-describedby.
      *
+     * The columns reach the AMD module in a data attribute, not in the js_call_amd() arguments,
+     * which core warns about past 1024 characters.
+     *
      * @param moodleform $mform
      */
     public function edit_field_add($mform) {
         global $OUTPUT;
 
         $context = \core\context\system::instance();
-        $subitems = $this->get_subitems();
-        $subitemdata = [];
-        foreach ($subitems as $subitem) {
-            // The template escapes: format_string() must hand it the plain spelling.
-            $subitemdata[] = ['name' => format_string($subitem, true, ['context' => $context, 'escape' => false])];
+        $schema = $this->get_schema();
+        $columns = [];
+        foreach ($schema->columns() as $column) {
+            // The template and the module escape: format_string() must hand them the plain spelling.
+            $columns[] = [
+                'key' => $column['key'],
+                'label' => format_string($schema->label($column['key']), true, ['context' => $context, 'escape' => false]),
+                'mode' => $column['mode'],
+                'required' => !empty($column['required']),
+            ];
         }
 
         $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
@@ -65,7 +77,12 @@ class profile_field_repeatable extends profile_field_base {
             'labelid' => $this->get_wrapper_id() . '-label',
             'errorid' => $this->get_error_id(),
             'wrapperid' => $this->get_wrapper_id(),
-            'subitems' => $subitemdata,
+            'columns' => $columns,
+            // The hex flags keep markup characters of a label out of the attribute, which the template escapes.
+            'columnsjson' => json_encode(
+                $columns,
+                JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+            ),
             'setcolumn' => get_string('setcolumn', 'profilefield_repeatable'),
             'actioncolumn' => get_string('actioncolumn', 'profilefield_repeatable'),
             'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
@@ -91,7 +108,7 @@ class profile_field_repeatable extends profile_field_base {
      * @param stdClass $user
      */
     public function edit_load_user_data($user) {
-        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
+        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_schema());
 
         $user->{$this->inputname} = \profilefield_repeatable\helper::encode_payload($payload);
     }
@@ -116,7 +133,6 @@ class profile_field_repeatable extends profile_field_base {
         $config = [
             'wrapperid' => $this->get_wrapper_id(),
             'hiddenid' => $this->get_hidden_id(),
-            'subitems' => $this->get_subitems(),
             'readonly' => $this->is_locked() && !has_capability('moodle/user:update', \core\context\system::instance()),
             'strings' => [
                 'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
@@ -156,7 +172,7 @@ class profile_field_repeatable extends profile_field_base {
             $processed = $this->field->defaultdata ?? '{}';
         }
 
-        $payload = \profilefield_repeatable\helper::normalise_payload($processed, $this->get_subitems());
+        $payload = \profilefield_repeatable\helper::normalise_payload($processed, $this->get_schema());
         $fallbackjson = \profilefield_repeatable\helper::encode_payload($payload);
 
         $data->userid = (int)$usernew->id;
@@ -194,7 +210,7 @@ class profile_field_repeatable extends profile_field_base {
      * @return string
      */
     public function edit_save_data_preprocess($data, $datarecord) {
-        $payload = \profilefield_repeatable\helper::normalise_payload($data, $this->get_subitems());
+        $payload = \profilefield_repeatable\helper::normalise_payload($data, $this->get_schema());
         return \profilefield_repeatable\helper::encode_payload($payload);
     }
 
@@ -225,9 +241,13 @@ class profile_field_repeatable extends profile_field_base {
             }
         }
 
-        $payload = \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
+        $payload = \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_schema());
         if ($this->is_required() && empty($payload)) {
             return [$this->inputname => get_string('required')];
+        }
+        $requirederror = $this->validate_required_columns($payload);
+        if ($requirederror !== null) {
+            return [$this->inputname => $requirederror];
         }
 
         // The parent's uniqueness check compares this value with stored data: give it the canonical
@@ -259,13 +279,15 @@ class profile_field_repeatable extends profile_field_base {
             );
         }
 
-        $subitems = array_fill_keys($this->get_subitems(), true);
+        // A value counts under every name the normaliser reads it from: the key and a legacy label.
+        $schema = $this->get_schema();
+        $sourcekeys = array_fill_keys(array_merge($schema->keys(), array_values($schema->legacy_labels())), true);
         foreach ($decoded as $setdata) {
             if (!is_array($setdata)) {
                 continue;
             }
-            foreach ($setdata as $subitem => $value) {
-                if (!isset($subitems[$subitem]) || !is_scalar($value)) {
+            foreach ($setdata as $sourcekey => $value) {
+                if (!isset($sourcekeys[$sourcekey]) || !is_scalar($value)) {
                     continue;
                 }
                 if (core_text::strlen((string)$value) > \profilefield_repeatable\helper::MAX_VALUE_LENGTH) {
@@ -282,12 +304,46 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
+     * Check that every set fills the columns flagged required.
+     *
+     * The field-level "required" setting asks for at least one set; this asks each set that
+     * has any value for every required column.
+     *
+     * @param array $payload Normalised payload.
+     * @return string|null Error naming the first set and column that fail, or null.
+     */
+    protected function validate_required_columns(array $payload): ?string {
+        $schema = $this->get_schema();
+        $requiredkeys = $schema->required_keys();
+        if (empty($requiredkeys)) {
+            return null;
+        }
+
+        $setnumber = 0;
+        foreach ($payload as $set) {
+            $setnumber++;
+            foreach ($requiredkeys as $key) {
+                if (trim((string)($set[$key] ?? '')) === '') {
+                    return get_string('errorcolumnrequired', 'profilefield_repeatable', (object)[
+                        'set' => $setnumber,
+                        'column' => format_string($schema->label($key), true, [
+                            'context' => \core\context\system::instance(),
+                        ]),
+                    ]);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Check if the field data is considered empty.
      *
      * @return bool
      */
     public function is_empty() {
-        return empty(\profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems()));
+        return empty(\profilefield_repeatable\helper::normalise_payload($this->data, $this->get_schema()));
     }
 
     /**
@@ -328,13 +384,16 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Get configured sub-items.
+     * The field's column schema, version 2 or a version 1 field read through its labels.
      *
-     * @return string[]
+     * @return \profilefield_repeatable\local\schema
      */
-    protected function get_subitems(): array {
-        $rawsubitems = (string)($this->field->param1 ?? '');
-        return \profilefield_repeatable\helper::parse_subitems($rawsubitems);
+    protected function get_schema(): \profilefield_repeatable\local\schema {
+        if ($this->schema === null) {
+            $this->schema = \profilefield_repeatable\local\schema::from_field($this->field ?? new stdClass());
+        }
+
+        return $this->schema;
     }
 
     /**

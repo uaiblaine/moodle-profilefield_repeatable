@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Define repeatable field columns</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f5f6f8}
+a{color:#0f6cbf}a:hover{color:#0a4d87}
+input,select,button{font-family:inherit;font-size:14px}
+input[type=text],select{height:36px;box-sizing:border-box;border:1px solid #8f959e;border-radius:6px;padding:0 10px;background:#fff;color:#1d2125;min-width:0}
+input[type=text]:focus,select:focus,button:focus-visible{outline:3px solid rgba(15,108,191,.35);outline-offset:1px}
+input[type=checkbox],input[type=radio]{width:18px;height:18px;margin:0;accent-color:#0f6cbf}
+</style>
+</helmet>
+<div style="font-family:'Noto Sans',system-ui,sans-serif;color:#1d2125;min-height:100%;background:#f5f6f8;font-size:14px;line-height:1.5">
+  <header style="background:#fff;border-bottom:1px solid #dee2e6">
+    <div style="max-width:1240px;margin:0 auto;padding:0 24px;height:60px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:20px;color:#f98012;letter-spacing:-0.5px">moodle</span>
+      <nav aria-label="Site" style="display:flex;gap:20px;flex-wrap:wrap">
+        <a href="#" style="color:#1d2125;text-decoration:none">Home</a>
+        <a href="#" style="color:#1d2125;text-decoration:none">Dashboard</a>
+        <a href="#" style="color:#1d2125;text-decoration:none">My courses</a>
+        <a href="#" style="color:#0f6cbf;text-decoration:none;font-weight:600;border-bottom:3px solid #0f6cbf;padding-bottom:16px;margin-bottom:-19px">Site administration</a>
+      </nav>
+    </div>
+  </header>
+
+  <main style="max-width:1240px;margin:0 auto;padding:24px">
+    <nav aria-label="Breadcrumb" style="font-size:13px;color:#5c6670;display:flex;gap:6px;flex-wrap:wrap">
+      <a href="#">Site administration</a><span aria-hidden="true">/</span>
+      <a href="#">Users</a><span aria-hidden="true">/</span>
+      <a href="#">User profile fields</a><span aria-hidden="true">/</span>
+      <span>Editing a repeatable field</span>
+    </nav>
+    <h1 style="font-size:28px;font-weight:700;margin:12px 0 4px">Language certificates</h1>
+    <p style="margin:0 0 20px;color:#5c6670">Repeatable set · shortname <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px">langcerts</span></p>
+
+    <sc-if value="{{hasdata}}" hint-placeholder-val="{{ true }}">
+      <div role="status" style="display:flex;gap:12px;align-items:flex-start;background:#e7f1fa;border:1px solid #9fc5e8;border-radius:8px;padding:12px 16px;margin-bottom:20px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0a4d87" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:2px"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+        <div style="color:#0a4d87"><strong>1,248 users have data in this field.</strong> Existing column keys are locked: renaming a column changes only its label and keeps the stored values. Removing a column hides its values; they stay stored until you purge them.</div>
+      </div>
+    </sc-if>
+
+    <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+      <section aria-labelledby="colhead" style="flex:999 1 640px;min-width:0;background:#fff;border:1px solid #dee2e6;border-radius:8px">
+        <div style="padding:16px 20px;border-bottom:1px solid #dee2e6;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 id="colhead" style="font-size:18px;margin:0">Columns</h2>
+            <p style="margin:2px 0 0;color:#5c6670;font-size:13px">Each set a user adds has one value per column. Drag order is the order users see.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px">
+            <span style="background:#f1f3f5;border-radius:12px;padding:3px 10px">Title: <strong>{{titlelabel}}</strong></span>
+            <span style="background:{{sublinebg}};color:{{sublinefg}};border-radius:12px;padding:3px 10px">Subline {{sublinecount}}/3</span>
+            <span style="background:{{indexedbg}};color:{{indexedfg}};border-radius:12px;padding:3px 10px">Indexed {{indexedcount}}/3</span>
+          </div>
+        </div>
+
+        <ol style="list-style:none;margin:0;padding:0">
+          <sc-for list="{{columns}}" as="col" hint-placeholder-count="5">
+            <li style="border-bottom:1px solid #eef0f2">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:{{col.rowbg}}">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <button type="button" aria-label="Move {{col.label}} up" onClick="{{col.moveup}}" disabled="{{col.isfirst}}" style="width:28px;height:22px;border:1px solid #dee2e6;background:#fff;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d2125" stroke-width="2.2" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg></button>
+                  <button type="button" aria-label="Move {{col.label}} down" onClick="{{col.movedown}}" disabled="{{col.islast}}" style="width:28px;height:22px;border:1px solid #dee2e6;background:#fff;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d2125" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+                </div>
+                <span style="width:26px;height:26px;border-radius:50%;background:#e9ecef;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;flex:none">{{col.number}}</span>
+                <button type="button" onClick="{{col.toggle}}" aria-expanded="{{col.openattr}}" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;cursor:pointer;padding:4px 0;display:flex;flex-direction:column;gap:2px">
+                  <span style="font-weight:600;font-size:15px;color:#1d2125">{{col.label}}</span>
+                  <span style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:#5c6670">
+                    <span style="font-family:ui-monospace,Menlo,monospace">{{col.key}}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{{col.modesummary}}</span>
+                  </span>
+                </button>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                  <sc-for list="{{col.chips}}" as="chip" hint-placeholder-count="2">
+                    <span style="font-size:12px;border-radius:10px;padding:2px 8px;background:{{chip.bg}};color:{{chip.fg}};font-weight:500">{{chip.text}}</span>
+                  </sc-for>
+                </div>
+                <button type="button" onClick="{{col.toggle}}" aria-label="Edit {{col.label}}" style="width:36px;height:36px;border:1px solid #dee2e6;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d2125" stroke-width="2" aria-hidden="true" style="transform:{{col.chevron}}"><path d="M6 9l6 6 6-6"></path></svg></button>
+              </div>
+
+              <sc-if value="{{col.open}}" hint-placeholder-val="{{ false }}">
+                <div style="padding:4px 20px 20px 86px;display:flex;flex-direction:column;gap:16px;background:#fbfcfd">
+                  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+                    <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Column name
+                      <input type="text" value="{{col.label}}" onInput="{{col.setlabel}}">
+                      <span style="font-weight:400;font-size:12px;color:#5c6670">Shown to users. Multilang tags allowed.</span>
+                    </label>
+                    <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Key
+                      <span style="display:flex;gap:6px;align-items:center">
+                        <input type="text" value="{{col.key}}" readonly="{{col.keylocked}}" onInput="{{col.setkey}}" style="flex:1;font-family:ui-monospace,Menlo,monospace;background:{{col.keybg}}">
+                        <sc-if value="{{col.keylocked}}" hint-placeholder-val="{{ true }}">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5c6670" stroke-width="2" role="img" aria-label="Locked"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 018 0v4"></path></svg>
+                        </sc-if>
+                      </span>
+                      <span style="font-weight:400;font-size:12px;color:#5c6670">{{col.keyhelp}}</span>
+                    </label>
+                  </div>
+
+                  <fieldset style="border:0;margin:0;padding:0">
+                    <legend style="font-weight:600;margin-bottom:8px">How users fill it</legend>
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+                      <sc-for list="{{col.modes}}" as="m" hint-placeholder-count="4">
+                        <label style="display:flex;gap:10px;align-items:flex-start;border:1px solid {{m.border}};background:{{m.bg}};border-radius:8px;padding:10px 12px;cursor:pointer">
+                          <input type="radio" name="mode-{{col.key}}" checked="{{m.checked}}" onChange="{{m.pick}}" style="margin-top:2px">
+                          <span style="display:flex;flex-direction:column"><span style="font-weight:600">{{m.label}}</span><span style="font-size:12px;color:#5c6670">{{m.help}}</span></span>
+                        </label>
+                      </sc-for>
+                    </div>
+                  </fieldset>
+
+                  <sc-if value="{{col.isdict}}" hint-placeholder-val="{{ true }}">
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;border:1px solid #dee2e6;border-radius:8px;padding:14px;background:#fff">
+                      <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Dictionary
+                        <select value="{{col.domain}}" onChange="{{col.setdomain}}">
+                          <sc-for list="{{domains}}" as="d" hint-placeholder-count="5">
+                            <option value="{{d.shortname}}">{{d.name}} — {{d.items}} items</option>
+                          </sc-for>
+                        </select>
+                        <span style="font-weight:400;font-size:12px;color:#5c6670">From local_dictionaries. <span style="background:{{col.visbg}};color:{{col.visfg}};border-radius:8px;padding:1px 7px;font-weight:500">{{col.vislabel}}</span></span>
+                      </label>
+                      <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Depends on
+                        <select value="{{col.parent}}" onChange="{{col.setparent}}">
+                          <option value="">— none —</option>
+                          <sc-for list="{{col.parentoptions}}" as="p" hint-placeholder-count="2">
+                            <option value="{{p.key}}">{{p.label}}</option>
+                          </sc-for>
+                        </select>
+                        <span style="font-weight:400;font-size:12px;color:#5c6670">Suggestions are filtered by the parent column's code, e.g. cities of the chosen state.</span>
+                      </label>
+                      <sc-if value="{{col.parentmismatch}}" hint-placeholder-val="{{ false }}">
+                        <p role="alert" style="grid-column:1 / -1;margin:0;color:#ca3120;font-size:13px">The chosen parent column does not use the parent dictionary of “{{col.domainname}}”.</p>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{col.ispattern}}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:12px;border:1px solid #dee2e6;border-radius:8px;padding:14px;background:#fff">
+                      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+                        <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Preset
+                          <select value="{{col.preset}}" onChange="{{col.setpreset}}">
+                            <option value="none">None (regex only)</option>
+                            <option value="cpf">CPF</option>
+                            <option value="cnpj">CNPJ (alphanumeric)</option>
+                            <option value="cep">CEP</option>
+                            <option value="phone_br">Brazilian phone</option>
+                            <option value="custom">Custom mask</option>
+                          </select>
+                        </label>
+                        <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Mask
+                          <input type="text" value="{{col.maskvalue}}" readonly="{{col.maskreadonly}}" onInput="{{col.setmask}}" style="font-family:ui-monospace,Menlo,monospace;background:{{col.maskbg}}">
+                        </label>
+                        <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Store as
+                          <select value="{{col.storeformat}}" onChange="{{col.setstore}}">
+                            <option value="masked">Masked (123.456.789-09)</option>
+                            <option value="raw">Raw (12345678909)</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label style="display:flex;flex-direction:column;gap:4px;font-weight:600">Regular expression <span style="font-weight:400;color:#5c6670">(optional, anchored to the whole value)</span>
+                        <input type="text" value="{{col.regex}}" onInput="{{col.setregex}}" style="font-family:ui-monospace,Menlo,monospace" placeholder="e.g. [A-Z]{3}-\d{6}">
+                      </label>
+                      <p style="margin:0;font-size:12px;color:#5c6670">Tokens: <strong>9</strong> digit · <strong>A</strong> letter · <strong>*</strong> letter or digit · alternatives separated by <strong>|</strong>. Rules come from customfield_pattern; on Moodle 4.5 this mode is not offered.</p>
+                    </div>
+                  </sc-if>
+
+                  <fieldset style="border:0;margin:0;padding:0">
+                    <legend style="font-weight:600;margin-bottom:8px">Role in the set</legend>
+                    <div style="display:flex;gap:20px;flex-wrap:wrap">
+                      <label style="display:flex;gap:8px;align-items:center"><input type="radio" name="titlecol" checked="{{col.title}}" onChange="{{col.settitle}}"> Title of the set</label>
+                      <label style="display:flex;gap:8px;align-items:center;color:{{col.sublinefg}}"><input type="checkbox" checked="{{col.subline}}" disabled="{{col.sublinedisabled}}" onChange="{{col.togglesubline}}"> Show in subline</label>
+                      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" checked="{{col.required}}" onChange="{{col.togglerequired}}"> Required</label>
+                      <label style="display:flex;gap:8px;align-items:center;color:{{col.indexedfg}}"><input type="checkbox" checked="{{col.indexed}}" disabled="{{col.indexeddisabled}}" onChange="{{col.toggleindexed}}"> Index for reports <span style="font-size:12px;color:#5c6670">(PostgreSQL)</span></label>
+                    </div>
+                  </fieldset>
+
+                  <div style="display:flex;justify-content:flex-end">
+                    <button type="button" onClick="{{col.remove}}" style="border:1px solid #ca3120;color:#ca3120;background:#fff;border-radius:6px;padding:7px 14px;cursor:pointer;display:flex;gap:6px;align-items:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"></path></svg>Remove column</button>
+                  </div>
+                </div>
+              </sc-if>
+            </li>
+          </sc-for>
+        </ol>
+
+        <div style="padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <button type="button" onClick="{{addcolumn}}" style="border:1px solid #0f6cbf;color:#0f6cbf;background:#fff;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:600;display:flex;gap:6px;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add column</button>
+          <span style="font-size:13px;color:#5c6670">{{columncount}} of 20 columns</span>
+        </div>
+      </section>
+
+      <aside aria-labelledby="prevhead" style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:16px">
+        <section style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px">
+          <h2 id="prevhead" style="font-size:16px;margin:0 0 4px">Preview: what users see</h2>
+          <p style="margin:0 0 12px;font-size:13px;color:#5c6670">One row per set while editing the profile.</p>
+          <div style="overflow-x:auto;border:1px solid #dee2e6;border-radius:6px">
+            <table style="border-collapse:collapse;width:100%;font-size:13px">
+              <thead><tr>
+                <sc-for list="{{columns}}" as="col" hint-placeholder-count="5">
+                  <th scope="col" style="text-align:left;padding:8px;background:#f1f3f5;border-bottom:1px solid #dee2e6;white-space:nowrap">{{col.label}}<sc-if value="{{col.required}}" hint-placeholder-val="{{ false }}"><span style="color:#ca3120" aria-label="required"> *</span></sc-if></th>
+                </sc-for>
+              </tr></thead>
+              <tbody><tr>
+                <sc-for list="{{columns}}" as="col" hint-placeholder-count="5">
+                  <td style="padding:8px;border-bottom:1px solid #eef0f2;white-space:nowrap;color:#5c6670">
+                    <span style="display:inline-flex;gap:6px;align-items:center;border:1px solid #c4c8cc;border-radius:5px;padding:4px 8px;background:#fff">{{col.previewtext}}<sc-if value="{{col.isdict}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5c6670" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></sc-if></span>
+                  </td>
+                </sc-for>
+              </tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px">
+          <h2 style="font-size:16px;margin:0 0 8px">Stored schema</h2>
+          <p style="margin:0 0 8px;font-size:13px;color:#5c6670">Saved in <code>param1</code> as JSON; payloads are keyed by column key, never by name.</p>
+          <pre style="margin:0;background:#1d2125;color:#e9ecef;border-radius:6px;padding:12px;font-size:12px;line-height:1.45;overflow-x:auto;white-space:pre">{{schemajson}}</pre>
+        </section>
+      </aside>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap">
+      <button type="button" style="background:#0f6cbf;color:#fff;border:0;border-radius:6px;padding:10px 20px;font-weight:600;cursor:pointer">Save changes</button>
+      <button type="button" style="background:#e9ecef;color:#1d2125;border:0;border-radius:6px;padding:10px 20px;cursor:pointer">Cancel</button>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hasdata":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":1640}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      open: 4,
+      columns: [
+        {key: 'language', label: 'Language', mode: 'dictionary', domain: 'iso639', parent: '', preset: 'none', mask: '', regex: '', storeformat: 'masked', title: true, subline: false, required: true, indexed: true, existing: true},
+        {key: 'level', label: 'Level', mode: 'dictionary_open', domain: 'cefr_levels', parent: '', preset: 'none', mask: '', regex: '', storeformat: 'masked', title: false, subline: true, required: true, indexed: false, existing: true},
+        {key: 'certificate', label: 'Certificate number', mode: 'pattern', domain: 'iso639', parent: '', preset: 'custom', mask: 'AAA-999999', regex: '', storeformat: 'masked', title: false, subline: false, required: false, indexed: true, existing: true},
+        {key: 'state', label: 'Issuing state', mode: 'dictionary', domain: 'br_uf', parent: '', preset: 'none', mask: '', regex: '', storeformat: 'masked', title: false, subline: true, required: false, indexed: false, existing: true},
+        {key: 'city', label: 'Issuing city', mode: 'dictionary', domain: 'br_municipios', parent: 'state', preset: 'none', mask: '', regex: '', storeformat: 'masked', title: false, subline: false, required: false, indexed: false, existing: false}
+      ]
+    };
+  }
+
+  update(i, patch) {
+    const columns = this.state.columns.map((c, j) => (j === i ? Object.assign({}, c, patch) : c));
+    this.setState({columns: columns});
+  }
+
+  slug(text) {
+    return String(text).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'column';
+  }
+
+  renderVals() {
+    const hasdata = this.props.hasdata ?? true;
+    const domains = [
+      {shortname: 'iso639', name: 'Languages (ISO 639-1)', items: '184', open: true, parent: ''},
+      {shortname: 'cefr_levels', name: 'CEFR levels', items: '6', open: true, parent: ''},
+      {shortname: 'br_uf', name: 'Brazilian states (UF)', items: '27', open: true, parent: ''},
+      {shortname: 'br_municipios', name: 'Brazilian municipalities (IBGE)', items: '5,570', open: true, parent: 'br_uf'},
+      {shortname: 'exam_bodies', name: 'Exam bodies', items: '42', open: false, parent: ''}
+    ];
+    const byshort = {};
+    domains.forEach((d) => { byshort[d.shortname] = d; });
+    const presetmasks = {cpf: '999.999.999-99', cnpj: '**.***.***/****-99', cep: '99999-999', phone_br: '(99) 9999-9999|(99) 99999-9999', none: ''};
+    const modeinfo = [
+      {value: 'free', label: 'Free text', help: 'Any text up to 1,024 characters.'},
+      {value: 'dictionary', label: 'Dictionary, codes only', help: 'Pick from the list; stores the code, shows the name.'},
+      {value: 'dictionary_open', label: 'Dictionary, any code', help: 'Suggests from the list but accepts a new code.'},
+      {value: 'pattern', label: 'Pattern', help: 'Mask and/or regular expression (customfield_pattern).'}
+    ];
+    const cols = this.state.columns;
+    const indexedcount = cols.filter((c) => c.indexed).length;
+    const sublinecount = cols.filter((c) => c.subline).length;
+    const titlecol = cols.find((c) => c.title);
+    const self = this;
+
+    const columns = cols.map((c, i) => {
+      const isdict = c.mode === 'dictionary' || c.mode === 'dictionary_open';
+      const dom = byshort[c.domain] || domains[0];
+      const parentcol = cols.find((p) => p.key === c.parent);
+      const parentmismatch = isdict && !!parentcol && (!dom.parent || parentcol.domain !== dom.parent);
+      const modelabel = (modeinfo.find((m) => m.value === c.mode) || modeinfo[0]).label;
+      let modesummary = modelabel;
+      if (isdict) {
+        modesummary = modelabel + ' · ' + dom.shortname + (parentcol ? ' (by ' + parentcol.label + ')' : '');
+      } else if (c.mode === 'pattern') {
+        modesummary = 'Pattern · ' + (c.preset === 'custom' ? c.mask : c.preset.toUpperCase());
+      }
+      const chips = [];
+      if (c.title) { chips.push({text: 'Title', bg: '#0f6cbf', fg: '#fff'}); }
+      if (c.subline) { chips.push({text: 'Subline', bg: '#e9ecef', fg: '#1d2125'}); }
+      if (c.required) { chips.push({text: 'Required', bg: '#fbe4e1', fg: '#8a1f12'}); }
+      if (c.indexed) { chips.push({text: 'Indexed', bg: '#e3f1e2', fg: '#1f4d1d'}); }
+      if (!c.existing) { chips.push({text: 'New', bg: '#fff1d6', fg: '#6b4500'}); }
+      const keylocked = hasdata && c.existing;
+      let previewtext = 'Text';
+      if (isdict) { previewtext = 'Search ' + c.label.toLowerCase(); }
+      if (c.mode === 'pattern') { previewtext = c.preset === 'custom' ? c.mask : (presetmasks[c.preset] || 'Text').split('|')[0]; }
+      const open = this.state.open === i;
+      return {
+        key: c.key, label: c.label, number: String(i + 1), modesummary: modesummary, chips: chips,
+        open: open, openattr: open ? 'true' : 'false', chevron: open ? 'rotate(180deg)' : 'none',
+        rowbg: open ? '#f4f8fc' : '#fff',
+        isfirst: i === 0, islast: i === cols.length - 1,
+        keylocked: keylocked, keybg: keylocked ? '#f1f3f5' : '#fff',
+        keyhelp: keylocked ? 'Locked: 1,248 users have values under this key.' : 'Generated from the name; letters, digits and _ only.',
+        isdict: isdict, ispattern: c.mode === 'pattern',
+        domain: c.domain, domainname: dom.name, parent: c.parent,
+        vislabel: dom.open ? 'Searchable by any logged-in user' : 'Restricted: users without the view capability cannot search it',
+        visbg: dom.open ? '#e3f1e2' : '#fff1d6', visfg: dom.open ? '#1f4d1d' : '#6b4500',
+        parentoptions: cols.filter((p, j) => j < i && (p.mode === 'dictionary' || p.mode === 'dictionary_open')).map((p) => ({key: p.key, label: p.label})),
+        parentmismatch: parentmismatch,
+        preset: c.preset, storeformat: c.storeformat, regex: c.regex,
+        maskvalue: c.preset === 'custom' ? c.mask : (presetmasks[c.preset] || ''),
+        maskreadonly: c.preset !== 'custom', maskbg: c.preset === 'custom' ? '#fff' : '#f1f3f5',
+        title: c.title, subline: c.subline, required: c.required, indexed: c.indexed,
+        sublinedisabled: c.title || (!c.subline && sublinecount >= 3),
+        sublinefg: c.title ? '#8f959e' : '#1d2125',
+        indexeddisabled: !c.indexed && indexedcount >= 3,
+        indexedfg: !c.indexed && indexedcount >= 3 ? '#8f959e' : '#1d2125',
+        previewtext: previewtext,
+        modes: modeinfo.map((m) => ({
+          label: m.label, help: m.help, checked: c.mode === m.value,
+          border: c.mode === m.value ? '#0f6cbf' : '#dee2e6', bg: c.mode === m.value ? '#e7f1fa' : '#fff',
+          pick: () => self.update(i, {mode: m.value})
+        })),
+        toggle: () => self.setState({open: open ? -1 : i}),
+        setlabel: (e) => {
+          const label = e.target.value;
+          const patch = {label: label};
+          if (!keylocked) { patch.key = self.slug(label); }
+          self.update(i, patch);
+        },
+        setkey: (e) => { if (!keylocked) { self.update(i, {key: self.slug(e.target.value)}); } },
+        setdomain: (e) => self.update(i, {domain: e.target.value}),
+        setparent: (e) => self.update(i, {parent: e.target.value}),
+        setpreset: (e) => self.update(i, {preset: e.target.value}),
+        setmask: (e) => self.update(i, {mask: e.target.value}),
+        setregex: (e) => self.update(i, {regex: e.target.value}),
+        setstore: (e) => self.update(i, {storeformat: e.target.value}),
+        settitle: () => self.setState({columns: cols.map((x, j) => Object.assign({}, x, {title: j === i, subline: j === i ? false : x.subline}))}),
+        togglesubline: () => self.update(i, {subline: !c.subline}),
+        togglerequired: () => self.update(i, {required: !c.required}),
+        toggleindexed: () => self.update(i, {indexed: !c.indexed}),
+        moveup: () => {
+          if (i === 0) { return; }
+          const next = cols.slice(); const t = next[i - 1]; next[i - 1] = next[i]; next[i] = t;
+          self.setState({columns: next, open: i - 1});
+        },
+        movedown: () => {
+          if (i === cols.length - 1) { return; }
+          const next = cols.slice(); const t = next[i + 1]; next[i + 1] = next[i]; next[i] = t;
+          self.setState({columns: next, open: i + 1});
+        },
+        remove: () => self.setState({columns: cols.filter((x, j) => j !== i), open: -1})
+      };
+    });
+
+    const schema = {
+      version: 2,
+      columns: cols.map((c) => {
+        const o = {key: c.key, label: c.label, mode: c.mode};
+        if (c.mode === 'dictionary' || c.mode === 'dictionary_open') {
+          o.domain = c.domain;
+          if (c.parent) { o.parent = c.parent; }
+        }
+        if (c.mode === 'pattern') {
+          o.pattern = {preset: c.preset, mask: c.preset === 'custom' ? c.mask : '', regex: c.regex, storeformat: c.storeformat};
+        }
+        if (c.title) { o.title = true; }
+        if (c.subline) { o.subline = true; }
+        if (c.required) { o.required = true; }
+        if (c.indexed) { o.indexed = true; }
+        return o;
+      })
+    };
+
+    return {
+      hasdata: hasdata,
+      domains: domains,
+      columns: columns,
+      columncount: String(cols.length),
+      titlelabel: titlecol ? titlecol.label : 'none',
+      indexedcount: String(indexedcount), sublinecount: String(sublinecount),
+      indexedbg: indexedcount >= 3 ? '#fff1d6' : '#f1f3f5', indexedfg: indexedcount >= 3 ? '#6b4500' : '#1d2125',
+      sublinebg: sublinecount >= 3 ? '#fff1d6' : '#f1f3f5', sublinefg: sublinecount >= 3 ? '#6b4500' : '#1d2125',
+      schemajson: JSON.stringify(schema, null, 2),
+      addcolumn: () => {
+        const n = cols.length + 1;
+        let key = 'column_' + n;
+        while (cols.some((c) => c.key === key)) { key = key + '_'; }
+        self.setState({
+          columns: cols.concat([{key: key, label: 'Column ' + n, mode: 'free', domain: 'iso639', parent: '', preset: 'none', mask: '', regex: '', storeformat: 'masked', title: false, subline: false, required: false, indexed: false, existing: false}]),
+          open: cols.length
+        });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

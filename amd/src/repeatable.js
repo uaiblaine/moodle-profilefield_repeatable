@@ -27,7 +27,7 @@ const SELECTORS = {
     setTitle: '[data-region="set-title"]',
     removeSet: '[data-action="removeset"]',
     addSet: '[data-action="addset"]',
-    input: 'input[data-subitem]'
+    input: 'input[data-key]'
 };
 
 /**
@@ -42,11 +42,11 @@ const renderSetTitle = (template, index) => template.replace('{no}', String(inde
 /**
  * Build one empty set row node to be used as cloning template.
  *
- * @param {Array} subitems
+ * @param {Array} columns Objects with key, label and required.
  * @param {Object} strings
  * @returns {HTMLElement}
  */
-const createSetTemplate = (subitems, strings) => {
+const createSetTemplate = (columns, strings) => {
     const row = document.createElement('tr');
     row.dataset.region = 'set';
     row.className = 'profilefield-repeatable-set';
@@ -61,19 +61,24 @@ const createSetTemplate = (subitems, strings) => {
     titlecell.appendChild(title);
     row.appendChild(titlecell);
 
-    subitems.forEach((subitem) => {
+    columns.forEach((column) => {
         const cell = document.createElement('td');
         cell.className = 'align-middle';
 
         const label = document.createElement('label');
         label.className = 'accesshide';
         label.dataset.region = 'subitem-label';
-        label.textContent = subitem;
+        label.textContent = column.label;
 
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'form-control';
-        input.dataset.subitem = subitem;
+        input.dataset.key = column.key;
+        input.dataset.label = column.label;
+        if (column.required) {
+            // Not the required attribute: it would block the submit of a set left empty on purpose.
+            input.setAttribute('aria-required', 'true');
+        }
 
         cell.appendChild(label);
         cell.appendChild(input);
@@ -131,7 +136,7 @@ const updateSetMetadata = (wrapper, hiddenid, titletemplate) => {
                 label.setAttribute('for', id);
             }
 
-            input.setAttribute('aria-label', `${String(input.dataset.subitem)} (${renderedtitle})`);
+            input.setAttribute('aria-label', `${String(input.dataset.label)} (${renderedtitle})`);
         });
     });
 };
@@ -148,7 +153,7 @@ const cloneSetFromTemplate = (template, values = {}) => {
     const inputs = Array.from(node.querySelectorAll(SELECTORS.input));
 
     inputs.forEach((input) => {
-        const key = input.dataset.subitem;
+        const key = input.dataset.key;
         input.value = Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : '';
     });
 
@@ -166,11 +171,11 @@ const hasSetValue = (setvalues) => Object.values(setvalues).some((value) => Stri
 /**
  * Parse current hidden JSON to list of set objects.
  *
- * @param {String} rawpayload
- * @param {Array} subitems
+ * @param {String} rawpayload Payload keyed by column key, as the server normalised it.
+ * @param {Array} keys Column keys.
  * @returns {Array}
  */
-const parsePayloadToSetList = (rawpayload, subitems) => {
+const parsePayloadToSetList = (rawpayload, keys) => {
     if (!rawpayload || typeof rawpayload !== 'string') {
         return [];
     }
@@ -189,9 +194,9 @@ const parsePayloadToSetList = (rawpayload, subitems) => {
             }
 
             const normalisedset = {};
-            subitems.forEach((subitem) => {
-                const value = Object.prototype.hasOwnProperty.call(setdata, subitem) ? setdata[subitem] : '';
-                normalisedset[subitem] = value === null || value === undefined ? '' : String(value);
+            keys.forEach((key) => {
+                const value = Object.prototype.hasOwnProperty.call(setdata, key) ? setdata[key] : '';
+                normalisedset[key] = value === null || value === undefined ? '' : String(value);
             });
 
             if (hasSetValue(normalisedset)) {
@@ -209,10 +214,10 @@ const parsePayloadToSetList = (rawpayload, subitems) => {
  * Build strict JSON object with @@ID#N keys from current DOM.
  *
  * @param {HTMLElement} wrapper
- * @param {Array} subitems
+ * @param {Array} keys Column keys.
  * @returns {Object}
  */
-const buildPayloadFromDom = (wrapper, subitems) => {
+const buildPayloadFromDom = (wrapper, keys) => {
     const payload = {};
     let index = 1;
 
@@ -222,11 +227,11 @@ const buildPayloadFromDom = (wrapper, subitems) => {
         const valuesbykey = {};
 
         Array.from(set.querySelectorAll(SELECTORS.input)).forEach((input) => {
-            valuesbykey[input.dataset.subitem] = String(input.value);
+            valuesbykey[input.dataset.key] = String(input.value);
         });
 
-        subitems.forEach((subitem) => {
-            setvalues[subitem] = Object.prototype.hasOwnProperty.call(valuesbykey, subitem) ? valuesbykey[subitem] : '';
+        keys.forEach((key) => {
+            setvalues[key] = Object.prototype.hasOwnProperty.call(valuesbykey, key) ? valuesbykey[key] : '';
         });
 
         if (!hasSetValue(setvalues)) {
@@ -284,15 +289,31 @@ const applyReadonlyState = (wrapper) => {
 };
 
 /**
+ * Read the columns the server put on the wrapper.
+ *
+ * @param {HTMLElement} wrapper
+ * @returns {Array} Objects with key, label and required; empty when the attribute is unreadable.
+ */
+const readColumns = (wrapper) => {
+    try {
+        const columns = JSON.parse(wrapper.dataset.columns || '[]');
+        return Array.isArray(columns) ? columns.filter((column) => column && typeof column.key === 'string') : [];
+    } catch (_e) {
+        return [];
+    }
+};
+
+/**
  * Initialise repeatable field UI.
  *
  * Reads the payload from the hidden input once and writes it back from the widget when the form is
  * submitted, dropping sets with no value. Safe to call once per field on a form holding several.
+ * The columns come from the wrapper's data-columns attribute (profile_field_repeatable::edit_field_add()).
  *
- * @param {Object} config From profile_field_repeatable::edit_after_data(): wrapperid, hiddenid, subitems, readonly, strings.
+ * @param {Object} config From profile_field_repeatable::edit_after_data(): wrapperid, hiddenid, readonly, strings.
  */
 export const init = (config) => {
-    if (!config || !config.wrapperid || !config.hiddenid || !Array.isArray(config.subitems)) {
+    if (!config || !config.wrapperid || !config.hiddenid) {
         return;
     }
 
@@ -318,10 +339,11 @@ export const init = (config) => {
         repeatableset: config.strings && config.strings.repeatableset ? config.strings.repeatableset : 'Set {no}'
     };
 
-    const subitems = config.subitems.map((item) => String(item).trim()).filter((item) => item !== '');
-    const settemplate = createSetTemplate(subitems, strings);
+    const columns = readColumns(wrapper);
+    const keys = columns.map((column) => column.key);
+    const settemplate = createSetTemplate(columns, strings);
 
-    const existingsets = parsePayloadToSetList(hidden.value, subitems);
+    const existingsets = parsePayloadToSetList(hidden.value, keys);
     if (existingsets.length) {
         existingsets.forEach((setvalues) => {
             setscontainer.appendChild(cloneSetFromTemplate(settemplate, setvalues));
@@ -362,7 +384,7 @@ export const init = (config) => {
     const form = hidden.closest('form');
     if (form) {
         form.addEventListener('submit', () => {
-            const payload = buildPayloadFromDom(wrapper, subitems);
+            const payload = buildPayloadFromDom(wrapper, keys);
             hidden.value = Object.keys(payload).length ? JSON.stringify(payload) : '{}';
         });
     }

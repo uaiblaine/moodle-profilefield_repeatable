@@ -31,7 +31,7 @@ class helper {
     public const MAX_VALUE_LENGTH = 1024;
 
     /**
-     * Fallback domain shortname pattern for param3 reference mappings.
+     * Fallback domain shortname pattern of dictionary columns.
      *
      * Used only while the companion `local_dictionaries` is absent; {@see self::domain_pattern()} reads the
      * companion's own pattern when it is installed, and a test pins the two to the same value.
@@ -51,16 +51,43 @@ class helper {
     }
 
     /**
-     * Whether an indexed sub-item can be written into the index DDL.
+     * The companion's domains for the column editor, or null when the companion is absent.
      *
-     * The DDL runs through moodle_database::execute(), whose placeholder scan also reads quoted
-     * literals: a sub-item holding ':', '?' or '$' makes CREATE INDEX throw, so it cannot be indexed.
+     * Read through \local_dictionaries\api::list_domains(), which runs no capability check: only
+     * the definition form, behind moodle/site:config, calls this. A companion too old to have
+     * that method, or one that fails, gives an empty list; the editor then asks for the
+     * shortname as text.
      *
-     * @param string $subitem
-     * @return bool
+     * @return array|null List of ['shortname', 'name' (plain), 'itemcount', 'visibility', 'parentdomain'].
      */
-    public static function is_indexable_subitem(string $subitem): bool {
-        return !preg_match('/[:?$]/', $subitem);
+    public static function companion_domains(): ?array {
+        if (!class_exists('\local_dictionaries\resolver')) {
+            return null;
+        }
+        if (!method_exists('\local_dictionaries\api', 'list_domains')) {
+            return [];
+        }
+
+        try {
+            $records = \local_dictionaries\api::list_domains();
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $context = \core\context\system::instance();
+        $domains = [];
+        foreach ($records as $record) {
+            $record = (array)$record;
+            $domains[] = [
+                'shortname' => (string)($record['shortname'] ?? ''),
+                'name' => format_string((string)($record['name'] ?? ''), true, ['context' => $context, 'escape' => false]),
+                'itemcount' => (int)($record['itemcount'] ?? 0),
+                'visibility' => (int)($record['visibility'] ?? 0),
+                'parentdomain' => isset($record['parentdomain']) ? (string)$record['parentdomain'] : null,
+            ];
+        }
+
+        return $domains;
     }
 
     /**
@@ -74,10 +101,11 @@ class helper {
     }
 
     /**
-     * Parse sub-item labels into unique canonical list.
+     * Parse version 1 sub-item labels (param1) into a unique canonical list.
      *
      * One label per line (any line ending), trimmed, blank lines skipped. Duplicates are compared
-     * case-insensitively and the first spelling wins.
+     * case-insensitively and the first spelling wins. Only {@see local\schema::from_v1()} reads
+     * version 1 parameters.
      *
      * @param string $rawsubitems
      * @return string[]
@@ -106,10 +134,7 @@ class helper {
     }
 
     /**
-     * Parse subitem/domain mapping lines with format "subitem|domain".
-     *
-     * Shared by display rendering and the Report Builder integration so the
-     * reference-mapping format has a single canonical parser.
+     * Parse version 1 subitem/domain mapping lines with format "subitem|domain" (param3).
      *
      * @param string $rawmappings Raw param3 contents.
      * @param string[] $subitems Canonical configured sub-items.
@@ -160,16 +185,16 @@ class helper {
     }
 
     /**
-     * Build a cross-DB SQL expression extracting one sub-item's text value from a set's JSON.
+     * Build a cross-DB SQL expression extracting one column's text value from a set's JSON.
      *
      * PostgreSQL reads the JSONB value with the ->> operator (casting defensively so a
      * not-yet-migrated text column still works); MySQL/MariaDB use
-     * JSON_UNQUOTE(JSON_EXTRACT(...)) with a quoted JSON path. The sub-item key is bound
-     * as a parameter on both drivers so arbitrary labels are handled safely.
+     * JSON_UNQUOTE(JSON_EXTRACT(...)) with a quoted JSON path. The key is bound as a parameter
+     * on both drivers.
      *
      * @param \moodle_database $db
      * @param string $columnsql Aliased reference to the JSON column, e.g. "alias.data".
-     * @param string $subitem Sub-item key to extract.
+     * @param string $subitem Column key to extract.
      * @param string $paramname Unique bound-parameter name to use for the key.
      * @return array Two-element list: the SQL expression string and its bound parameters.
      */
@@ -188,21 +213,58 @@ class helper {
     }
 
     /**
-     * Normalise repeatable payload keeping only configured sub-items.
+     * SQL reading one column of a set's JSON, also under its legacy label while it has one.
      *
-     * Returns the sets keyed '@@ID#1', '@@ID#2', ... in input order, each holding every configured
-     * sub-item as a string. Silently drops sets with no non-blank value, keeps only the first
-     * MAX_SETS remaining sets and truncates values to MAX_VALUE_LENGTH: callers that must reject excess
-     * check the raw payload first ({@see \profile_field_repeatable::validate_payload_limits()}).
+     * A field whose payloads are still being re-keyed has projection rows keyed by label
+     * ({@see local\schema::legacy_labels()}); COALESCE reads either shape, as the PHP readers do.
+     *
+     * @param \moodle_database $db
+     * @param string $columnsql Aliased reference to the JSON column, e.g. "alias.data".
+     * @param local\schema $schema
+     * @param string $key Column key.
+     * @param string $paramname Bound-parameter name for the key.
+     * @param string $legacyparamname Bound-parameter name for the legacy label, used only when there is one.
+     * @return array Two-element list: the SQL expression string and its bound parameters.
+     */
+    public static function sql_column_value(
+        \moodle_database $db,
+        string $columnsql,
+        local\schema $schema,
+        string $key,
+        string $paramname,
+        string $legacyparamname
+    ): array {
+        [$sql, $params] = self::sql_subitem_value($db, $columnsql, $key, $paramname);
+        $legacy = $schema->legacy_labels()[$key] ?? null;
+        if ($legacy === null) {
+            return [$sql, $params];
+        }
+
+        [$legacysql, $legacyparams] = self::sql_subitem_value($db, $columnsql, $legacy, $legacyparamname);
+        return ["COALESCE({$sql}, {$legacysql})", $params + $legacyparams];
+    }
+
+    /**
+     * Normalise a repeatable payload to the columns of a schema.
+     *
+     * Returns the sets keyed '@@ID#1', '@@ID#2', ... in input order, each holding every column key
+     * as a string. A value is read under the column key, or, when the set has no such key, under
+     * the column's legacy label ({@see local\schema::legacy_labels()}): a version 1 payload reads
+     * the same as its re-keyed form. Silently drops sets with no non-blank value, keeps only the
+     * first MAX_SETS remaining sets and truncates values to MAX_VALUE_LENGTH: callers that must
+     * reject excess check the raw payload first
+     * ({@see \profile_field_repeatable::validate_payload_limits()}).
      *
      * @param mixed $rawpayload JSON string, object or array; anything else yields [].
-     * @param string[] $subitems
+     * @param local\schema $schema
      * @return array
      */
-    public static function normalise_payload($rawpayload, array $subitems): array {
-        if (empty($subitems)) {
+    public static function normalise_payload($rawpayload, local\schema $schema): array {
+        $keys = $schema->keys();
+        if (empty($keys)) {
             return [];
         }
+        $legacy = $schema->legacy_labels();
 
         if (is_string($rawpayload)) {
             $rawpayload = trim($rawpayload);
@@ -240,9 +302,9 @@ class helper {
 
             $set = [];
             $hasvalue = false;
-            foreach ($subitems as $subitem) {
-                $value = $setdata[$subitem] ?? '';
-                if (!is_scalar($value) && $value !== null) {
+            foreach ($keys as $key) {
+                $value = self::column_value($setdata, $key, $legacy[$key] ?? null) ?? '';
+                if (!is_scalar($value)) {
                     $value = '';
                 }
 
@@ -253,7 +315,7 @@ class helper {
                 if (trim($value) !== '') {
                     $hasvalue = true;
                 }
-                $set[$subitem] = $value;
+                $set[$key] = $value;
             }
 
             if ($hasvalue) {
@@ -263,6 +325,27 @@ class helper {
         }
 
         return $normalised;
+    }
+
+    /**
+     * The raw value of one column in a decoded set: under the key, else under its legacy label.
+     *
+     * A JSON null counts as absent, as the SQL reader treats it ({@see self::sql_column_value()}:
+     * PostgreSQL's ->> gives NULL for it, which COALESCE passes over).
+     *
+     * @param array $set Decoded set.
+     * @param string $key Column key.
+     * @param string|null $legacylabel The key's legacy label, if any.
+     * @return mixed|null Null when the set holds no value for the column.
+     */
+    public static function column_value(array $set, string $key, ?string $legacylabel) {
+        if (isset($set[$key])) {
+            return $set[$key];
+        }
+        if ($legacylabel !== null && isset($set[$legacylabel])) {
+            return $set[$legacylabel];
+        }
+        return null;
     }
 
     /**
