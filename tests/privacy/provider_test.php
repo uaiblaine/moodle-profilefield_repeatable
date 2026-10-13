@@ -281,4 +281,58 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             'Name (Name)' => 'four',
         ]], $data->sets);
     }
+
+    /**
+     * Export one user's pattern column: a CPF stored raw, then text the mask does not fit.
+     *
+     * @return array The exported sets.
+     */
+    private function export_pattern_values(): array {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user();
+        $field = $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field([
+            ['key' => 'cpf', 'label' => 'CPF', 'mode' => 'pattern', 'pattern' => ['preset' => 'cpf', 'storeformat' => 'raw']],
+        ], ['shortname' => 'docs', 'name' => 'Docs']);
+        $DB->insert_record('user_info_data', (object)[
+            'userid' => $user->id,
+            'fieldid' => $field->id,
+            'data' => '{"@@ID#1":{"cpf":"52998224725"},"@@ID#2":{"cpf":"<b>1</b>"}}',
+            'dataformat' => 0,
+        ]);
+
+        $context = \context_user::instance($user->id);
+        provider::export_user_data(new approved_contextlist($user, 'profilefield_repeatable', [$context->id]));
+        return writer::with_context($context)->get_data([get_string('pluginname', 'profilefield_repeatable'), 'Docs'])->sets;
+    }
+
+    /**
+     * A pattern value is exported as it is shown, as plain text.
+     */
+    public function test_export_formats_pattern_values(): void {
+        if (!\profilefield_repeatable\local\pattern_columns::available()) {
+            $this->markTestSkipped('customfield_pattern with its public API is not installed (Moodle 5.1 or later).');
+        }
+        $this->resetAfterTest();
+
+        $this->assertSame([
+            get_string('repeatableset', 'profilefield_repeatable', 1) => ['CPF' => '529.982.247-25'],
+            get_string('repeatableset', 'profilefield_repeatable', 2) => ['CPF' => '<b>1</b>'],
+        ], $this->export_pattern_values());
+    }
+
+    /**
+     * Without customfield_pattern a pattern value is exported as stored.
+     */
+    public function test_export_without_the_plugin_keeps_pattern_values(): void {
+        if (\profilefield_repeatable\local\pattern_columns::available()) {
+            $this->markTestSkipped('customfield_pattern is installed; its absence is tested on Moodle 4.5 and 5.0.');
+        }
+        $this->resetAfterTest();
+
+        $this->assertSame([
+            get_string('repeatableset', 'profilefield_repeatable', 1) => ['CPF' => '52998224725'],
+            get_string('repeatableset', 'profilefield_repeatable', 2) => ['CPF' => '<b>1</b>'],
+        ], $this->export_pattern_values());
+    }
 }

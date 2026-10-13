@@ -494,4 +494,68 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->setUser(0);
         $this->assertFalse($this->sets_available($private, $report), 'no user does not see PRIVATE');
     }
+
+    /**
+     * A report of one user's pattern column values: a CPF stored raw, then text the mask does not fit.
+     *
+     * @return string[] The column's values, as the report shows them.
+     */
+    private function pattern_report_values(): array {
+        global $DB;
+
+        $fielddef = $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field([
+            ['key' => 'name', 'label' => 'Name', 'title' => true],
+            ['key' => 'cpf', 'label' => 'CPF', 'mode' => 'pattern', 'pattern' => ['preset' => 'cpf', 'storeformat' => 'raw']],
+        ], ['shortname' => 'docs', 'name' => 'Docs']);
+        $user = $this->getDataGenerator()->create_user();
+        // Written directly, as a CSV upload or a sync would: nothing validates the second value.
+        $payload = ['@@ID#1' => ['name' => 'a', 'cpf' => '52998224725'], '@@ID#2' => ['name' => 'b', 'cpf' => '<b>1</b>']];
+        $dataid = $DB->insert_record('user_info_data', (object)[
+            'userid' => $user->id,
+            'fieldid' => $fielddef->id,
+            'data' => json_encode($payload),
+            'dataformat' => 0,
+        ]);
+        \profilefield_repeatable\local\projection::sync((int)$dataid, (int)$fielddef->id, (int)$user->id, $payload);
+
+        $entity = $this->entity_name($fielddef);
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
+        $report = $generator->create_report(['name' => 'Docs', 'source' => repeatable_sets::class, 'default' => 0]);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':cpf']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':setnumber',
+            'sortenabled' => 1]);
+        $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
+
+        $content = $this->get_custom_report_content($report->get('id'), 0, [
+            'user:username_operator' => text::IS_EQUAL_TO,
+            'user:username_value' => $user->username,
+        ]);
+        return array_map(static fn(array $row): string => (string)array_values($row)[0], $content);
+    }
+
+    /**
+     * A pattern column shows its values as customfield_pattern formats them, escaped.
+     */
+    public function test_pattern_column_is_formatted_and_escaped(): void {
+        if (!\profilefield_repeatable\local\pattern_columns::available()) {
+            $this->markTestSkipped('customfield_pattern with its public API is not installed (Moodle 5.1 or later).');
+        }
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $this->assertSame(['529.982.247-25', '&lt;b&gt;1&lt;/b&gt;'], $this->pattern_report_values());
+    }
+
+    /**
+     * Without customfield_pattern a pattern column shows its values as stored, escaped.
+     */
+    public function test_pattern_column_without_the_plugin_shows_stored_values(): void {
+        if (\profilefield_repeatable\local\pattern_columns::available()) {
+            $this->markTestSkipped('customfield_pattern is installed; its absence is tested on Moodle 4.5 and 5.0.');
+        }
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $this->assertSame(['52998224725', '&lt;b&gt;1&lt;/b&gt;'], $this->pattern_report_values());
+    }
 }

@@ -221,7 +221,11 @@ final class schema_test extends \advanced_testcase {
             'key too long' => [[$title, $free(str_repeat('a', 41))], 'errorkeyinvalid', str_repeat('a', 41)],
             'escaped key' => [[$title, $free('<b>')], 'errorkeyinvalid', '&lt;b&gt;'],
             'duplicate key' => [[$title, $free('name')], 'errorkeyduplicate', 'name'],
-            'pattern not offered yet' => [[$title, $free('code', ['mode' => 'pattern'])], 'errormodeinvalid', 'Code'],
+            'pattern without customfield_pattern' => [
+                [$title, $free('code', ['mode' => 'pattern'])],
+                'errorpatternunavailable',
+                'Code',
+            ],
             'unknown mode' => [[$title, $free('code', ['mode' => 'select'])], 'errormodeinvalid', 'Code'],
             'dictionary without domain' => [[$title, $dictionary('lang', ['domain' => ''])], 'errordomaininvalid', 'Lang'],
             'malformed domain' => [[$title, $dictionary('lang', ['domain' => 'bad-domain'])], 'errordomaininvalid', 'Lang'],
@@ -401,5 +405,108 @@ final class schema_test extends \advanced_testcase {
 
         // Validation still sees every submitted column, so it can name them.
         $this->assertCount(7, schema::from_columns(json_decode($json, true)['columns'])->columns());
+    }
+
+    /**
+     * With customfield_pattern, each problem of a pattern column's configuration is reported with its name.
+     */
+    public function test_validate_pattern_configuration_with_the_plugin(): void {
+        $this->resetAfterTest();
+        $seen = [];
+        $patternerrors = static function (array $config) use (&$seen): array {
+            $seen[] = $config;
+            return ($config['mask'] ?? '') === '--' ? ['mask' => 'Bad <mask>', 'regex' => 'Bad regex'] : [];
+        };
+        $columns = [
+            ['key' => 'name', 'label' => 'Name', 'mode' => 'free', 'title' => true],
+            ['key' => 'doc', 'label' => 'Doc <1>', 'mode' => 'pattern',
+                'pattern' => ['preset' => 'custom', 'mask' => '--', 'other' => 'kept', 'regex' => ['not a string']]],
+            ['key' => 'cpf', 'label' => 'CPF', 'mode' => 'pattern', 'pattern' => ['preset' => 'cpf']],
+        ];
+
+        $errors = schema::validate($this->document($columns), null, [], [], $patternerrors);
+
+        // The plugin's messages are already safe HTML; the column name is escaped.
+        $expected = fn(string $error): string => get_string('errorpatternconfig', 'profilefield_repeatable', (object)[
+            'column' => 'Doc &lt;1&gt;',
+            'error' => $error,
+        ]);
+        $this->assertSame([$expected('Bad <mask>'), $expected('Bad regex')], $errors);
+        // The plugin is handed the column's settings it knows, as strings.
+        $this->assertSame([['preset' => 'custom', 'mask' => '--'], ['preset' => 'cpf']], $seen);
+    }
+
+    /**
+     * Without customfield_pattern only a stored pattern column, unchanged, may be saved.
+     */
+    public function test_validate_pattern_without_the_plugin(): void {
+        $this->resetAfterTest();
+        $title = ['key' => 'name', 'label' => 'Name', 'mode' => 'free', 'title' => true];
+        $stored = ['doc' => ['preset' => 'cpf', 'storeformat' => 'raw', 'future' => 'x']];
+        $column = fn(string $key, array $pattern): array => ['key' => $key, 'label' => ucfirst($key), 'mode' => 'pattern',
+            'pattern' => $pattern];
+        $unavailable = fn(string $name): array => [get_string('errorpatternunavailable', 'profilefield_repeatable', $name)];
+
+        // The stored column, its settings in another order: kept.
+        $this->assertSame([], schema::validate(
+            $this->document([$title, $column('doc', ['future' => 'x', 'storeformat' => 'raw', 'preset' => 'cpf'])]),
+            null,
+            [],
+            [],
+            null,
+            $stored
+        ));
+        // The stored column with a changed setting: nothing could check it.
+        $this->assertSame($unavailable('Doc'), schema::validate(
+            $this->document([$title, $column('doc', ['preset' => 'cep', 'storeformat' => 'raw', 'future' => 'x'])]),
+            null,
+            [],
+            [],
+            null,
+            $stored
+        ));
+        // A new pattern column, and an existing free column turned into one.
+        $this->assertSame($unavailable('Other'), schema::validate(
+            $this->document([$title, $column('other', ['preset' => 'cpf'])]),
+            null,
+            [],
+            [],
+            null,
+            $stored
+        ));
+        $this->assertSame($unavailable('Name'), schema::validate(
+            $this->document([['mode' => 'pattern'] + $title]),
+            null,
+            [],
+            [],
+            null,
+            $stored
+        ));
+    }
+
+    /**
+     * The pattern accessors read a column's configuration and keep its stored object verbatim.
+     */
+    public function test_pattern_accessors(): void {
+        $schema = schema::from_json(json_encode($this->document([
+            ['key' => 'name', 'label' => 'Name', 'mode' => 'free', 'title' => true, 'pattern' => ['preset' => 'cpf']],
+            ['key' => 'doc', 'label' => 'Doc', 'mode' => 'pattern',
+                'pattern' => ['preset' => ' cpf ', 'storeformat' => 'raw', 'maxlength' => 3, 'future' => ['x']]],
+            ['key' => 'bare', 'label' => 'Bare', 'mode' => 'pattern'],
+        ])));
+
+        $this->assertNull($schema->pattern_config('name'), 'Not a pattern column');
+        $this->assertNull($schema->pattern_config('missing'));
+        $this->assertSame(['preset' => 'cpf', 'storeformat' => 'raw'], $schema->pattern_config('doc'));
+        $this->assertSame([], $schema->pattern_config('bare'));
+        $this->assertSame([
+            'doc' => ['preset' => ' cpf ', 'storeformat' => 'raw', 'maxlength' => 3, 'future' => ['x']],
+            'bare' => [],
+        ], $schema->pattern_objects());
+        $this->assertArrayNotHasKey('pattern', $schema->column('name'), 'A free column drops the pattern settings');
+        $this->assertStringContainsString(
+            '"pattern":{"preset":" cpf ","storeformat":"raw","maxlength":3,"future":["x"]}',
+            $schema->to_json()
+        );
     }
 }

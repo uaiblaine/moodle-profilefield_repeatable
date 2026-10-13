@@ -159,7 +159,9 @@ class provider implements
      * Every stored set with a value is exported, read through the field's schema (so a payload
      * not yet re-keyed exports the same way). Values stored under a name the schema no longer
      * reads (a removed column) are exported under that raw name. A name already used in the set
-     * gets the key or the raw name appended, so no value overwrites another.
+     * gets the key or the raw name appended, so no value overwrites another. A pattern value is
+     * exported as it is shown ({@see \profilefield_repeatable\local\pattern_columns::format()}),
+     * as plain text like every other value: the export is JSON, not HTML.
      *
      * @param \stdClass $record A {@see self::get_records()} row: data, fieldid, param1..param4.
      * @return array
@@ -189,8 +191,12 @@ class provider implements
                     $read[$legacy[$key]] = true;
                 }
                 $label = format_string($schema->label($key), true, ['context' => $context, 'escape' => false]);
-                $value = \profilefield_repeatable\helper::column_value($rawset, $key, $legacy[$key] ?? null);
-                $values[self::unique_name($values, $label, $key)] = self::export_value($value);
+                $value = self::export_value(\profilefield_repeatable\helper::column_value($rawset, $key, $legacy[$key] ?? null));
+                $patternconfig = $schema->pattern_config($key);
+                if ($patternconfig !== null && trim($value) !== '') {
+                    $value = \profilefield_repeatable\local\pattern_columns::format($patternconfig, $value);
+                }
+                $values[self::unique_name($values, $label, $key)] = $value;
             }
             foreach ($rawset as $name => $value) {
                 if (!isset($read[$name])) {

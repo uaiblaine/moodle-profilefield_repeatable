@@ -442,7 +442,10 @@ class display_renderer {
     }
 
     /**
-     * Resolve a display value via local reference dictionary for a dictionary column.
+     * The value as shown: a dictionary code resolved to its label, a pattern value with its mask.
+     *
+     * Plain text: the templates escape it. A pattern value is formatted by customfield_pattern
+     * (a raw-stored value gets its mask back) and shown as stored without the plugin.
      *
      * @param string $key Column key.
      * @param string $rawvalue
@@ -451,6 +454,11 @@ class display_renderer {
     private function resolve_reference_display_value(string $key, string $rawvalue): string {
         if (trim($rawvalue) === '') {
             return '';
+        }
+
+        $patternconfig = $this->get_schema()->pattern_config($key);
+        if ($patternconfig !== null) {
+            return \profilefield_repeatable\local\pattern_columns::format($patternconfig, $rawvalue);
         }
 
         $domainmap = $this->get_schema()->domain_map();
