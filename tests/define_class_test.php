@@ -203,6 +203,34 @@ final class define_class_test extends \advanced_testcase {
     }
 
     /**
+     * A mapped domain the companion does not hold is rejected; a domain it holds is accepted.
+     */
+    public function test_define_validate_specific_checks_domains_through_the_companion(): void {
+        $this->resetAfterTest();
+        if (!class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries is not installed.');
+        }
+
+        $this->getDataGenerator()->get_plugin_generator('local_dictionaries')
+            ->create_domain(['shortname' => 'diretoria', 'name' => 'Diretoria', 'visibility' => 0]);
+        $define = new \profile_define_repeatable();
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param3' => "diretoria|Diretoria\nescola|escolas",
+        ], []);
+        $this->assertArrayHasKey('param3', $errors);
+        $this->assertStringContainsString('escolas', $errors['param3']);
+        $this->assertStringNotContainsString('diretoria', $errors['param3']);
+
+        $errors = $define->define_validate_specific((object) [
+            'param1' => self::SUBITEMS_DIR_ESC,
+            'param3' => "diretoria|diretoria",
+        ], []);
+        $this->assertArrayNotHasKey('param3', $errors);
+    }
+
+    /**
      * Ensure save preprocess canonicalises reference mappings.
      *
      * Sub-items take param1's spelling and order, domains are lower-cased and the first mapping of a sub-item wins.

@@ -473,13 +473,13 @@ class display_renderer {
             return $this->resolveddisplaycache[$cachekey];
         }
 
-        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+        if (!class_exists('\local_dictionaries\resolver')) {
             $this->resolveddisplaycache[$cachekey] = null;
             return null;
         }
 
         try {
-            $label = \local_profilefield_repeatable\resolver::resolve($domain, $code);
+            $label = \local_dictionaries\resolver::resolve($domain, $code);
         } catch (\Throwable $e) {
             $label = null;
         }
@@ -498,7 +498,7 @@ class display_renderer {
      * @param array $displaysets
      */
     private function prefetch_reference_labels(array $displaysets): void {
-        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+        if (!class_exists('\local_dictionaries\resolver')) {
             return;
         }
 
@@ -525,7 +525,7 @@ class display_renderer {
 
         foreach ($codesbydomain as $domain => $codes) {
             try {
-                $labels = \local_profilefield_repeatable\resolver::resolve_bulk($domain, array_values($codes));
+                $labels = \local_dictionaries\resolver::resolve_bulk($domain, array_values($codes));
             } catch (\Throwable $e) {
                 $labels = [];
             }

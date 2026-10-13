@@ -99,6 +99,29 @@ final class helper_test extends \advanced_testcase {
     }
 
     /**
+     * The fallback domain pattern equals the companion's, so a drift in either turns this red.
+     */
+    public function test_domain_pattern_agrees_with_the_companion(): void {
+        if (!class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries is not installed.');
+        }
+
+        $this->assertSame(\local_dictionaries\resolver::DOMAIN_PATTERN, helper::DOMAIN_PATTERN);
+        $this->assertSame(\local_dictionaries\resolver::DOMAIN_PATTERN, helper::domain_pattern());
+    }
+
+    /**
+     * Without the companion the field's own pattern is the one in force.
+     */
+    public function test_domain_pattern_falls_back_to_the_own_constant(): void {
+        if (class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries is installed.');
+        }
+
+        $this->assertSame(helper::DOMAIN_PATTERN, helper::domain_pattern());
+    }
+
+    /**
      * The reference-mapping parser keeps valid pairs and drops invalid lines.
      */
     public function test_parse_subitem_domain_map(): void {

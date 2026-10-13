@@ -182,14 +182,14 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 
 ### Companion dictionary plugin (soft dependency)
 
-- No `dependencies` in `version.php`; every touchpoint guards with `class_exists()`/`table_exists()`,
-  so the plugin installs, validates and renders without the companion. Touchpoints:
-  `resolver::resolve()`/`resolve_bulk()` (renderer, entity), the domain table read by
-  `define.class.php`, and `/^[a-z0-9_]+$/` in `helper::DOMAIN_PATTERN` and `define.class.php`.
-- The companion is now `local_dictionaries` (repo `uaiblaine/moodle-local_dictionaries`); this
-  branch still calls the old `\local_profilefield_repeatable\resolver` and table
-  `local_profilefield_repeatable_domain`, and a follow-up switches to `\local_dictionaries\resolver`
-  and `\local_dictionaries\resolver::DOMAIN_PATTERN`.
+- No `dependencies` in `version.php`; every touchpoint guards with `class_exists()`, so the plugin
+  installs, validates and renders without the companion. Touchpoints, all through the companion's
+  public API and never its tables: `\local_dictionaries\resolver::resolve()`/`resolve_bulk()`
+  (renderer, entity), `domain_exists()` (`define.class.php`), and `resolver::DOMAIN_PATTERN` read by
+  `helper::domain_pattern()`, with `helper::DOMAIN_PATTERN` as the fallback that a test pins equal.
+- The companion is `local_dictionaries` (repo `uaiblaine/moodle-local_dictionaries`). Its domains have
+  a `visibility`; the field resolves codes the viewer already sees, which the companion's contract
+  leaves ungated, so the field checks no visibility.
 - `ci.yml` installs the companion's `main` (`plugin-dependencies`): a contract change in either repo
   turns the other's CI red. The renderer prefetches labels once per domain: keep it N+1-free.
 

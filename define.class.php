@@ -38,9 +38,6 @@ class profile_define_repeatable extends profile_define_base {
     /** @var int Maximum number of sub-items allowed in the collapsed subline; display_renderer repeats it. */
     private const MAX_SUBLINE_SUBITEMS = 3;
 
-    /** @var string Same as {@see \profilefield_repeatable\helper::DOMAIN_PATTERN}; keep in step. */
-    private const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
-
     /**
      * Add elements for creating/editing a repeatable profile field.
      *
@@ -543,7 +540,7 @@ class profile_define_repeatable extends profile_define_base {
             $error = ['category' => 'unknown', 'value' => $rawsubitem];
         } else if (isset($mappings[$canonicalsubitem])) {
             $error = ['category' => 'duplicate', 'value' => $canonicalsubitem];
-        } else if (!preg_match(self::DOMAIN_PATTERN, $domain)) {
+        } else if (!preg_match(\profilefield_repeatable\helper::domain_pattern(), $domain)) {
             $error = ['category' => 'invalid', 'value' => $rawdomain];
         } else {
             $mappings[$canonicalsubitem] = $domain;
@@ -576,54 +573,35 @@ class profile_define_repeatable extends profile_define_base {
     }
 
     /**
-     * Return whether the companion dictionary plugin is present: its resolver class and domain table.
+     * Return whether the companion dictionary plugin is present.
      *
      * @return bool
      */
     private function is_local_reference_plugin_available(): bool {
-        global $DB;
-
-        if (!class_exists('\local_profilefield_repeatable\resolver')) {
-            return false;
-        }
-
-        return $DB->get_manager()->table_exists(new xmldb_table('local_profilefield_repeatable_domain'));
+        return class_exists('\local_dictionaries\resolver');
     }
 
     /**
      * Return missing domain shortnames for current mapping.
      *
+     * Asks the companion's public API; its visibility setting is irrelevant here, as the field only
+     * resolves codes and never lets anyone browse a domain.
+     *
      * @param string[] $domains
      * @return string[]
      */
     private function get_missing_reference_domains(array $domains): array {
-        global $DB;
-
         $domains = array_values(array_unique(array_map(
             static fn(string $domain): string => core_text::strtolower(trim($domain)),
             $domains
         )));
-        if (empty($domains)) {
-            return [];
-        }
-
-        if (!$DB->get_manager()->table_exists(new xmldb_table('local_profilefield_repeatable_domain'))) {
+        if (!class_exists('\local_dictionaries\resolver')) {
             return $domains;
         }
 
-        [$insql, $params] = $DB->get_in_or_equal($domains, SQL_PARAMS_NAMED, 'domain');
-        $existing = $DB->get_fieldset_select(
-            'local_profilefield_repeatable_domain',
-            'shortname',
-            "shortname $insql",
-            $params
-        );
-
-        $existing = array_values(array_unique(array_map(
-            static fn(string $domain): string => core_text::strtolower(trim($domain)),
-            $existing
-        )));
-
-        return array_values(array_diff($domains, $existing));
+        return array_values(array_filter(
+            $domains,
+            static fn(string $domain): bool => !\local_dictionaries\resolver::domain_exists($domain)
+        ));
     }
 }
