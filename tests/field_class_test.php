@@ -358,7 +358,8 @@ final class field_class_test extends \advanced_testcase {
             'timemodified' => $timemodified,
         ]);
 
-        $field = new \profile_field_repeatable(0, $user->id, $fielddata);
+        // Loaded the way core loads it: the payload comes from user_info_data.
+        $field = new \profile_field_repeatable((int)$fielddata->id, (int)$user->id);
 
         $originalscript = $SCRIPT ?? null;
         try {
@@ -748,9 +749,9 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * Repeated storage reads on one field instance must be memoised.
+     * is_empty() decides from the loaded payload and never queries the projection.
      */
-    public function test_is_empty_memoises_storage_reads(): void {
+    public function test_is_empty_reads_no_storage(): void {
         global $DB;
 
         $this->resetAfterTest();
@@ -767,17 +768,68 @@ final class field_class_test extends \advanced_testcase {
         ]);
 
         $field = new \profile_field_repeatable((int)$fieldrecord->id, (int)$user->id);
-        $this->assertFalse($field->is_empty());
-
         $before = $DB->perf_get_reads();
         $this->assertFalse($field->is_empty());
-        $this->assertSame(0, $DB->perf_get_reads() - $before, 'Second is_empty() must not query the database again.');
+        $this->assertSame(0, $DB->perf_get_reads() - $before, 'is_empty() must not query the database.');
     }
 
     /**
-     * The display renderer must consume preloaded storage records without querying.
+     * Profile reads follow the canonical payload after core writes user_info_data directly.
+     *
+     * profile_save_custom_fields() is what auth_db and auth_ldap attribute sync call: it never
+     * reaches this plugin, so the per-set rows keep the previous sets.
      */
-    public function test_display_renderer_uses_preloaded_records(): void {
+    public function test_reads_follow_payload_written_by_profile_save_custom_fields(): void {
+        global $DB, $SCRIPT;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $savefield = $this->create_field();
+        $fieldid = (int)$savefield->field->id;
+        $user = $this->getDataGenerator()->create_user();
+        $savefield->edit_save_data((object) [
+            'id' => $user->id,
+            $savefield->inputname => '{"@@ID#1":{"name":"Alice","role":"Manager"}}',
+        ]);
+
+        profile_save_custom_fields($user->id, ['repeatable_test' => '{"@@ID#1":{"name":"Bob","role":"Teacher"}}']);
+
+        // Precondition: the projection still holds the old set.
+        $rows = $DB->get_records('profilefield_repeatable_data', ['fieldid' => $fieldid, 'userid' => $user->id]);
+        $this->assertStringContainsString('Alice', (string)reset($rows)->data);
+
+        $field = new \profile_field_repeatable($fieldid, (int)$user->id);
+        $loaded = new \stdClass();
+        $field->edit_load_user_data($loaded);
+        $this->assertStringContainsString('Bob', $loaded->{$field->inputname});
+        $this->assertStringNotContainsString('Alice', $loaded->{$field->inputname});
+
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = '/user/edit.php';
+            $output = $field->display_data();
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+        $this->assertStringContainsString('Bob', $output);
+        $this->assertStringNotContainsString('Alice', $output);
+
+        // An emptied value empties the field, even though the projection still has a set.
+        profile_save_custom_fields($user->id, ['repeatable_test' => '{}']);
+        $this->assertTrue($DB->record_exists('profilefield_repeatable_data', ['fieldid' => $fieldid, 'userid' => $user->id]));
+
+        $field = new \profile_field_repeatable($fieldid, (int)$user->id);
+        $this->assertTrue($field->is_empty());
+        $this->assertSame('', $field->display_data());
+    }
+
+    /**
+     * A projection row lends its sync time only to the payload set it still mirrors.
+     */
+    public function test_display_renderer_takes_sync_time_from_matching_rows_only(): void {
+        global $SCRIPT;
+
         $this->resetAfterTest();
         $this->setAdminUser();
 
@@ -790,27 +842,114 @@ final class field_class_test extends \advanced_testcase {
             'defaultdata' => '{}',
             'param1' => self::SUBITEMS_NAME_ROLE,
         ]);
+        $payload = '{"@@ID#1":{"name":"Alice","role":"Manager"}}';
+        $synctime = 1700000000;
+        $syncstring = userdate($synctime, get_string('strftimedatetimeshort', 'langconfig'));
 
-        $records = [
-            (object) [
-                'id' => 1,
-                'set_id' => 1,
-                'data' => json_encode(['name' => 'Preloaded', 'role' => 'Ghost']),
-                'timemodified' => 0,
-            ],
+        // Keys in another order, as PostgreSQL JSONB returns them, still match the set.
+        $matching = [
+            (object) ['id' => 1, 'set_id' => 1, 'data' => '{"role": "Manager", "name": "Alice"}', 'timemodified' => $synctime],
+            (object) ['id' => 2, 'set_id' => 2, 'data' => '{"name": "Ghost", "role": "Stale"}', 'timemodified' => $synctime],
+        ];
+        $stale = [
+            (object) ['id' => 1, 'set_id' => 1, 'data' => '{"name": "Old", "role": "Manager"}', 'timemodified' => $synctime],
         ];
 
-        $renderer = new \profilefield_repeatable\output\display_renderer(
-            $fielddata,
-            999999,
-            '',
-            null,
-            null,
-            $records
+        $originalscript = $SCRIPT ?? null;
+        try {
+            $SCRIPT = self::SCRIPT_PROFILE;
+
+            // User 999999 has no rows in the database, so the sync time can only come from the preload.
+            $output = (new \profilefield_repeatable\output\display_renderer($fielddata, 999999, $payload, null, null, $matching))
+                ->render();
+            $this->assertStringContainsString('Alice', $output);
+            $this->assertStringNotContainsString('Ghost', $output);
+            $this->assertStringContainsString($syncstring, $output);
+
+            $output = (new \profilefield_repeatable\output\display_renderer($fielddata, 999999, $payload, null, null, $stale))
+                ->render();
+            $this->assertStringContainsString('Alice', $output);
+            $this->assertStringNotContainsString('Old', $output);
+            $this->assertStringNotContainsString($syncstring, $output);
+        } finally {
+            $SCRIPT = $originalscript;
+        }
+    }
+
+    /**
+     * Build the test form around a field, submitting a payload for it.
+     *
+     * @param \profile_field_repeatable $field
+     * @param string $payload Raw submitted value of the field.
+     * @return \profilefield_repeatable_test_edit_form
+     */
+    private function submit_edit_form(\profile_field_repeatable $field, string $payload): \profilefield_repeatable_test_edit_form {
+        global $CFG, $PAGE;
+
+        require_once($CFG->dirroot . '/user/profile/field/repeatable/tests/fixtures/edit_form.php');
+
+        $PAGE->set_url('/user/edit.php');
+        \profilefield_repeatable_test_edit_form::mock_submit([$field->inputname => $payload]);
+        return new \profilefield_repeatable_test_edit_form(null, ['field' => $field]);
+    }
+
+    /**
+     * A server-side validation error renders under the widget, which points at it.
+     */
+    public function test_edit_form_renders_validation_error_under_widget(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $field = $this->create_field();
+        $oversized = str_repeat('x', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 1);
+        $form = $this->submit_edit_form($field, json_encode(['@@ID#1' => ['name' => $oversized, 'role' => '']]));
+
+        $this->assertNull($form->get_data());
+        $html = $form->render();
+
+        $errorid = 'fgroup_id_error_' . $field->inputname;
+        $message = get_string('errorvaluetoolong', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_VALUE_LENGTH);
+        $this->assertMatchesRegularExpression(
+            '~<div[^>]*id="' . preg_quote($errorid, '~') . '"[^>]*>\s*' . preg_quote($message, '~') . '\s*</div>~',
+            $html
+        );
+        $this->assertStringContainsString('aria-describedby="' . $errorid . '"', $html);
+    }
+
+    /**
+     * The required error of an empty payload renders too, and a valid payload round-trips once.
+     */
+    public function test_edit_form_required_error_and_value_round_trip(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddata = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable',
+            'name' => 'Repeatable test',
+            'shortname' => 'repeatable_test',
+            'required' => 1,
+            'defaultdata' => '{}',
+            'param1' => self::SUBITEMS_NAME_ROLE,
+        ]);
+        // Own profile, so core also adds its client-side required rule to the element.
+        $field = new \profile_field_repeatable((int)$fielddata->id, (int)$USER->id);
+
+        $form = $this->submit_edit_form($field, '{}');
+        $this->assertNull($form->get_data());
+        $html = $form->render();
+        $errorid = 'fgroup_id_error_' . $field->inputname;
+        $this->assertMatchesRegularExpression(
+            '~id="' . preg_quote($errorid, '~') . '"[^>]*>\s*' . preg_quote(get_string('required'), '~') . '~',
+            $html
         );
 
-        $output = $renderer->render();
-        $this->assertStringContainsString('Preloaded', $output);
-        $this->assertStringContainsString('Ghost', $output);
+        $payload = '{"@@ID#1":{"name":"Alice","role":"Manager"}}';
+        $form = $this->submit_edit_form($field, $payload);
+        $data = $form->get_data();
+        $this->assertNotNull($data);
+        $this->assertSame($payload, $data->{$field->inputname});
+        $this->assertSame(1, preg_match_all('~<input[^>]* name="' . preg_quote($field->inputname, '~') . '"~', $form->render()));
     }
 }

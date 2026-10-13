@@ -124,7 +124,7 @@ class provider implements
     public static function export_user_data(approved_contextlist $contextlist): void {
         $user = $contextlist->get_user();
         foreach ($contextlist->get_contexts() as $context) {
-            if ($context->contextlevel !== CONTEXT_USER || $context->instanceid !== $user->id) {
+            if ($context->contextlevel !== CONTEXT_USER || (int)$context->instanceid !== (int)$user->id) {
                 continue;
             }
 
@@ -179,7 +179,7 @@ class provider implements
         $user = $contextlist->get_user();
 
         foreach ($contextlist->get_contexts() as $context) {
-            if ($context->contextlevel === CONTEXT_USER && $context->instanceid === $user->id) {
+            if ($context->contextlevel === CONTEXT_USER && (int)$context->instanceid === (int)$user->id) {
                 static::delete_data($context->instanceid);
             }
         }

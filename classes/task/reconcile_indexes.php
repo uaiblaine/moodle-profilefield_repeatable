@@ -31,6 +31,9 @@ class reconcile_indexes extends adhoc_task {
     /** Maximum number of indexed sub-items per field. */
     private const MAX_INDEXED_SUBITEMS = 3;
 
+    /** Name of every index this task owns: field id, then the hash from {@see build_index_name()}. */
+    private const INDEX_NAME_PATTERN = '/^pfrd_f(\d+)_[0-9a-f]{16}$/';
+
     #[\Override]
     public function get_name() {
         return get_string('taskreconcileindexes', 'profilefield_repeatable');
@@ -113,16 +116,7 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
-        $tablename = $DB->get_prefix() . 'profilefield_repeatable_data';
-        $indexes = $DB->get_fieldset_sql(
-            "SELECT indexname FROM pg_indexes
-              WHERE schemaname = ANY(current_schemas(false))
-                AND tablename = :tablename
-                AND indexname LIKE :pattern",
-            ['tablename' => $tablename, 'pattern' => 'pfrd_f' . $fieldid . '_%']
-        );
-
-        foreach ($indexes as $indexname) {
+        foreach (self::list_field_indexes($fieldid) as $indexname) {
             $quoted = helper::quote_identifier($indexname);
             try {
                 $DB->execute("DROP INDEX CONCURRENTLY IF EXISTS $quoted");
@@ -198,21 +192,71 @@ class reconcile_indexes extends adhoc_task {
      * @return string[]
      */
     private function get_existing_indexes(int $fieldid): array {
+        return self::list_field_indexes($fieldid);
+    }
+
+    /**
+     * List the indexes this task owns for one field.
+     *
+     * The LIKE prefix is escaped so "_" is literal, and every name is then checked whole:
+     * a bare "pfrd_f1_%" also matches "pfrd_f12_...", the indexes of fields 10-19 and 100-199.
+     *
+     * @param int $fieldid
+     * @return string[]
+     */
+    private static function list_field_indexes(int $fieldid): array {
+        return self::filter_field_indexes(self::query_field_index_candidates($fieldid), $fieldid);
+    }
+
+    /**
+     * Indexes on the storage table whose name starts with the field's literal prefix.
+     *
+     * @param int $fieldid
+     * @return string[]
+     */
+    private static function query_field_index_candidates(int $fieldid): array {
         global $DB;
 
-        $sql = "SELECT indexname
-                  FROM pg_indexes
-                 WHERE schemaname = ANY(current_schemas(false))
-                   AND tablename = :tablename
-                   AND indexname LIKE :pattern";
+        $like = $DB->sql_like('indexname', ':pattern', true, true, false, '\\');
+        return $DB->get_fieldset_sql(
+            "SELECT indexname
+               FROM pg_indexes
+              WHERE schemaname = ANY(current_schemas(false))
+                AND tablename = :tablename
+                AND {$like}",
+            [
+                'tablename' => $DB->get_prefix() . 'profilefield_repeatable_data',
+                'pattern' => $DB->sql_like_escape('pfrd_f' . $fieldid . '_', '\\') . '%',
+            ]
+        );
+    }
 
-        $tablename = $DB->get_prefix() . 'profilefield_repeatable_data';
-        $pattern = 'pfrd_f' . $fieldid . '_%';
+    /**
+     * Keep only the index names this task owns for one field.
+     *
+     * @param string[] $indexnames
+     * @param int $fieldid
+     * @return string[]
+     */
+    public static function filter_field_indexes(array $indexnames, int $fieldid): array {
+        return array_values(array_filter(
+            $indexnames,
+            static fn(string $indexname): bool => self::owned_index_fieldid($indexname) === $fieldid
+        ));
+    }
 
-        return $DB->get_fieldset_sql($sql, [
-            'tablename' => $tablename,
-            'pattern' => $pattern,
-        ]);
+    /**
+     * The field id an index belongs to, when this task created it.
+     *
+     * @param string $indexname
+     * @return int|null Null for any name {@see build_index_name()} cannot produce.
+     */
+    public static function owned_index_fieldid(string $indexname): ?int {
+        if (!preg_match(self::INDEX_NAME_PATTERN, $indexname, $matches)) {
+            return null;
+        }
+
+        return (int)$matches[1];
     }
 
     /**
@@ -305,11 +349,12 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
-        // Map each index to its field ID (pfrd_f{id}_{hash}).
+        // Map each owned index to its field ID.
         $indexfieldmap = [];
         foreach ($allindexes as $indexname) {
-            if (preg_match('/^pfrd_f(\d+)_/', $indexname, $matches)) {
-                $indexfieldmap[$indexname] = (int)$matches[1];
+            $owner = self::owned_index_fieldid($indexname);
+            if ($owner !== null) {
+                $indexfieldmap[$indexname] = $owner;
             }
         }
 

@@ -18,6 +18,11 @@ Database baseline follows Moodle requirements:
 
 Recommended for best performance: PostgreSQL 13+.
 
+Microsoft SQL Server (and Oracle, on Moodle 4.5) is not supported by the Report Builder source: its
+per-sub-item SQL exists only for PostgreSQL and MySQL/MariaDB, so the "Repeatable profile field
+sets" source is hidden on other databases. The profile field
+itself (editing and the profile page) does not depend on it.
+
 
 Motivation for this plugin
 --------------------------

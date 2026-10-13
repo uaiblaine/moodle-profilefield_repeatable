@@ -33,4 +33,12 @@ $observers = [
         'eventname' => '\core\event\user_info_field_deleted',
         'callback' => '\profilefield_repeatable\observer::user_info_field_deleted',
     ],
+    [
+        'eventname' => '\core\event\user_updated',
+        'callback' => '\profilefield_repeatable\observer::user_updated',
+    ],
+    [
+        'eventname' => '\core\event\user_created',
+        'callback' => '\profilefield_repeatable\observer::user_created',
+    ],
 ];

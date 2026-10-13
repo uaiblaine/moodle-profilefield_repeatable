@@ -36,8 +36,7 @@ exclude:              # exclude wins over include
     - "**/*.min.js"
     - "**/*.map"
     - "mutations/**"
-    - "tests/fixtures/**"
-    - "tests/behat/**/*.feature"
+    - "tests/**"          # security review reads production code; tests stay out of the size count
     - ".mdlshield/**"
     - ".gitattributes"
     - "README.md"
