@@ -9,7 +9,8 @@ A Moodle user profile field plugin that stores repeatable field data as sets of 
 Requirements
 ------------
 
-- Moodle 4.5 or later (tested up to Moodle 5.3).
+- Moodle 5.3 (branch `MOODLE_503_STABLE`; releases `v5.3-rN`), PHP 8.3 or later. Other Moodle
+  versions have their own branches.
 - Optional: [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries) for reference resolution.
 - Optional, Moodle 5.1 or later: [moodle-customfield_pattern](https://github.com/uaiblaine/moodle-customfield_pattern)
   (a version with `\customfield_pattern\api`) for pattern columns: masks and validation such as
@@ -17,8 +18,8 @@ Requirements
 
 Database baseline follows Moodle requirements:
 
-- PostgreSQL 13+ (Moodle 5.3 requires PostgreSQL 17)
-- MySQL 8.0+ / MariaDB (Moodle 5.3 requires MariaDB 11.4); supported fallback mode
+- PostgreSQL 17+
+- MySQL 8.4+ / MariaDB 11.4+; supported fallback mode
 
 Recommended for best performance: PostgreSQL.
 

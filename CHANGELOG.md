@@ -2,7 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [v5.3-r1] - 2026-10-13
+
+Moodle 5.3 branch (`MOODLE_503_STABLE`): version `2026100500`, release `v5.3-r1`,
+`MATURITY_STABLE`, `$plugin->supported = [503, 503]`, CI against core `MOODLE_503_STABLE`.
 
 First release on the one-branch-per-Moodle-version layout: `MOODLE_405_STABLE` (`v4.5-r1`),
 `MOODLE_501_STABLE` (`v5.1-r1`), `MOODLE_502_STABLE` (`v5.2-r1`, also `main`) and
