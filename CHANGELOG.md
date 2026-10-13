@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
 - Report Builder: free columns are `repeatable_<shortname>:<key>`, dictionary columns
   `<key>_name` and `<key>_code`; column titles use the column name.
 - Privacy export lists each set's values under the column names.
+- Upgrade step (3.0): converts every field's four lists into the schema (keys from the labels,
+  mapped columns as strict dictionaries, the first column as title), re-keys the stored payloads and
+  the projection, queues the index reconciliation, and renames the identifiers of saved reports,
+  filters, conditions and users' filter values. Fields with more than 500 values are finished by
+  the new ad hoc task `rekey_payloads`; until then readers accept both payload shapes.
 - A test data generator for repeatable fields.
 - Moodle 5.3 support: `$plugin->supported` is now `[405, 503]`, and CI runs the full PHP x database
   matrix on 5.3 (5.2 runs one database).

@@ -24,7 +24,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026101300;
+$plugin->version   = 2026101301;
 $plugin->requires  = 2024100100;
 $plugin->component = 'profilefield_repeatable';
 $plugin->maturity  = MATURITY_STABLE;

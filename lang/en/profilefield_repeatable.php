@@ -79,4 +79,5 @@ $string['setcolumn'] = 'SET';
 $string['setnumber'] = 'Set number';
 $string['synchronisedat'] = 'Synchronised at: {$a}';
 $string['taskreconcileindexes'] = 'Reconcile repeatable profile field JSON indexes';
+$string['taskrekeypayloads'] = 'Re-key repeatable profile field values by column key';
 $string['taskreprojectsets'] = 'Rebuild repeatable profile field sets for reports';

@@ -79,4 +79,5 @@ $string['setcolumn'] = 'CONJUNTO';
 $string['setnumber'] = 'Número do conjunto';
 $string['synchronisedat'] = 'Sincronizado em: {$a}';
 $string['taskreconcileindexes'] = 'Reconciliar índices JSON do campo de perfil repetível';
+$string['taskrekeypayloads'] = 'Rechavear os valores do campo de perfil repetível pela chave da coluna';
 $string['taskreprojectsets'] = 'Reconstruir os conjuntos do campo de perfil repetível para relatórios';
