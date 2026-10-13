@@ -189,7 +189,7 @@ class projection {
      * Rebuild the rows of every user of one repeatable field whose rows no longer match the payload.
      *
      * Walks the payloads and the rows of the field in two ordered recordsets, so each run costs
-     * two queries per field plus one write per stale user.
+     * two queries per field plus one {@see self::reproject_record()} transaction per stale record.
      *
      * @param \stdClass $field The {user_info_field} record (id, param1).
      * @return int Number of {user_info_data} records whose rows were rewritten.
@@ -294,6 +294,9 @@ class projection {
 
     /**
      * Insert or update one set row, preserving timecreated on update.
+     *
+     * PostgreSQL upserts with ON CONFLICT on the unique (dataid, set_id) index; other families
+     * select then write. A schema or semantic change must land in both branches.
      *
      * @param int $dataid
      * @param int $fieldid

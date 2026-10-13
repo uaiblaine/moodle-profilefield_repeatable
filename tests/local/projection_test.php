@@ -173,7 +173,7 @@ final class projection_test extends \advanced_testcase {
      * Rows of a vanished record are stepped over without re-reading every later record.
      *
      * The outcome is the same either way (reproject_record() re-checks inside its transaction), so
-     * the guard is held by cost: the reads of a run with an orphan group must equal those of a run
+     * the test compares cost: the reads of a run with an orphan group must equal those of a run
      * without one. Both runs happen on the same database, because a recordset counts as a different
      * number of reads on PostgreSQL and MariaDB.
      */

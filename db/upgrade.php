@@ -33,7 +33,6 @@ require_once(__DIR__ . '/lib.php');
  * @return bool
  */
 function xmldb_profilefield_repeatable_upgrade(int $oldversion): bool {
-    // No upgrade steps required for fresh installations.
-    // Table and indexes are created by install.xml and install.php.
+    // No upgrade steps yet: install.xml and db/install.php create the table and its indexes.
     return true;
 }

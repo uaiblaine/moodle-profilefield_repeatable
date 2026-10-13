@@ -28,6 +28,9 @@ require_once(__DIR__ . '/lib.php');
 
 /**
  * Plugin install hook.
+ *
+ * On PostgreSQL, converts the data column to jsonb and adds its GIN index, which install.xml
+ * cannot express.
  */
 function xmldb_profilefield_repeatable_install(): void {
     global $DB;

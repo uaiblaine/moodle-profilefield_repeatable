@@ -427,9 +427,9 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
     /**
      * Visibility is decided with the same capabilities as core's profile-field columns.
      *
-     * The field instance has no user, so a TEACHERS field follows moodle/site:viewuseridentity in
-     * the global course (moodle/user:viewalldetails opens only PRIVATE and NONE fields), and
-     * without a user (cron, CLI) a PRIVATE field is not available.
+     * The field instance is bound to \core\user::SUPPORT_USER, not a real user, so a TEACHERS field
+     * follows moodle/site:viewuseridentity in the global course (moodle/user:viewalldetails opens
+     * only PRIVATE and NONE fields), and without a user (cron, CLI) a PRIVATE field is not available.
      */
     public function test_visibility_uses_the_capabilities_core_checks(): void {
         global $COURSE;

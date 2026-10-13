@@ -100,6 +100,8 @@ final class define_class_test extends \advanced_testcase {
 
     /**
      * Ensure save preprocess canonicalises and deduplicates indexed sub-items.
+     *
+     * Five entries are given so the silent cap at three (the fourth distinct entry is dropped) is pinned too.
      */
     public function test_define_save_preprocess_normalises_indexed_subitems(): void {
         $define = new \profile_define_repeatable();
@@ -175,6 +177,8 @@ final class define_class_test extends \advanced_testcase {
 
     /**
      * Ensure save preprocess canonicalises reference mappings.
+     *
+     * Sub-items take param1's spelling and order, domains are lower-cased and the first mapping of a sub-item wins.
      */
     public function test_define_save_preprocess_normalises_reference_mappings(): void {
         $define = new \profile_define_repeatable();

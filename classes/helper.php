@@ -27,7 +27,7 @@ class helper {
     /** PostgreSQL feature flag: SQL/JSON path operators. */
     public const POSTGRES_FEATURE_JSONPATH = 'jsonpath';
 
-    /** PostgreSQL feature flag: GIN deduplication parameter. */
+    /** PostgreSQL feature flag gating {@see self::maybe_optimize_gin_deduplication()} (server 14+). */
     public const POSTGRES_FEATURE_GIN_DEDUP = 'gin_dedup';
 
     /** Maximum number of sets accepted per field value. */
@@ -36,7 +36,12 @@ class helper {
     /** Maximum length of one sub-item value in characters. */
     public const MAX_VALUE_LENGTH = 1024;
 
-    /** Domain shortname pattern for reference mapping. */
+    /**
+     * Domain shortname pattern for param3 reference mappings.
+     *
+     * Keep in step with the copy in define.class.php and with the companion dictionary plugin's
+     * resolver, which rejects any other domain shortname.
+     */
     public const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
 
     /**
@@ -51,6 +56,9 @@ class helper {
 
     /**
      * Parse sub-item labels into unique canonical list.
+     *
+     * One label per line (any line ending), trimmed, blank lines skipped. Duplicates are compared
+     * case-insensitively and the first spelling wins.
      *
      * @param string $rawsubitems
      * @return string[]
@@ -163,7 +171,12 @@ class helper {
     /**
      * Normalise repeatable payload keeping only configured sub-items.
      *
-     * @param mixed $rawpayload
+     * Returns the sets keyed '@@ID#1', '@@ID#2', ... in input order, each holding every configured
+     * sub-item as a string. Silently drops sets with no non-blank value, keeps only the first
+     * MAX_SETS remaining sets and truncates values to MAX_VALUE_LENGTH: callers that must reject excess
+     * check the raw payload first ({@see \profile_field_repeatable::validate_payload_limits()}).
+     *
+     * @param mixed $rawpayload JSON string, object or array; anything else yields [].
      * @param string[] $subitems
      * @return array
      */
@@ -237,7 +250,7 @@ class helper {
      * Encode payload as strict JSON object.
      *
      * @param array $payload
-     * @return string
+     * @return string JSON, or '{}' when the payload is empty or cannot be encoded.
      */
     public static function encode_payload(array $payload): string {
         if (empty($payload)) {
@@ -382,11 +395,9 @@ class helper {
     }
 
     /**
-     * Apply PostgreSQL 14+ GIN deduplication optimization to an index.
+     * Rebuild a GIN index with REINDEX on PostgreSQL 14+.
      *
-     * PostgreSQL 14+ includes improved GIN posting list/storage behavior.
-     * Reindexing after creation helps ensure the index is built with the
-     * best available implementation for the running server version.
+     * Best effort: a failure is reported through debugging() and otherwise ignored.
      *
      * @param \moodle_database $db
      * @param string $indexname
@@ -413,6 +424,7 @@ class helper {
      *
      * @param string $identifier
      * @return string
+     * @throws \coding_exception When the identifier contains a NUL byte.
      */
     public static function quote_identifier(string $identifier): string {
         if (strpos($identifier, "\0") !== false) {

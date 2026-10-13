@@ -104,7 +104,7 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * Ensure preprocessing persists normalised strict JSON.
+     * Ensure preprocessing drops empty sets and renumbers the remaining ones from @@ID#1.
      */
     public function test_edit_save_data_preprocess_normalises_payload(): void {
         $this->resetAfterTest();
@@ -636,7 +636,7 @@ final class field_class_test extends \advanced_testcase {
             'label' => 'EE Alpha',
         ]]);
 
-        // Simulate define_save_preprocess to canonicalise param3.
+        // Canonicalise param1 and param3 through define_save_preprocess, as the admin form does.
         $define = new \profile_define_repeatable();
         $preprocessed = $define->define_save_preprocess((object) [
             'param1' => "Codigo_Diretoria\nCodigo_Escola",

@@ -31,7 +31,10 @@ use core_privacy\local\request\contextlist;
 use core_privacy\local\request\userlist;
 
 /**
- * Privacy class for requesting user data.
+ * Privacy provider for repeatable field payloads and their per-set projection rows.
+ *
+ * Projection rows are reached only through the user's {user_info_data} records; rows left behind
+ * by core's direct deletes are purged by {@see \profilefield_repeatable\observer} instead.
  *
  * @package    profilefield_repeatable
  */
@@ -118,6 +121,9 @@ class provider implements
 
     /**
      * Export all user data in approved contexts.
+     *
+     * Exports the JSON payload of each field; the projection rows are derived from it and are not
+     * exported.
      *
      * @param approved_contextlist $contextlist
      */

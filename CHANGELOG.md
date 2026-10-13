@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Code comments audited against the code and Moodle's guidance: contracts stated, comments that
+  contradicted the code corrected, history moved out of the code. `amd/build` rebuilt for the
+  edited JSDoc of `amd/src/repeatable.js`.
+
 ### Security
 - **Stored XSS in Report Builder**: the sub-item value, code and resolved-name columns now
   escape their output, and the name filter escapes its option labels (core's autocomplete

@@ -15,10 +15,10 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Backward-compatible wrappers delegating to \profilefield_repeatable\helper.
+ * Procedural wrappers delegating to \profilefield_repeatable\helper.
  *
- * This file is required by db/install.php and db/upgrade.php which cannot
- * rely on class autoloading during upgrade steps.
+ * Loaded by db/install.php and db/upgrade.php, so install and upgrade steps call these functions
+ * rather than plugin classes; the helper is loaded with require_once, not through the autoloader.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
@@ -27,7 +27,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-// Ensure autoloading is available for the helper class.
+// Load the helper class directly, independent of the autoloader.
 require_once(__DIR__ . '/../classes/helper.php');
 
 /**
@@ -72,8 +72,10 @@ function profilefield_repeatable_encode_payload(array $payload): string {
 }
 
 /**
- * Ensure storage table exists with required columns and indexes.
- * Called from install.php during plugin installation.
+ * Create the storage table, as install.xml defines it, when it does not exist.
+ *
+ * An existing table is left as it is: its columns and indexes are not checked. Called from
+ * install.php, after core has already created the table from install.xml.
  *
  * @param database_manager $dbman
  */

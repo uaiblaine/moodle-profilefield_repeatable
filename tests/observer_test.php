@@ -24,7 +24,7 @@ require_once($CFG->dirroot . '/user/profile/definelib.php');
 require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
 
 /**
- * Tests for event observers cleaning up storage rows.
+ * Tests for the event observers: projection cleanup on deletion and reprojection on user events.
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\observer
@@ -205,7 +205,7 @@ final class observer_test extends \advanced_testcase {
     }
 
     /**
-     * Event cases: event class, as dispatched after profile_save_custom_fields() by auth_ldap's sync.
+     * Event cases: the user event class whose observer reprojects the stored payload.
      *
      * @return array
      */

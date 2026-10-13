@@ -286,7 +286,10 @@ const applyReadonlyState = (wrapper) => {
 /**
  * Initialise repeatable field UI.
  *
- * @param {Object} config
+ * Reads the payload from the hidden input once and writes it back from the widget when the form is
+ * submitted, dropping sets with no value. Safe to call once per field on a form holding several.
+ *
+ * @param {Object} config From profile_field_repeatable::edit_after_data(): wrapperid, hiddenid, subitems, readonly, strings.
  */
 export const init = (config) => {
     if (!config || !config.wrapperid || !config.hiddenid || !Array.isArray(config.subitems)) {
