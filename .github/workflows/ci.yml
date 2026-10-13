@@ -47,6 +47,15 @@ jobs:
       plugin-dependencies: |
         uaiblaine/moodle-local_profilefield_repeatable,main
 
+  ci-500:
+    name: Moodle 5.00
+    uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    with:
+      moodle-core-branch: MOODLE_500_STABLE
+      one-db-only: true
+      plugin-dependencies: |
+        uaiblaine/moodle-local_profilefield_repeatable,main
+
   ci-405:
     name: Moodle 4.05
     uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
