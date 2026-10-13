@@ -62,11 +62,6 @@ class reconcile_indexes extends adhoc_task {
             return;
         }
 
-        $pgmajor = helper::postgres_major_version($DB);
-        if ($pgmajor !== null) {
-            debugging('profilefield_repeatable: reconcile indexes running on PostgreSQL ' . $pgmajor, DEBUG_DEVELOPER);
-        }
-
         $desired = $this->get_desired_index_map((int)$fieldid);
         $existing = $this->get_existing_indexes((int)$fieldid);
 
@@ -185,6 +180,15 @@ class reconcile_indexes extends adhoc_task {
 
         $desired = [];
         foreach ($indexedsubitems as $subitem) {
+            if (!helper::is_indexable_subitem($subitem)) {
+                // Its literal would be read as a query placeholder, see helper::is_indexable_subitem().
+                debugging(
+                    'profilefield_repeatable: not indexing sub-item "' . $subitem . '" of field ' . $fieldid .
+                    ': it contains ":", "?" or "$"',
+                    DEBUG_DEVELOPER
+                );
+                continue;
+            }
             $indexname = $this->build_index_name($fieldid, $subitem);
             $desired[$indexname] = $subitem;
         }

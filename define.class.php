@@ -162,6 +162,18 @@ class profile_define_repeatable extends profile_define_base {
             $errors['param2'] = get_string('errorindexedsubitemunknown', 'profilefield_repeatable', implode(', ', $unknown));
         } else if (count($indexedsubitems) > self::MAX_INDEXED_SUBITEMS) {
             $errors['param2'] = get_string('errorindexedsubitemlimit', 'profilefield_repeatable', self::MAX_INDEXED_SUBITEMS);
+        } else {
+            $unindexable = array_filter(
+                $indexedsubitems,
+                static fn(string $subitem): bool => !\profilefield_repeatable\helper::is_indexable_subitem($subitem)
+            );
+            if (!empty($unindexable)) {
+                $errors['param2'] = get_string(
+                    'errorindexedsubitemplaceholder',
+                    'profilefield_repeatable',
+                    implode(', ', $unindexable)
+                );
+            }
         }
 
         return $errors;

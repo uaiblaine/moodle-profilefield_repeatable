@@ -99,6 +99,33 @@ final class define_class_test extends \advanced_testcase {
     }
 
     /**
+     * Indexed sub-items holding ":", "?" or "$" are rejected: the index DDL would read them as placeholders.
+     */
+    public function test_define_validate_specific_rejects_indexed_subitems_with_placeholder_characters(): void {
+        $define = new \profile_define_repeatable();
+
+        foreach (['Start:date', 'Name?', 'Cost$1'] as $subitem) {
+            $errors = $define->define_validate_specific((object) [
+                'param1' => "plain\n{$subitem}",
+                'param2' => $subitem,
+            ], []);
+
+            $this->assertArrayHasKey('param2', $errors, $subitem);
+            $this->assertEquals(
+                get_string('errorindexedsubitemplaceholder', 'profilefield_repeatable', $subitem),
+                $errors['param2']
+            );
+        }
+
+        // The same characters are fine in a sub-item that is not indexed, and plain names stay valid.
+        $errors = $define->define_validate_specific((object) [
+            'param1' => "plain\nStart:date",
+            'param2' => 'plain',
+        ], []);
+        $this->assertArrayNotHasKey('param2', $errors);
+    }
+
+    /**
      * Ensure save preprocess canonicalises and deduplicates indexed sub-items.
      *
      * Five entries are given so the silent cap at three (the fourth distinct entry is dropped) is pinned too.

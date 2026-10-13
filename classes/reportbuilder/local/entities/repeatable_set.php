@@ -40,6 +40,9 @@ use profilefield_repeatable\helper;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class repeatable_set extends base {
+    /** @var array Resolved label per "domain\ncode" key, filled by {@see self::resolve_label()}. */
+    private static array $labelmemo = [];
+
     /** @var \stdClass The user_info_field record this entity represents. */
     private \stdClass $field;
 
@@ -283,6 +286,9 @@ class repeatable_set extends base {
     /**
      * Resolve a stored code to its reference label, falling back to the code.
      *
+     * Memoised per domain and code for the request, misses included: the resolver caches only the
+     * labels it finds, so an unresolved code would otherwise cost the same queries on every row.
+     *
      * @param string $domain Reference domain shortname.
      * @param string|null $code Stored code value.
      * @return string Resolved label, or the raw code when unresolved.
@@ -293,17 +299,42 @@ class repeatable_set extends base {
             return '';
         }
 
+        // The newline cannot occur in a domain shortname, so the key has no ambiguity.
+        $key = $domain . "\n" . $code;
+        if (!array_key_exists($key, self::$labelmemo)) {
+            $label = static::lookup_label($domain, $code);
+            self::$labelmemo[$key] = ($label !== null && trim($label) !== '') ? $label : $code;
+        }
+
+        return self::$labelmemo[$key];
+    }
+
+    /**
+     * Forget the memoised labels (a test seeds a domain after an earlier lookup missed).
+     */
+    public static function reset_label_memo(): void {
+        self::$labelmemo = [];
+    }
+
+    /**
+     * Ask the companion dictionary plugin for the label of a code.
+     *
+     * @param string $domain Reference domain shortname.
+     * @param string $code Non-empty stored code value.
+     * @return string|null The label, or null when the companion is absent, throws or has none.
+     */
+    protected static function lookup_label(string $domain, string $code): ?string {
         if (!class_exists('\local_profilefield_repeatable\resolver')) {
-            return $code;
+            return null;
         }
 
         try {
             $label = \local_profilefield_repeatable\resolver::resolve($domain, $code);
         } catch (\Throwable $e) {
-            $label = null;
+            return null;
         }
 
-        return (is_string($label) && trim($label) !== '') ? $label : $code;
+        return is_string($label) ? $label : null;
     }
 
     /**

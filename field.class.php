@@ -56,11 +56,12 @@ class profile_field_repeatable extends profile_field_base {
         $subitems = $this->get_subitems();
         $subitemdata = [];
         foreach ($subitems as $subitem) {
-            $subitemdata[] = ['name' => format_string($subitem, true, ['context' => $context])];
+            // The template escapes: format_string() must hand it the plain spelling.
+            $subitemdata[] = ['name' => format_string($subitem, true, ['context' => $context, 'escape' => false])];
         }
 
         $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
-            'fieldlabel' => format_string($this->field->name),
+            'fieldlabel' => format_string($this->field->name, true, ['context' => $context, 'escape' => false]),
             'labelid' => $this->get_wrapper_id() . '-label',
             'errorid' => $this->get_error_id(),
             'wrapperid' => $this->get_wrapper_id(),
@@ -324,16 +325,6 @@ class profile_field_repeatable extends profile_field_base {
      */
     public function get_field_properties() {
         return [PARAM_RAW, NULL_NOT_ALLOWED];
-    }
-
-    /**
-     * Normalise payload for the current field configuration.
-     *
-     * @param mixed $rawpayload
-     * @return array
-     */
-    private function normalise_payload($rawpayload): array {
-        return \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
     }
 
     /**

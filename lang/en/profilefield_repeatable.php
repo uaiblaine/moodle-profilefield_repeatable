@@ -38,6 +38,7 @@ $string['errordomainmapinvaliddomain'] = 'Invalid domain shortname(s): {$a}. All
 $string['errordomainmapmissingdomain'] = 'Reference domain(s) not found in local_profilefield_repeatable: {$a}.';
 $string['errordomainmapunknownsubitem'] = 'Reference mapping sub-item(s) not found in Sub-items: {$a}.';
 $string['errorindexedsubitemlimit'] = 'You can index at most {$a} sub-items for this field.';
+$string['errorindexedsubitemplaceholder'] = 'Indexed sub-item(s) cannot contain ":", "?" or "$": {$a}.';
 $string['errorindexedsubitemunknown'] = 'Indexed sub-item(s) not found in Sub-items: {$a}.';
 $string['errorinvalidjson'] = 'Invalid repeatable payload; expected a JSON object.';
 $string['errorsubitemsduplicate'] = 'Sub-items must be unique (case-insensitive).';

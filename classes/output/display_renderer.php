@@ -132,7 +132,7 @@ class display_renderer {
 
                 $parts[] = [
                     'hasseparator' => !empty($parts),
-                    'key' => format_string($subitem, true, ['context' => $context]),
+                    'key' => format_string($subitem, true, ['context' => $context, 'escape' => false]),
                     'value' => $this->resolve_reference_display_value($subitem, $value),
                 ];
             }
@@ -243,7 +243,10 @@ class display_renderer {
         $rows = [];
         foreach ($subitems as $subitem) {
             $rows[] = [
-                'label' => format_string($subitem, true, ['context' => \core\context\system::instance()]),
+                'label' => format_string($subitem, true, [
+                    'context' => \core\context\system::instance(),
+                    'escape' => false,
+                ]),
                 'value' => $this->resolve_reference_display_value($subitem, (string)($values[$subitem] ?? '')),
             ];
         }
@@ -302,10 +305,11 @@ class display_renderer {
             $items[] = $item;
         }
 
+        // The templates escape, so the plain spelling goes in.
         $fieldname = format_string(
             (string)($this->field->name ?? ''),
             true,
-            ['context' => \core\context\system::instance()]
+            ['context' => \core\context\system::instance(), 'escape' => false]
         );
 
         return [
@@ -505,7 +509,7 @@ class display_renderer {
 
         $codesbydomain = [];
         foreach ($displaysets as $set) {
-            $values = (array)($set['values'] ?? $set['raw'] ?? []);
+            $values = (array)($set['values'] ?? []);
             foreach ($domainmap as $subitem => $domain) {
                 $rawvalue = trim((string)($values[$subitem] ?? ''));
                 if ($rawvalue === '') {
