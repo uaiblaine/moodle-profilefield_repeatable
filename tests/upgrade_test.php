@@ -308,6 +308,11 @@ final class upgrade_test extends core_reportbuilder_testcase {
             array_map('array_values', $content)
         );
 
+        // The define form locks the keys holding values through the legacy labels too.
+        $stored = $DB->get_record('user_info_field', ['id' => $field->id]);
+        $usage = local\projection::keys_in_use((int)$field->id, schema::from_field($stored));
+        $this->assertSame(['lingua', 'level', 'certificate_number'], $usage['keys']);
+
         // The task finishes the field.
         $this->expectOutputRegex('/re-keyed ' . (migration::INLINE_LIMIT + 1) . ' payload\(s\) of field ' . $field->id . '/');
         $this->runAdhocTasks(rekey_payloads::class);

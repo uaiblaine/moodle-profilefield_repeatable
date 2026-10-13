@@ -25,7 +25,8 @@
 /**
  * Admin definition of a repeatable profile field.
  *
- * param1 holds the column schema as JSON ({@see \profilefield_repeatable\local\schema});
+ * param1 holds the column schema as JSON ({@see \profilefield_repeatable\local\schema}), edited
+ * through the column editor (amd/src/columneditor.js) or, without JavaScript, as text;
  * param2..param4 are unused since version 2 and cleared on save. defaultdata is always '{}'.
  *
  * @package    profilefield_repeatable
@@ -51,9 +52,57 @@ class profile_define_repeatable extends profile_define_base {
     }
 
     /**
+     * Hand the column editor what it needs: locked keys, the users with data and the domains.
+     *
+     * Everything travels in data attributes of the schema textarea, not in the js_call_amd()
+     * arguments, which core warns about past 1024 characters. The locked keys come from the
+     * stored field, never from the submitted schema: a key holding values cannot be renamed.
+     *
+     * @param MoodleQuickForm $mform
+     */
+    public function define_after_data(&$mform) {
+        global $DB, $PAGE;
+
+        if (!$mform->elementExists('param1')) {
+            return;
+        }
+
+        $element = $mform->getElement('param1');
+        $usage = ['users' => 0, 'keys' => []];
+        $fieldid = (int)$mform->getElementValue('id');
+        $stored = $fieldid > 0 ? $DB->get_record('user_info_field', ['id' => $fieldid, 'datatype' => 'repeatable']) : false;
+        if ($stored) {
+            $usage = \profilefield_repeatable\local\projection::keys_in_use(
+                $fieldid,
+                \profilefield_repeatable\local\schema::from_field($stored)
+            );
+        }
+
+        // Shown pretty-printed, so the schema stays editable without JavaScript.
+        $schema = \profilefield_repeatable\local\schema::from_json((string)$element->getValue());
+        if ($schema !== null) {
+            $element->setValue(json_encode(
+                $schema->to_document(),
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+            ));
+        }
+
+        $domains = \profilefield_repeatable\helper::companion_domains();
+        $element->updateAttributes([
+            'data-lockedkeys' => json_encode($usage['keys']),
+            'data-users' => $usage['users'],
+            'data-domains' => json_encode($domains ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            'data-companion' => $domains === null ? 0 : 1,
+        ]);
+
+        $PAGE->requires->js_call_amd('profilefield_repeatable/columneditor', 'init');
+    }
+
+    /**
      * Validate the submitted column schema.
      *
-     * Every broken rule is listed under the schema ({@see \profilefield_repeatable\local\schema::validate()}).
+     * Every broken rule is listed under the schema, which the column editor shows with the
+     * error region of the form row ({@see \profilefield_repeatable\local\schema::validate()}).
      *
      * @param stdClass|array $data
      * @param array $files

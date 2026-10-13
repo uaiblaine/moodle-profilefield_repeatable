@@ -136,4 +136,95 @@ final class define_class_test extends \advanced_testcase {
         $this->assertSame('', $processed->param4);
         $this->assertSame('{}', $processed->defaultdata);
     }
+
+    /**
+     * Build the definition form elements the way core's profile field form does, then run define_after_data().
+     *
+     * @param int $fieldid
+     * @param string $param1
+     * @return \MoodleQuickForm
+     */
+    private function after_data(int $fieldid, string $param1): \MoodleQuickForm {
+        $mform = new \MoodleQuickForm('profilefield', 'post', '');
+        $mform->addElement('hidden', 'id', $fieldid);
+        $mform->setType('id', PARAM_INT);
+        $define = new \profile_define_repeatable();
+        $define->define_form_specific($mform);
+        $mform->setDefault('param1', $param1);
+        $define->define_after_data($mform);
+        return $mform;
+    }
+
+    /**
+     * The editor learns which keys hold values, from the stored field, and how many users have data.
+     */
+    public function test_define_after_data_locks_the_keys_holding_values(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $fielddata = $this->generator()->create_field(['Name', 'Role', 'Notes']);
+        $user1 = $this->getDataGenerator()->create_user();
+        $user2 = $this->getDataGenerator()->create_user();
+        foreach ([$user1, $user2] as $user) {
+            $field = new \profile_field_repeatable((int)$fielddata->id, (int)$user->id);
+            $field->edit_save_data((object)[
+                'id' => $user->id,
+                $field->inputname => json_encode(['@@ID#1' => ['name' => 'Ann', 'role' => '', 'notes' => ' ']]),
+            ]);
+        }
+        $field = new \profile_field_repeatable((int)$fielddata->id, (int)$user1->id);
+        $field->edit_save_data((object)[
+            'id' => $user1->id,
+            $field->inputname => json_encode(['@@ID#1' => ['name' => '', 'role' => 'Lead']]),
+        ]);
+
+        // The submitted schema renames a key; the lock still follows what is stored.
+        $submitted = $this->generator()->schema_json([['key' => 'renamed', 'label' => 'Name']]);
+        $element = $this->after_data((int)$fielddata->id, $submitted)->getElement('param1');
+
+        $this->assertSame('["name","role"]', $element->getAttribute('data-lockedkeys'));
+        $this->assertEquals(2, $element->getAttribute('data-users'));
+        $this->assertStringContainsString("\n", $element->getValue(), 'Pretty-printed for editing without JavaScript');
+        $this->assertSame(['renamed'], local\schema::from_json($element->getValue())->keys());
+
+        $amdjscode = (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires);
+        $this->assertStringContainsString('profilefield_repeatable/columneditor', implode("\n", $amdjscode));
+    }
+
+    /**
+     * A new field has nothing locked, and text the editor cannot read is left as typed.
+     */
+    public function test_define_after_data_for_a_new_field(): void {
+        $this->resetAfterTest();
+
+        $element = $this->after_data(0, 'not json')->getElement('param1');
+
+        $this->assertSame('[]', $element->getAttribute('data-lockedkeys'));
+        $this->assertEquals(0, $element->getAttribute('data-users'));
+        $this->assertSame('not json', $element->getValue());
+        $companion = class_exists('\local_dictionaries\resolver') ? '1' : '0';
+        $this->assertSame($companion, (string)$element->getAttribute('data-companion'));
+    }
+
+    /**
+     * With the companion installed, the editor receives its domains with their plain names.
+     */
+    public function test_define_after_data_lists_the_companion_domains(): void {
+        if (!class_exists('\local_dictionaries\resolver')) {
+            $this->markTestSkipped('local_dictionaries is not installed.');
+        }
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => 'uf', 'name' => 'States & <b>regions</b>']);
+        $generator->create_item(['domain' => 'uf', 'code' => 'SP', 'label' => 'Sao Paulo']);
+
+        $element = $this->after_data(0, '')->getElement('param1');
+
+        $domains = json_decode($element->getAttribute('data-domains'), true);
+        $uf = array_values(array_filter($domains, static fn(array $domain): bool => $domain['shortname'] === 'uf'));
+        $this->assertCount(1, $uf);
+        $this->assertSame('States & regions', $uf[0]['name']);
+        $this->assertSame(1, $uf[0]['itemcount']);
+        $this->assertSame('1', (string)$element->getAttribute('data-companion'));
+    }
 }

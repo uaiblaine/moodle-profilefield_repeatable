@@ -23,14 +23,37 @@
  */
 
 $string['actioncolumn'] = 'AÇÃO';
+$string['addcolumn'] = 'Adicionar coluna';
 $string['addnewset'] = 'Adicionar novo conjunto';
+$string['columncount'] = '{$a->count} de {$a->max} colunas';
+$string['columndomain'] = 'Dicionário';
+$string['columndomainhint'] = 'Do local_dictionaries.';
+$string['columndomainnocompanion'] =
+    'Nome curto de um domínio do local_dictionaries. Sem esse plugin, os valores aparecem como armazenados.';
+$string['columnkey'] = 'Chave';
+$string['columnkeyhint'] =
+    'Gerada a partir do nome; apenas letras minúsculas, dígitos e _. Valores e relatórios ficam guardados sob ela.';
+$string['columnkeylocked'] = 'Bloqueada: há usuários com valores nesta chave.';
+$string['columnlabel'] = 'Nome da coluna';
+$string['columnlabelhint'] = 'Exibido aos usuários. Aceita marcações multilang.';
+$string['columnmode'] = 'Como os usuários preenchem';
+$string['columnnew'] = 'Nova';
+$string['columnparent'] = 'Depende de';
+$string['columnparenthint'] =
+    'Uma coluna de dicionário anterior cujo código restringe esta, por exemplo as cidades do estado escolhido.';
+$string['columnrole'] = 'Papel no conjunto';
 $string['columns'] = 'Colunas';
 $string['columns_help'] =
     'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma chave com valores não pode mudar; renomeie o nome da coluna.';
+$string['columnsindata'] =
+    '{$a} usuários têm dados neste campo. As chaves das colunas com valores estão bloqueadas: renomear uma coluna muda apenas o nome. Remover uma coluna oculta seus valores; eles continuam armazenados.';
 $string['columnsubitem'] = '{$a}';
 $string['columnsubitemcode'] = '{$a} (código)';
 $string['columnsubitemname'] = '{$a} (nome)';
 $string['datasourcerepeatablesets'] = 'Conjuntos de campo de perfil repetível';
+$string['domainoption'] = '{$a->name} ({$a->itemcount} itens)';
+$string['domainrestricted'] = 'Restrito: só quem pode ver dicionários consegue pesquisá-lo.';
+$string['domainvisible'] = 'Pesquisável por qualquer usuário autenticado.';
 $string['entityrepeatableset'] = 'Conjunto repetível';
 $string['entityrepeatablesetnamed'] = '{$a}';
 $string['errorcolumnrequired'] = 'Conjunto {$a->set}: {$a->column} é obrigatório.';
@@ -54,6 +77,16 @@ $string['errorsublinetitle'] = 'A coluna "{$a}" é o título e não pode estar t
 $string['errortitlecount'] = 'Marque exatamente uma coluna como título do conjunto.';
 $string['errortoomanysets'] = 'Conjuntos demais: no máximo {$a} conjuntos são permitidos.';
 $string['errorvaluetoolong'] = 'Valor muito longo: cada valor é limitado a {$a} caracteres.';
+$string['modedictionary'] = 'Dicionário, só códigos';
+$string['modedictionaryhelp'] = 'Códigos do dicionário; guarda o código, exibe o nome.';
+$string['modedictionaryopen'] = 'Dicionário, qualquer código';
+$string['modedictionaryopenhelp'] = 'Sugere do dicionário, mas aceita um código novo.';
+$string['modefree'] = 'Texto livre';
+$string['modefreehelp'] = 'Qualquer texto de até 1.024 caracteres.';
+$string['movedown'] = 'Mover {$a} para baixo';
+$string['moveup'] = 'Mover {$a} para cima';
+$string['newcolumn'] = 'Coluna {$a}';
+$string['parentnone'] = 'Nenhuma';
 $string['pluginname'] = 'Conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:data'] = 'Dados do usuário do campo de perfil de conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:dataformat'] =
@@ -73,10 +106,22 @@ $string['privacy:metadata:profilefield_repeatable_data:timecreated'] = 'A data e
 $string['privacy:metadata:profilefield_repeatable_data:timemodified'] = 'A data da última modificação da linha do conjunto';
 $string['privacy:metadata:profilefield_repeatable_data:userid'] = 'O ID do usuário proprietário dos dados deste campo repetível';
 $string['profilewidgettitle'] = 'Campos repetíveis';
+$string['removecolumn'] = 'Remover coluna';
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
+$string['roleindexed'] = 'Indexada';
+$string['roleindexedlabel'] = 'Indexar para relatórios (PostgreSQL)';
+$string['rolerequired'] = 'Obrigatória';
+$string['rolerequiredlabel'] = 'Obrigatória em todo conjunto';
+$string['rolesubline'] = 'Linha auxiliar';
+$string['rolesublinelabel'] = 'Exibir na linha auxiliar';
+$string['roletitle'] = 'Título';
+$string['roletitlelabel'] = 'Título do conjunto';
 $string['setcolumn'] = 'CONJUNTO';
 $string['setnumber'] = 'Número do conjunto';
+$string['summaryindexed'] = 'Indexadas {$a->count}/{$a->max}';
+$string['summarysubline'] = 'Linha auxiliar {$a->count}/{$a->max}';
+$string['summarytitle'] = 'Título: {$a}';
 $string['synchronisedat'] = 'Sincronizado em: {$a}';
 $string['taskreconcileindexes'] = 'Reconciliar índices JSON do campo de perfil repetível';
 $string['taskrekeypayloads'] = 'Rechavear os valores do campo de perfil repetível pela chave da coluna';

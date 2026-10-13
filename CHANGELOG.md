@@ -9,8 +9,11 @@ All notable changes to this project will be documented in this file.
   (`{"version": 2, "columns": [...]}`), each column with a stable key, a label, a mode (`free`,
   `dictionary`, `dictionary_open`; `pattern` is reserved), an optional domain and parent column,
   and its role (title, subline, required, indexed). Values, Report Builder identifiers and index
-  names follow the key, so renaming a column no longer orphans its data. The definition form edits
-  the schema as JSON and lists every broken rule under it.
+  names follow the key, so renaming a column no longer orphans its data.
+- A column editor in the field definition form (`amd/src/columneditor.js`) replaces the four text
+  lists: name, key (locked once users hold values under it), mode, dictionary picked from
+  `local_dictionaries`, parent column, roles with their limits, reordering. Without JavaScript the
+  schema is edited as JSON. Every broken rule is listed under it.
 - Per-column **required**: every set that has a value must fill the required columns; the field's
   own "required" setting still means "at least one set".
 - Report Builder: free columns are `repeatable_<shortname>:<key>`, dictionary columns
