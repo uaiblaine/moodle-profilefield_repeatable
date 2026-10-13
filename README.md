@@ -72,7 +72,13 @@ After installing, navigate to **Site Administration > Plugins > Moodle plugins >
      that has any value; up to 3 columns are **indexed** on PostgreSQL.
 
    Columns are reordered with the arrows, added with "Add column" (20 at most) and removed with
-   "Remove column". Removing a column hides its values; they stay stored.
+   "Remove column". A column whose key holds stored values cannot be removed, and its key cannot
+   change: the form rejects such a schema, whatever was submitted.
+
+   **Required columns are checked by the profile form only.** Web services
+   (`core_user_create_users`, `core_user_update_users`), CSV upload and auth plugin sync save
+   through the field without its form validation, so a set they write may leave a required
+   column empty.
 
 Without JavaScript the columns are edited as the JSON schema the editor writes to `param1`:
 

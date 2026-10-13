@@ -41,9 +41,9 @@ $string['columnparenthint'] = 'An earlier dictionary column whose code narrows t
 $string['columnrole'] = 'Role in the set';
 $string['columns'] = 'Columns';
 $string['columns_help'] =
-    'The columns each set has, as a JSON schema: {"version": 2, "columns": [{"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. With JavaScript the column editor writes it. Modes: free, dictionary (codes of a local_dictionaries domain only), dictionary_open (any code). Exactly one column is the title; up to 3 are shown in the subline and up to 3 are indexed. A key holding values cannot change; rename the label instead.';
+    'The columns each set has, as a JSON schema: {"version": 2, "columns": [{"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. With JavaScript the column editor writes it. Modes: free, dictionary (codes of a local_dictionaries domain only), dictionary_open (any code). Exactly one column is the title; up to 3 are shown in the subline and up to 3 are indexed. A column whose key holds stored values can be neither removed nor re-keyed; rename its label instead.';
 $string['columnsindata'] =
-    '{$a} users have data in this field. Keys of columns holding values are locked: renaming a column changes only its name. Removing a column hides its values; they stay stored.';
+    '{$a} users have data in this field. Columns holding stored values cannot be removed and their keys are locked: renaming such a column changes only its name.';
 $string['columnsubitem'] = '{$a}';
 $string['columnsubitemcode'] = '{$a} (code)';
 $string['columnsubitemname'] = '{$a} (name)';
@@ -64,6 +64,7 @@ $string['errorkeyconflict'] = 'Two columns produce the report column "{$a}": cha
 $string['errorkeyduplicate'] = 'Key used by two columns: {$a}.';
 $string['errorkeyinvalid'] =
     'Invalid key "{$a}": start with a lowercase letter, then up to 39 lowercase letters, digits or underscores.';
+$string['errorkeylocked'] = 'Columns holding stored values cannot be removed and their keys cannot change: {$a}.';
 $string['errorlabelduplicate'] = 'Column name used twice: {$a}.';
 $string['errorlabelrequired'] = 'Column {$a} has no name.';
 $string['errormodeinvalid'] = 'Column "{$a}": choose free text or a dictionary mode.';
@@ -104,6 +105,7 @@ $string['privacy:metadata:profilefield_repeatable_data:timemodified'] = 'The tim
 $string['privacy:metadata:profilefield_repeatable_data:userid'] = 'The user id owner of this repeatable field data';
 $string['profilewidgettitle'] = 'Repeatable fields';
 $string['removecolumn'] = 'Remove column';
+$string['removecolumnlocked'] = 'Users have values in this column, so it cannot be removed.';
 $string['removeset'] = 'Remove set';
 $string['repeatableset'] = 'Set {$a}';
 $string['roleindexed'] = 'Indexed';

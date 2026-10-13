@@ -310,7 +310,7 @@ final class upgrade_test extends core_reportbuilder_testcase {
 
         // The define form locks the keys holding values through the legacy labels too.
         $stored = $DB->get_record('user_info_field', ['id' => $field->id]);
-        $usage = local\projection::keys_in_use((int)$field->id, schema::from_field($stored));
+        $usage = local\stored_values::keys_in_use((int)$field->id, schema::from_field($stored));
         $this->assertSame(['lingua', 'level', 'certificate_number'], $usage['keys']);
 
         // The task finishes the field.

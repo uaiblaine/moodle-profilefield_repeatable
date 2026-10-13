@@ -139,45 +139,6 @@ class projection {
     }
 
     /**
-     * Which column keys hold a value in some set of one field, and how many users have sets.
-     *
-     * One query over the projection, which Report Builder reads the same way: a key counts once
-     * any set has a non-blank value under it. The define form locks these keys.
-     *
-     * @param int $fieldid
-     * @param schema $schema The field's stored schema ({@see schema::from_field()}).
-     * @return array ['users' => int, 'keys' => string[] the keys in use, in schema order].
-     */
-    public static function keys_in_use(int $fieldid, schema $schema): array {
-        global $DB;
-
-        $keys = $schema->keys();
-        $select = ['COUNT(DISTINCT userid) AS users'];
-        $params = ['fieldid' => $fieldid];
-        foreach ($keys as $index => $key) {
-            [$valuesql, $valueparams] = helper::sql_column_value($DB, 'data', $schema, $key, 'key' . $index, 'legacy' . $index);
-            $select[] = "MAX(CASE WHEN TRIM({$valuesql}) <> '' THEN 1 ELSE 0 END) AS used{$index}";
-            $params += $valueparams;
-        }
-
-        $record = $DB->get_record_sql(
-            'SELECT ' . implode(', ', $select) . '
-               FROM {profilefield_repeatable_data}
-              WHERE fieldid = :fieldid',
-            $params
-        );
-
-        $inuse = [];
-        foreach ($keys as $index => $key) {
-            if (!empty($record->{'used' . $index})) {
-                $inuse[] = $key;
-            }
-        }
-
-        return ['users' => (int)($record->users ?? 0), 'keys' => $inuse];
-    }
-
-    /**
      * Rebuild the rows of every repeatable field of one user whose rows no longer match the payload.
      *
      * @param int $userid

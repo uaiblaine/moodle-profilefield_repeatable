@@ -44,9 +44,9 @@ $string['columnparenthint'] =
 $string['columnrole'] = 'Papel no conjunto';
 $string['columns'] = 'Colunas';
 $string['columns_help'] =
-    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma chave com valores não pode mudar; renomeie o nome da coluna.';
+    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma coluna cuja chave tem valores armazenados não pode ser removida nem ter a chave alterada; renomeie o nome da coluna.';
 $string['columnsindata'] =
-    '{$a} usuários têm dados neste campo. As chaves das colunas com valores estão bloqueadas: renomear uma coluna muda apenas o nome. Remover uma coluna oculta seus valores; eles continuam armazenados.';
+    '{$a} usuários têm dados neste campo. Colunas com valores armazenados não podem ser removidas e suas chaves estão bloqueadas: renomear essa coluna muda apenas o nome.';
 $string['columnsubitem'] = '{$a}';
 $string['columnsubitemcode'] = '{$a} (código)';
 $string['columnsubitemname'] = '{$a} (nome)';
@@ -67,6 +67,7 @@ $string['errorkeyconflict'] = 'Duas colunas geram a coluna de relatório "{$a}":
 $string['errorkeyduplicate'] = 'Chave usada por duas colunas: {$a}.';
 $string['errorkeyinvalid'] =
     'Chave inválida "{$a}": comece com uma letra minúscula, seguida de até 39 letras minúsculas, dígitos ou sublinhados.';
+$string['errorkeylocked'] = 'Colunas com valores armazenados não podem ser removidas nem ter a chave alterada: {$a}.';
 $string['errorlabelduplicate'] = 'Nome de coluna usado duas vezes: {$a}.';
 $string['errorlabelrequired'] = 'A coluna {$a} não tem nome.';
 $string['errormodeinvalid'] = 'Coluna "{$a}": escolha texto livre ou um modo de dicionário.';
@@ -107,6 +108,7 @@ $string['privacy:metadata:profilefield_repeatable_data:timemodified'] = 'A data 
 $string['privacy:metadata:profilefield_repeatable_data:userid'] = 'O ID do usuário proprietário dos dados deste campo repetível';
 $string['profilewidgettitle'] = 'Campos repetíveis';
 $string['removecolumn'] = 'Remover coluna';
+$string['removecolumnlocked'] = 'Há usuários com valores nesta coluna, por isso ela não pode ser removida.';
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
 $string['roleindexed'] = 'Indexada';

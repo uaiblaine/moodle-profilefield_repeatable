@@ -41,9 +41,9 @@ Feature: Repeatable profile field editing and display
     And I should see "Certificates"
     And I open my profile in edit mode
     And I expand all fieldsets
-    When I set the field "Certificate language" in the "Other fields" "fieldset" to "Portuguese"
+    When I set the field "Certificate language" in the "Testing" "fieldset" to "Portuguese"
     And I press "Update profile"
     Then I should see "Set 1: Level is required."
-    And I set the field "Level" in the "Other fields" "fieldset" to "C2"
+    And I set the field "Level" in the "Testing" "fieldset" to "C2"
     And I press "Update profile"
     And I should not see "Set 1: Level is required."

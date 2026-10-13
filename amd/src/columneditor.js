@@ -46,8 +46,8 @@ const STRINGKEYS = [
     'columnkeyhint', 'columnkeylocked', 'columnlabel', 'columnlabelhint', 'columnmode', 'columnnew', 'columnparent',
     'columnparenthint', 'columnrole', 'columnsindata', 'domainoption', 'domainrestricted', 'domainvisible',
     'modedictionary', 'modedictionaryhelp', 'modedictionaryopen', 'modedictionaryopenhelp', 'modefree', 'modefreehelp',
-    'movedown', 'moveup', 'newcolumn', 'parentnone', 'removecolumn', 'roleindexed', 'roleindexedlabel', 'rolerequired',
-    'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel', 'summaryindexed',
+    'movedown', 'moveup', 'newcolumn', 'parentnone', 'removecolumn', 'removecolumnlocked', 'roleindexed', 'roleindexedlabel',
+    'rolerequired', 'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel', 'summaryindexed',
     'summarysubline', 'summarytitle',
 ];
 
@@ -62,7 +62,8 @@ const fill = (template, a) => {
     if (a !== null && typeof a === 'object') {
         return template.replace(/\{\$a->(\w+)\}/g, (match, name) => String(a[name] ?? ''));
     }
-    return a === undefined ? template : template.replace(/\{\$a\}/g, String(a));
+    // A replacer function, so a "$" in the value is never read as a replacement pattern.
+    return a === undefined ? template : template.replace(/\{\$a\}/g, () => String(a));
 };
 
 /**
@@ -452,9 +453,13 @@ class Editor {
             children.push(this.renderDictionary(column, index, id, field));
         }
         children.push(this.renderRoles(column, index, id));
+        // A column holding stored values cannot be removed; the server rejects it as well.
         children.push(make('div', {className: 'profilefield-repeatable-ce-actions'}, [
-            make('button', {type: 'button', className: 'btn btn-danger', dataset: {action: 'remove', index: String(index)}},
-                [this.str('removecolumn')]),
+            make('button', {
+                type: 'button', className: 'btn btn-danger', disabled: locked,
+                dataset: {action: 'remove', index: String(index)},
+                attrs: locked ? {title: this.str('removecolumnlocked')} : {},
+            }, [this.str('removecolumn')]),
         ]));
 
         return make('div', {className: 'profilefield-repeatable-ce-body', id: bodyid}, children);
@@ -595,7 +600,7 @@ class Editor {
             });
             this.open = this.columns.length - 1;
             this.render(`#${CSS.escape(`${this.uid}-column-${this.open}-label`)}`);
-        } else if (action === 'remove') {
+        } else if (action === 'remove' && !this.isLocked(this.columns[index])) {
             const [removed] = this.columns.splice(index, 1);
             this.columns.forEach((column) => {
                 column.parent = column.parent === removed.key ? '' : column.parent;

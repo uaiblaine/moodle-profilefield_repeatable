@@ -210,8 +210,8 @@ final class define_class_test extends \advanced_testcase {
      * With the companion installed, the editor receives its domains with their plain names.
      */
     public function test_define_after_data_lists_the_companion_domains(): void {
-        if (!class_exists('\local_dictionaries\resolver')) {
-            $this->markTestSkipped('local_dictionaries is not installed.');
+        if (!method_exists('\local_dictionaries\api', 'list_domains')) {
+            $this->markTestSkipped('local_dictionaries with api::list_domains() is not installed.');
         }
         $this->resetAfterTest();
         $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
@@ -226,5 +226,124 @@ final class define_class_test extends \advanced_testcase {
         $this->assertSame('States & regions', $uf[0]['name']);
         $this->assertSame(1, $uf[0]['itemcount']);
         $this->assertSame('1', (string)$element->getAttribute('data-companion'));
+    }
+
+    /**
+     * A field with stored values in a payload that has no projection row.
+     *
+     * Written straight into {user_info_data}, as core's profile_save_custom_fields() does, so only
+     * the canonical payload knows about the value.
+     *
+     * @return \stdClass The field record.
+     */
+    private function field_with_unprojected_value(): \stdClass {
+        global $DB;
+
+        $fielddata = $this->generator()->create_field(['Name', 'Role', 'Notes']);
+        $user = $this->getDataGenerator()->create_user();
+        $DB->insert_record('user_info_data', (object)[
+            'userid' => $user->id,
+            'fieldid' => $fielddata->id,
+            'data' => '{"@@ID#1":{"name":"Ann","role":" ","notes":null}}',
+            'dataformat' => 0,
+        ]);
+        $this->assertFalse($DB->record_exists('profilefield_repeatable_data', ['fieldid' => $fielddata->id]));
+        return $fielddata;
+    }
+
+    /**
+     * The server refuses a schema that removes or re-keys a column holding values, read from the payloads.
+     */
+    public function test_define_validate_specific_rejects_dropping_a_key_in_use(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $fielddata = $this->field_with_unprojected_value();
+        $define = new \profile_define_repeatable();
+        $validate = fn(array $columns, int $id): array => $define->define_validate_specific((object)[
+            'id' => $id,
+            'param1' => $this->generator()->schema_json($columns),
+        ], []);
+        $locked = ['param1' => get_string('errorkeylocked', 'profilefield_repeatable', 'Name')];
+
+        $this->assertSame($locked, $validate(['Role', 'Notes'], (int)$fielddata->id), 'Removed');
+        $this->assertSame($locked, $validate([['key' => 'full_name', 'label' => 'Name'], 'Role'], (int)$fielddata->id), 'Re-keyed');
+        // Controls: renaming the label, or removing columns that hold no value, is allowed.
+        $this->assertSame([], $validate([['key' => 'name', 'label' => 'Full name']], (int)$fielddata->id));
+        // A new field, or an id that is not a repeatable field, locks nothing.
+        $this->assertSame([], $validate(['Role'], 0));
+        $other = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'text', 'shortname' => 'other', 'name' => 'Other', 'param1' => $fielddata->param1,
+        ]);
+        $DB->insert_record('user_info_data', (object)[
+            'userid' => $this->getDataGenerator()->create_user()->id,
+            'fieldid' => $other->id,
+            'data' => '{"@@ID#1":{"name":"Not a repeatable value"}}',
+            'dataformat' => 0,
+        ]);
+        $this->assertSame([], $validate(['Role'], (int)$other->id));
+    }
+
+    /**
+     * The editor locks the same keys as the server, from the payloads, without a projection row.
+     */
+    public function test_define_after_data_locks_keys_of_unprojected_payloads(): void {
+        $this->resetAfterTest();
+        $fielddata = $this->field_with_unprojected_value();
+
+        $element = $this->after_data((int)$fielddata->id, $fielddata->param1)->getElement('param1');
+
+        $this->assertSame('["name"]', $element->getAttribute('data-lockedkeys'));
+        $this->assertEquals(1, $element->getAttribute('data-users'));
+    }
+
+    /**
+     * A field still on the version 1 parameters opens as its version 2 schema, and saving it converts it.
+     */
+    public function test_v1_field_opens_as_its_schema_and_converts_on_save(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $fielddata = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable', 'shortname' => 'oldfield', 'name' => 'Old field',
+            'param1' => "Full name\nRole", 'param3' => 'Role|roles', 'param4' => 'Role',
+        ]);
+        $user = $this->getDataGenerator()->create_user();
+        $dataid = $DB->insert_record('user_info_data', (object)[
+            'userid' => $user->id, 'fieldid' => $fielddata->id, 'dataformat' => 0,
+            'data' => '{"@@ID#1":{"Full name":"Ann","Role":"lead"}}',
+        ]);
+
+        $element = $this->after_data((int)$fielddata->id, $fielddata->param1)->getElement('param1');
+        $schema = local\schema::from_json($element->getValue());
+        $this->assertSame(['full_name', 'role'], $schema->keys());
+        $this->assertSame(['role' => 'roles'], $schema->domain_map());
+        $this->assertSame(['role'], $schema->subline_keys());
+        $define = new \profile_define_repeatable();
+        $this->assertSame([], $define->define_validate_specific((object)[
+            'id' => $fielddata->id,
+            'param1' => $element->getValue(),
+        ], []));
+
+        $record = $DB->get_record('user_info_field', ['id' => $fielddata->id]);
+        $record->param1 = $element->getValue();
+        $define->define_save($record);
+
+        $this->assertSame(
+            ['full_name' => 'Full name', 'role' => 'Role'],
+            json_decode(get_config('profilefield_repeatable', local\schema::legacy_config_name((int)$fielddata->id)), true)
+        );
+        $field = new \profile_field_repeatable((int)$fielddata->id, (int)$user->id);
+        $loaded = new \stdClass();
+        $field->edit_load_user_data($loaded);
+        $this->assertSame('{"@@ID#1":{"full_name":"Ann","role":"lead"}}', $loaded->{$field->inputname});
+
+        $this->expectOutputRegex('/re-keyed 1 payload/');
+        $this->runAdhocTasks(task\rekey_payloads::class);
+        $this->assertSame(
+            '{"@@ID#1":{"full_name":"Ann","role":"lead"}}',
+            $DB->get_field('user_info_data', 'data', ['id' => $dataid])
+        );
+        $this->assertFalse(get_config('profilefield_repeatable', local\schema::legacy_config_name((int)$fielddata->id)));
     }
 }

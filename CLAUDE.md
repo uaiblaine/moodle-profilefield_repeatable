@@ -116,8 +116,19 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   the constructor normalises and never rejects. `pattern` is reserved and rejected until stage C.
 - **Payloads and Report Builder identifiers are keyed by column key**, never by label. A key is
   `[a-z][a-z0-9_]{0,39}`; `generate_key()` and `amd/src/columneditor.js` `generateKey()` must stay
-  in step. Keys holding values (`projection::keys_in_use()`, read from the STORED field) are locked
-  in the editor; removing a column hides its values without deleting them.
+  in step. Keys holding values (`local\stored_values`, read from the stored field's
+  `user_info_data` payloads, never the projection) are locked in the editor AND enforced by
+  `define_validate_specific()`: a schema that removes or re-keys one is rejected. A stored schema
+  is re-checked on read: `from_json()` drops columns with a bad or colliding key.
+- `from_v1()` never gives a key equal to another column's label (or its `_name`/`_code`): v1
+  payloads hold values under labels, and such a key would read the other column's value.
+- Per-column `required` is checked in `edit_validate_field()` only: web services, CSV upload and
+  auth sync save through `edit_save_data()` without it. A JSON null under a key counts as absent
+  (`helper::column_value()`), as COALESCE treats PostgreSQL's NULL.
+- The upgrade is resumable: `legacykeys_<fieldid>` is written for every converted field (`{}` when
+  no label differs from its key) and removed only by `migration::finish_field()`; a v2 field that
+  still has it is resumed. The rekey's compare-and-set is exact (`sql_equal()` case and accent
+  sensitive on pgsql/mysql, PHP comparison elsewhere).
 - Report Builder identifiers: free `<key>`, dictionary `<key>_name` + `<key>_code`, plus
   `setnumber`. The upgrade maps 2.x `subitemN`/`subitemnameN`/`subitemcodeN` (1-based position) in
   `reportbuilder_column`, `reportbuilder_filter`, `conditiondata` and users' filter values.

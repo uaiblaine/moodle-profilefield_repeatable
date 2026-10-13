@@ -52,16 +52,46 @@ class profile_define_repeatable extends profile_define_base {
     }
 
     /**
+     * The stored repeatable field a submitted id names, or null.
+     *
+     * @param int $fieldid
+     * @return stdClass|null
+     */
+    private function stored_field(int $fieldid): ?stdClass {
+        global $DB;
+
+        if ($fieldid <= 0) {
+            return null;
+        }
+        return $DB->get_record('user_info_field', ['id' => $fieldid, 'datatype' => 'repeatable']) ?: null;
+    }
+
+    /**
+     * The submitted schema, normalised but with every column kept, so errors name what was typed.
+     *
+     * @param string $json
+     * @return \profilefield_repeatable\local\schema|null Null when the text is not a version 2 schema.
+     */
+    private function submitted_schema(string $json): ?\profilefield_repeatable\local\schema {
+        $document = \profilefield_repeatable\local\schema::decode($json);
+        if ($document === null || !is_array($document['columns'] ?? null)) {
+            return null;
+        }
+        return \profilefield_repeatable\local\schema::from_columns(array_values($document['columns']));
+    }
+
+    /**
      * Hand the column editor what it needs: locked keys, the users with data and the domains.
      *
      * Everything travels in data attributes of the schema textarea, not in the js_call_amd()
      * arguments, which core warns about past 1024 characters. The locked keys come from the
-     * stored field, never from the submitted schema: a key holding values cannot be renamed.
+     * stored field, never from the submitted schema; {@see self::define_validate_specific()}
+     * enforces them. A field still on the version 1 parameters is shown as its version 2 schema.
      *
      * @param MoodleQuickForm $mform
      */
     public function define_after_data(&$mform) {
-        global $DB, $PAGE;
+        global $PAGE;
 
         if (!$mform->elementExists('param1')) {
             return;
@@ -69,17 +99,20 @@ class profile_define_repeatable extends profile_define_base {
 
         $element = $mform->getElement('param1');
         $usage = ['users' => 0, 'keys' => []];
-        $fieldid = (int)$mform->getElementValue('id');
-        $stored = $fieldid > 0 ? $DB->get_record('user_info_field', ['id' => $fieldid, 'datatype' => 'repeatable']) : false;
+        $stored = $this->stored_field((int)$mform->getElementValue('id'));
         if ($stored) {
-            $usage = \profilefield_repeatable\local\projection::keys_in_use(
-                $fieldid,
+            $usage = \profilefield_repeatable\local\stored_values::keys_in_use(
+                (int)$stored->id,
                 \profilefield_repeatable\local\schema::from_field($stored)
             );
+            $isv1 = \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
+            if ($isv1 && trim((string)$element->getValue()) === trim((string)$stored->param1)) {
+                $element->setValue(\profilefield_repeatable\local\schema::from_field($stored)->to_json());
+            }
         }
 
         // Shown pretty-printed, so the schema stays editable without JavaScript.
-        $schema = \profilefield_repeatable\local\schema::from_json((string)$element->getValue());
+        $schema = $this->submitted_schema((string)$element->getValue());
         if ($schema !== null) {
             $element->setValue(json_encode(
                 $schema->to_document(),
@@ -103,6 +136,8 @@ class profile_define_repeatable extends profile_define_base {
      *
      * Every broken rule is listed under the schema, which the column editor shows with the
      * error region of the form row ({@see \profilefield_repeatable\local\schema::validate()}).
+     * The keys holding values are read from the stored field's payloads, whatever the editor
+     * sent: a schema that drops one is rejected.
      *
      * @param stdClass|array $data
      * @param array $files
@@ -116,7 +151,16 @@ class profile_define_repeatable extends profile_define_base {
             $domainexists = static fn(string $domain): bool => \local_dictionaries\resolver::domain_exists($domain);
         }
 
-        $errors = \profilefield_repeatable\local\schema::validate($document, $domainexists);
+        $lockedlabels = [];
+        $stored = $this->stored_field((int)($data->id ?? 0));
+        if ($stored) {
+            $context = \core\context\system::instance();
+            foreach (\profilefield_repeatable\local\stored_values::locked_labels($stored) as $key => $label) {
+                $lockedlabels[$key] = format_string($label, true, ['context' => $context, 'escape' => false]);
+            }
+        }
+
+        $errors = \profilefield_repeatable\local\schema::validate($document, $domainexists, $lockedlabels);
         if (empty($errors)) {
             return [];
         }
@@ -134,7 +178,7 @@ class profile_define_repeatable extends profile_define_base {
      * @return array|stdClass
      */
     public function define_save_preprocess($data) {
-        $schema = \profilefield_repeatable\local\schema::from_json((string)($data->param1 ?? ''));
+        $schema = $this->submitted_schema((string)($data->param1 ?? ''));
         if ($schema !== null) {
             $data->param1 = $schema->to_json();
         }
@@ -149,12 +193,30 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Save repeatable field configuration and, on PostgreSQL, enqueue index reconciliation.
      *
+     * Saving a field still on the version 1 parameters converts it as the upgrade does: its
+     * key => label map is written before param1 changes, so the label-keyed payloads keep
+     * reading, and {@see \profilefield_repeatable\task\rekey_payloads} re-keys them.
+     *
      * @param array|stdClass $data
      */
     public function define_save($data) {
         global $DB;
 
+        $stored = $this->stored_field((int)($data->id ?? 0));
+        $convert = $stored && \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
+        if ($convert) {
+            $legacy = \profilefield_repeatable\local\schema::from_field($stored)->legacy_labels();
+            set_config(
+                \profilefield_repeatable\local\schema::legacy_config_name((int)$stored->id),
+                json_encode((object)$legacy, JSON_UNESCAPED_UNICODE),
+                'profilefield_repeatable'
+            );
+        }
+
         parent::define_save($data);
+        if ($convert) {
+            \profilefield_repeatable\task\rekey_payloads::queue_for_field((int)$stored->id);
+        }
         if ($DB->get_dbfamily() !== 'postgres' || empty($data->id)) {
             return;
         }
