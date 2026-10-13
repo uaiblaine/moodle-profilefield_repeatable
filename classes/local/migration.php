@@ -82,7 +82,7 @@ final class migration {
      *
      * @param int $fieldid
      * @param schema $schema The field's schema with its legacy labels.
-     * @return int Number of payloads whose normalised form differed from the stored text.
+     * @return int Number of payloads written.
      */
     public static function rekey_payloads(int $fieldid, schema $schema): int {
         global $DB;
@@ -110,8 +110,9 @@ final class migration {
                 if ($json === (string)$row->data) {
                     continue;
                 }
-                self::write_if_unchanged($lastid, (string)$row->data, $json);
-                $rewritten++;
+                if (self::write_if_unchanged($lastid, (string)$row->data, $json)) {
+                    $rewritten++;
+                }
             }
             $transaction->allow_commit();
         } while (count($rows) === self::CHUNK_SIZE);
@@ -120,20 +121,37 @@ final class migration {
     }
 
     /**
-     * Replace a stored payload, unless it is no longer the text that was read.
+     * Replace a stored payload, unless it is no longer exactly the text that was read.
+     *
+     * On PostgreSQL and MySQL/MariaDB the comparison is part of the UPDATE, case and accent
+     * sensitive ({@see \moodle_database::sql_equal()}: MariaDB's default collation would
+     * otherwise take "Alice" for "alice"). Other families compare text columns only through
+     * truncating casts, so the row is re-read and compared in PHP, inside the caller's
+     * transaction. Called inside the transaction of a chunk ({@see self::rekey_payloads()}).
      *
      * @param int $dataid The {user_info_data} id.
      * @param string $old The payload as read.
      * @param string $new The payload to write.
-     * @return void
+     * @return bool Whether the stored payload is now $new because of this call.
      */
-    public static function write_if_unchanged(int $dataid, string $old, string $new): void {
+    public static function write_if_unchanged(int $dataid, string $old, string $new): bool {
         global $DB;
 
-        $comparedata = $DB->sql_compare_text('data') . ' = ' . $DB->sql_compare_text(':olddata');
-        $DB->set_field_select('user_info_data', 'data', $new, "id = :id AND {$comparedata}", [
-            'id' => $dataid,
-            'olddata' => $old,
-        ]);
+        if (in_array($DB->get_dbfamily(), ['postgres', 'mysql'], true)) {
+            $DB->set_field_select(
+                'user_info_data',
+                'data',
+                $new,
+                'id = :id AND ' . $DB->sql_equal('data', ':olddata', true, true),
+                ['id' => $dataid, 'olddata' => $old]
+            );
+            return $old !== $new && $DB->get_field('user_info_data', 'data', ['id' => $dataid]) === $new;
+        }
+
+        if ($DB->get_field('user_info_data', 'data', ['id' => $dataid]) !== $old) {
+            return false;
+        }
+        $DB->set_field('user_info_data', 'data', $new, ['id' => $dataid]);
+        return true;
     }
 }

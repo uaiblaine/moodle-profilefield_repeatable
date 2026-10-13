@@ -341,10 +341,10 @@ final class upgrade_test extends core_reportbuilder_testcase {
         // A save of the new shape lands between the read and the write: the write leaves it alone.
         $saved = '{"@@ID#1":{"lingua":"fr","level":"","certificate_number":""}}';
         $DB->set_field('user_info_data', 'data', $saved, ['id' => $dataid]);
-        migration::write_if_unchanged($dataid, self::ALICE, '{"stale":"rewrite"}');
+        $this->assertFalse(migration::write_if_unchanged($dataid, self::ALICE, '{"stale":"rewrite"}'));
         $this->assertSame($saved, $DB->get_field('user_info_data', 'data', ['id' => $dataid]));
         // Control: written when the stored text is the one read.
-        migration::write_if_unchanged($dataid, $saved, '{}');
+        $this->assertTrue(migration::write_if_unchanged($dataid, $saved, '{}'));
         $this->assertSame('{}', $DB->get_field('user_info_data', 'data', ['id' => $dataid]));
         // A payload already in the new shape is not rewritten.
         $DB->set_field('user_info_data', 'data', $saved, ['id' => $dataid]);
@@ -382,5 +382,80 @@ final class upgrade_test extends core_reportbuilder_testcase {
             )
         );
         $this->assertNull(profilefield_repeatable_upgrade_rename_value_keys(['user:fullname_value' => 'y'], $map));
+    }
+
+    /**
+     * The compare-and-set is exact: a payload differing only in case or accents is not the one read.
+     *
+     * MariaDB's default collation is case and accent insensitive; the comparison must not be.
+     */
+    public function test_write_if_unchanged_compares_case_and_accents(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $field = $this->v1_field();
+        $user = $this->getDataGenerator()->create_user();
+        $stored = '{"@@ID#1":{"Língua":"Alice"}}';
+        $dataid = $this->v1_payload($field, (int)$user->id, $stored);
+
+        $this->assertFalse(migration::write_if_unchanged($dataid, '{"@@ID#1":{"Língua":"alice"}}', '{"case":1}'));
+        $this->assertFalse(migration::write_if_unchanged($dataid, '{"@@ID#1":{"Lingua":"Alice"}}', '{"accent":1}'));
+        $this->assertSame($stored, $DB->get_field('user_info_data', 'data', ['id' => $dataid]));
+        $this->assertTrue(migration::write_if_unchanged($dataid, $stored, '{"exact":1}'));
+    }
+
+    /**
+     * A field left half-converted by an interrupted run is finished when the step runs again.
+     *
+     * The run died after writing the schema and the legacy labels, before renaming the reports
+     * and re-keying the payloads.
+     */
+    public function test_upgrade_resumes_a_half_converted_field(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $field = $this->v1_field();
+        $user = $this->getDataGenerator()->create_user();
+        $dataid = $this->v1_payload($field, (int)$user->id, self::ALICE);
+        $report = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder')->create_report([
+            'name' => 'Certificates', 'source' => repeatable_sets::class, 'default' => 0,
+        ]);
+        (new column(0, (object)['reportid' => $report->get('id'), 'uniqueidentifier' => 'repeatable_langcerts:subitem3',
+            'columnorder' => 1]))->create();
+        // Already renamed by the interrupted run: kept as it is.
+        (new column(0, (object)['reportid' => $report->get('id'), 'uniqueidentifier' => 'repeatable_langcerts:level_name',
+            'columnorder' => 2]))->create();
+
+        profilefield_repeatable_upgrade_convert_field($field);
+        $this->assertNotNull(schema::decode($DB->get_field('user_info_field', 'param1', ['id' => $field->id])));
+
+        $this->upgrade();
+
+        $this->assertSame(
+            '{"@@ID#1":{"lingua":"pt","level":"C2","certificate_number":"CEL-1"},'
+                . '"@@ID#2":{"lingua":"es","level":"","certificate_number":"DEL-2"}}',
+            $DB->get_field('user_info_data', 'data', ['id' => $dataid])
+        );
+        $this->assertEquals(['lingua' => 'pt', 'level' => 'C2', 'certificate_number' => 'CEL-1'], $this->projected($dataid)[1]);
+        $this->assertEqualsCanonicalizing(
+            ['repeatable_langcerts:certificate_number', 'repeatable_langcerts:level_name'],
+            $DB->get_fieldset_select('reportbuilder_column', 'uniqueidentifier', 'reportid = ?', [$report->get('id')])
+        );
+        $this->assertFalse(get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)));
+    }
+
+    /**
+     * A field whose labels are all their own keys still gets the in-progress marker, so it resumes too.
+     */
+    public function test_convert_marks_fields_without_legacy_labels(): void {
+        $this->resetAfterTest();
+        $field = $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'repeatable', 'shortname' => 'plain', 'name' => 'Plain', 'param1' => "name\nrole",
+        ]);
+
+        profilefield_repeatable_upgrade_convert_field($field);
+
+        $this->assertSame('{}', get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)));
     }
 }

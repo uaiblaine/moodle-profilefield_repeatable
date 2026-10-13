@@ -32,8 +32,13 @@ use profilefield_repeatable\task\rekey_payloads;
  *
  * Per field: write the schema and the legacy labels, map saved Report Builder identifiers, then
  * re-key the payloads and rebuild the projection at once, or queue an adhoc task when the field
- * has more than {@see migration::INLINE_LIMIT} payloads. A field already on version 2 is skipped,
- * so a rerun is harmless.
+ * has more than {@see migration::INLINE_LIMIT} payloads.
+ *
+ * Resumable: the legacy-label config is written for every converted field (an empty map when
+ * every label is its own key) and removed only by {@see migration::finish_field()}. A field on
+ * version 2 that still has it was left half-way by an interrupted run and is resumed (renaming
+ * only the report identifiers still under their old names, re-keying, or queueing again); a
+ * field on version 2 without it is done and skipped.
  *
  * @return void
  */
@@ -44,7 +49,10 @@ function profilefield_repeatable_upgrade_to_schema_v2(): void {
     foreach ($fields as $field) {
         $schema = profilefield_repeatable_upgrade_convert_field($field);
         if ($schema === null) {
-            continue;
+            if (get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)) === false) {
+                continue;
+            }
+            $schema = schema::from_field($field);
         }
 
         profilefield_repeatable_upgrade_map_report_identifiers($field, $schema);
@@ -61,7 +69,8 @@ function profilefield_repeatable_upgrade_to_schema_v2(): void {
  * Write the version 2 schema of one version 1 field and remember its labels.
  *
  * The legacy labels go to the plugin config before param1 changes, so no reader ever sees the
- * new schema without them; param2..param4 are cleared.
+ * new schema without them, and the config marks the field as converted but not finished
+ * ({@see profilefield_repeatable_upgrade_to_schema_v2()}); param2..param4 are cleared.
  *
  * @param stdClass $field The {user_info_field} record.
  * @return schema|null The new schema with its legacy labels, or null when the field is on version 2.
@@ -79,13 +88,11 @@ function profilefield_repeatable_upgrade_convert_field(stdClass $field): ?schema
         (string)$field->param3,
         (string)$field->param4
     );
-    if (!empty($schema->legacy_labels())) {
-        set_config(
-            schema::legacy_config_name((int)$field->id),
-            json_encode($schema->legacy_labels(), JSON_UNESCAPED_UNICODE),
-            'profilefield_repeatable'
-        );
-    }
+    set_config(
+        schema::legacy_config_name((int)$field->id),
+        json_encode((object)$schema->legacy_labels(), JSON_UNESCAPED_UNICODE),
+        'profilefield_repeatable'
+    );
 
     $DB->update_record('user_info_field', (object)[
         'id' => (int)$field->id,
@@ -130,6 +137,7 @@ function profilefield_repeatable_upgrade_report_identifier_map(string $entitynam
  * Only reports of this plugin's datasource are touched. Each row is renamed from what it was,
  * one row at a time, so an old name that equals another column's new name cannot chain.
  * Condition and user filter values are keyed "<uniqueidentifier>_<suffix>" and are renamed too.
+ * Idempotent: only names still in their version 1 form are renamed, so a resumed run is safe.
  *
  * @param stdClass $field The {user_info_field} record (shortname).
  * @param schema $schema The converted schema.
