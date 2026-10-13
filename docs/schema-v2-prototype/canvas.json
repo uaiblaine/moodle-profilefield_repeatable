@@ -1,0 +1,18 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-13T12:00:00Z"},
+  "title": "Repeatable field schema v2",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 1640, "title": "1 · Admin: defining the columns", "expand": "fill", "is_interactive": true},
+    "UserEdit.dc.html": {"x": 1360, "y": 0, "w": 1280, "h": 1080, "title": "2 · User: editing sets", "expand": "fill", "is_interactive": true},
+    "Display.dc.html": {"x": 2720, "y": 0, "w": 1280, "h": 1180, "title": "3 · Profile display and Report Builder", "expand": "fill"},
+    "Migration.dc.html": {"x": 4080, "y": 0, "w": 1280, "h": 1080, "title": "4 · Migration v1 to v2", "expand": "fill"}
+  },
+  "order": ["Main.dc.html", "UserEdit.dc.html", "Display.dc.html", "Migration.dc.html"],
+  "notes": {
+    "rowtitle": {"x": 0, "y": -300, "text": "Repeatable field — column schema v2 (prototype)", "kind": "title1", "maxW": 5360}
+  },
+  "designSystems": []
+}

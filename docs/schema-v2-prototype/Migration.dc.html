@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Migration from v1 to v2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f5f6f8}
+a{color:#0f6cbf}a:hover{color:#0a4d87}
+</style>
+</helmet>
+<div style="font-family:'Noto Sans',system-ui,sans-serif;color:#1d2125;min-height:100%;background:#f5f6f8;font-size:14px;line-height:1.5">
+  <main style="max-width:1240px;margin:0 auto;padding:32px 24px;display:flex;flex-direction:column;gap:24px">
+    <div>
+      <p style="margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:.06em;color:#5c6670">UPGRADE STEP · RUNS ONCE PER FIELD</p>
+      <h1 style="font-size:26px;margin:0">From four text lists to one column schema</h1>
+      <p style="margin:6px 0 0;color:#5c6670;max-width:760px">Today the column name is also the key under which every value is stored, so renaming a column orphans its data. v2 gives each column a stable key and moves every setting next to the column it belongs to.</p>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:stretch">
+      <section aria-labelledby="v1head" style="flex:1 1 440px;min-width:0;background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+        <h2 id="v1head" style="font-size:17px;margin:0;display:flex;gap:8px;align-items:center"><span style="background:#e9ecef;border-radius:10px;padding:1px 9px;font-size:13px">v1</span> Today</h2>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:12px">
+          <div><div style="font-weight:600;margin-bottom:3px">param1 · Sub-items</div><pre style="margin:0;background:#f1f3f5;border-radius:6px;padding:8px;white-space:pre">Language
+Level
+Certificate number</pre></div>
+          <div><div style="font-weight:600;margin-bottom:3px">param2 · Indexed</div><pre style="margin:0;background:#f1f3f5;border-radius:6px;padding:8px;white-space:pre">Language</pre></div>
+          <div><div style="font-weight:600;margin-bottom:3px">param3 · Mappings</div><pre style="margin:0;background:#f1f3f5;border-radius:6px;padding:8px;white-space:pre">Language|iso639
+Level|cefr_levels</pre></div>
+          <div><div style="font-weight:600;margin-bottom:3px">param4 · Subline</div><pre style="margin:0;background:#f1f3f5;border-radius:6px;padding:8px;white-space:pre">Level</pre></div>
+        </div>
+        <div style="font-size:12px"><div style="font-weight:600;margin-bottom:3px">Stored value (user_info_data.data)</div><pre style="margin:0;background:#1d2125;color:#e9ecef;border-radius:6px;padding:10px;white-space:pre;overflow-x:auto">{"@@ID#1": {"Language": "pt",
+            "Level": "C2",
+            "Certificate number": "CEL-204871"}}</pre></div>
+        <p style="margin:0;font-size:12px;color:#8a1f12;background:#fbe4e1;border-radius:6px;padding:8px 10px">Rename “Certificate number” to “Certificate” and 1,248 stored values stop showing.</p>
+      </section>
+
+      <div aria-hidden="true" style="flex:0 0 40px;display:flex;align-items:center;justify-content:center">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0f6cbf" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+      </div>
+
+      <section aria-labelledby="v2head" style="flex:1 1 440px;min-width:0;background:#fff;border:1px solid #9fc5e8;border-radius:8px;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+        <h2 id="v2head" style="font-size:17px;margin:0;display:flex;gap:8px;align-items:center"><span style="background:#0f6cbf;color:#fff;border-radius:10px;padding:1px 9px;font-size:13px">v2</span> After the upgrade</h2>
+        <div style="font-size:12px"><div style="font-weight:600;margin-bottom:3px">param1 · Column schema</div><pre style="margin:0;background:#1d2125;color:#e9ecef;border-radius:6px;padding:10px;white-space:pre;overflow-x:auto">{"version": 2, "columns": [
+  {"key": "language", "label": "Language",
+   "mode": "dictionary", "domain": "iso639",
+   "title": true, "indexed": true},
+  {"key": "level", "label": "Level",
+   "mode": "dictionary", "domain": "cefr_levels",
+   "subline": true},
+  {"key": "certificate_number",
+   "label": "Certificate number", "mode": "free"}
+]}</pre></div>
+        <div style="font-size:12px"><div style="font-weight:600;margin-bottom:3px">Stored value, re-keyed</div><pre style="margin:0;background:#1d2125;color:#e9ecef;border-radius:6px;padding:10px;white-space:pre;overflow-x:auto">{"@@ID#1": {"language": "pt",
+            "level": "C2",
+            "certificate_number": "CEL-204871"}}</pre></div>
+        <p style="margin:0;font-size:12px;color:#1f4d1d;background:#e3f1e2;border-radius:6px;padding:8px 10px">Renaming now changes only <code>label</code>. Mapped columns become strict dictionaries: existing values outside the list stay stored and show as codes.</p>
+      </section>
+    </div>
+
+    <section aria-labelledby="stepshead" style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px">
+      <h2 id="stepshead" style="font-size:17px;margin:0 0 12px">What the upgrade does, per field</h2>
+      <ol style="margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;counter-reset:s">
+        <li style="background:#f8f9fa;border-radius:8px;padding:12px"><div style="font-weight:700;color:#0f6cbf">1</div><div style="font-weight:600">Generate keys</div><div style="font-size:12px;color:#5c6670">Lowercase, accents and symbols folded to <code>_</code>, made unique within the field.</div></li>
+        <li style="background:#f8f9fa;border-radius:8px;padding:12px"><div style="font-weight:700;color:#0f6cbf">2</div><div style="font-weight:600">Write the schema</div><div style="font-size:12px;color:#5c6670">param1 to param4 become one JSON schema in param1; param2 to param4 are cleared.</div></li>
+        <li style="background:#f8f9fa;border-radius:8px;padding:12px"><div style="font-weight:700;color:#0f6cbf">3</div><div style="font-weight:600">Re-key payloads</div><div style="font-size:12px;color:#5c6670">Every user_info_data row, in chunks; above 500 users an adhoc task finishes it.</div></li>
+        <li style="background:#f8f9fa;border-radius:8px;padding:12px"><div style="font-weight:700;color:#0f6cbf">4</div><div style="font-weight:600">Rebuild projection</div><div style="font-size:12px;color:#5c6670">Per-set rows and PostgreSQL indexes are rebuilt from the new payloads.</div></li>
+        <li style="background:#f8f9fa;border-radius:8px;padding:12px"><div style="font-weight:700;color:#0f6cbf">5</div><div style="font-weight:600">Keep old reports</div><div style="font-size:12px;color:#5c6670">Saved Report Builder columns are mapped from index names to key names.</div></li>
+      </ol>
+      <p style="margin:12px 0 0;font-size:12px;color:#5c6670">Until a field's payloads are re-keyed, reads accept both shapes (v1 label keys are resolved through the schema), so a half-finished task never hides data.</p>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
