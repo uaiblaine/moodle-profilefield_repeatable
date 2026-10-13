@@ -523,28 +523,18 @@ final class field_class_test extends \advanced_testcase {
      * Ensure profile display resolves label when local reference dictionary has the code.
      */
     public function test_display_data_profile_context_resolves_reference_label(): void {
-        global $DB, $SCRIPT;
+        global $SCRIPT;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
-            $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
+        if (!class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries plugin is not available.');
         }
 
-        if (
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_domain')) ||
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_item'))
-        ) {
-            $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
-        }
-
-        $manager = new \local_profilefield_repeatable\local\Manager();
-        $manager->upsert_domain('diretoria', 'Diretoria');
-        $manager->upsert_items('diretoria', [[
-            'code' => '16',
-            'label' => 'Sao Paulo',
-        ]]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => 'diretoria', 'name' => 'Diretoria']);
+        $generator->create_item(['domain' => 'diretoria', 'code' => '16', 'label' => 'Sao Paulo']);
 
         $field = $this->create_field([
             'param1' => "codigo_diretoria\ncodigo_escola",
@@ -567,28 +557,18 @@ final class field_class_test extends \advanced_testcase {
      * Ensure non-profile (plain) display resolves reference labels when local dictionary is available.
      */
     public function test_display_data_non_profile_context_resolves_reference_label(): void {
-        global $DB, $SCRIPT;
+        global $SCRIPT;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
-            $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
+        if (!class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries plugin is not available.');
         }
 
-        if (
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_domain')) ||
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_item'))
-        ) {
-            $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
-        }
-
-        $manager = new \local_profilefield_repeatable\local\manager();
-        $manager->upsert_domain('diretoria', 'Diretoria');
-        $manager->upsert_items('diretoria', [[
-            'code' => '16',
-            'label' => 'Sao Paulo',
-        ]]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => 'diretoria', 'name' => 'Diretoria']);
+        $generator->create_item(['domain' => 'diretoria', 'code' => '16', 'label' => 'Sao Paulo']);
 
         $field = $this->create_field([
             'param1' => "codigo_diretoria\ncodigo_escola",
@@ -668,33 +648,20 @@ final class field_class_test extends \advanced_testcase {
      * Ensure accordion resolves reference labels when field is configured via define_save_preprocess.
      */
     public function test_display_data_profile_resolves_reference_with_preprocessed_param3(): void {
-        global $DB, $SCRIPT;
+        global $SCRIPT;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        if (!class_exists('\\local_profilefield_repeatable\\local\\manager')) {
-            $this->markTestSkipped('local_profilefield_repeatable plugin is not available.');
+        if (!class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries plugin is not available.');
         }
 
-        if (
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_domain')) ||
-            !$DB->get_manager()->table_exists(new \xmldb_table('local_profilefield_repeatable_item'))
-        ) {
-            $this->markTestSkipped('local_profilefield_repeatable tables are not available.');
-        }
-
-        $manager = new \local_profilefield_repeatable\local\manager();
-        $manager->upsert_domain('diretorias', 'Diretorias');
-        $manager->upsert_items('diretorias', [[
-            'code' => '16',
-            'label' => 'Sao Paulo',
-        ]]);
-        $manager->upsert_domain('escolas', 'Escolas');
-        $manager->upsert_items('escolas', [[
-            'code' => '45',
-            'label' => 'EE Alpha',
-        ]]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => 'diretorias', 'name' => 'Diretorias']);
+        $generator->create_item(['domain' => 'diretorias', 'code' => '16', 'label' => 'Sao Paulo']);
+        $generator->create_domain(['shortname' => 'escolas', 'name' => 'Escolas']);
+        $generator->create_item(['domain' => 'escolas', 'code' => '45', 'label' => 'EE Alpha']);
 
         // Canonicalise param1 and param3 through define_save_preprocess, as the admin form does.
         $define = new \profile_define_repeatable();

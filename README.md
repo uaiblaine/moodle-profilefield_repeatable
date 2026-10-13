@@ -3,7 +3,7 @@ moodle-profilefield_repeatable
 
 [![Moodle Plugin CI](https://github.com/uaiblaine/moodle-profilefield_repeatable/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/uaiblaine/moodle-profilefield_repeatable/actions/workflows/ci.yml?query=branch%3Amain)
 
-A Moodle user profile field plugin that stores repeatable field data as sets of sub-items with efficient PostgreSQL JSONB indexing and optional reference resolution via the local_profilefield_repeatable plugin.
+A Moodle user profile field plugin that stores repeatable field data as sets of sub-items with efficient PostgreSQL JSONB indexing and optional reference resolution via the local_dictionaries plugin.
 
 
 Requirements
@@ -31,7 +31,7 @@ Standard Moodle profile fields support only simple text values. This plugin prov
 
 1. **Repeatable sets** — Store multiple related data values as structured records (e.g., language proficiencies, certifications, work experience)
 2. **Efficient indexing** — PostgreSQL GIN expression indexes on selected sub-items for fast queries
-3. **Reference resolution** — Optional mapping to external domains (via local_profilefield_repeatable) for rich display values
+3. **Reference resolution** — Optional mapping to external domains (via local_dictionaries) for rich display values
 4. **Backward compatibility** — Falls back to JSON storage in user_info_data when storage table unavailable
 5. **Privacy compliance** — Full GDPR export/delete support
 
@@ -44,7 +44,7 @@ Install the plugin like any other plugin to folder
 
 See http://docs.moodle.org/en/Installing_plugins for details on installing Moodle plugins.
 
-**Optional dependency**: If you want to use reference resolution in repeatable fields, also install [moodle-local_profilefield_repeatable](https://github.com/uaiblaine/moodle-local_profilefield_repeatable).
+**Optional dependency**: If you want to use reference resolution in repeatable fields, also install [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries).
 
 
 Usage & Configuration
@@ -127,14 +127,14 @@ This release keeps compatibility with the Moodle baseline while documenting newe
 
 ### Reference Resolution
 
-Indexed sub-items can be mapped to external domains (plugins implementing the resolver interface):
+Sub-items can be mapped to reference domains kept by the companion plugin `local_dictionaries`:
 
 ```text
 Language|iso639              → resolve('en', 'iso639') → 'English'
 Proficiency|cefrframework    → resolve('B2', 'cefrframework') → 'Upper-Intermediate'
 ```
 
-Domain plugins implement `\local_profilefield_repeatable\resolver`.
+The field calls the static class `\local_dictionaries\resolver` (`resolve()`, `resolve_bulk()`, `domain_exists()`); it is a class, not an interface.
 
 
 API
@@ -173,8 +173,8 @@ parts are skipped: the JSONB column conversion, the base GIN index, and the per-
 expression indexes.
 
 #### Reference resolution not working
-1. Verify `moodle-local_profilefield_repeatable` is installed
-2. Ensure the resolver domain plugin is installed
+1. Verify `moodle-local_dictionaries` is installed and the domain exists there
+2. Ensure the code exists in that domain (codes are matched case-insensitively)
 3. Check field's Third-party domain mappings configuration
 
 

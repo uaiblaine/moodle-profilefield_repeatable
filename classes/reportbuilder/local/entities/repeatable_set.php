@@ -324,12 +324,12 @@ class repeatable_set extends base {
      * @return string|null The label, or null when the companion is absent, throws or has none.
      */
     protected static function lookup_label(string $domain, string $code): ?string {
-        if (!class_exists('\local_profilefield_repeatable\resolver')) {
+        if (!class_exists('\local_dictionaries\resolver')) {
             return null;
         }
 
         try {
-            $label = \local_profilefield_repeatable\resolver::resolve($domain, $code);
+            $label = \local_dictionaries\resolver::resolve($domain, $code);
         } catch (\Throwable $e) {
             return null;
         }
@@ -375,9 +375,9 @@ class repeatable_set extends base {
         }
 
         $labels = [];
-        if (class_exists('\local_profilefield_repeatable\resolver')) {
+        if (class_exists('\local_dictionaries\resolver')) {
             try {
-                $labels = \local_profilefield_repeatable\resolver::resolve_bulk($domain, array_values($cleancodes));
+                $labels = \local_dictionaries\resolver::resolve_bulk($domain, array_values($cleancodes));
             } catch (\Throwable $e) {
                 $labels = [];
             }

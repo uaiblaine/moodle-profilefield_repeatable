@@ -6,7 +6,7 @@ with the same columns. A value is kept twice: as a JSON object in core's
 `user_info_data.data`, and as one row per set in the plugin's own table
 `profilefield_repeatable_data`. On PostgreSQL that table's `data` column is converted to
 JSONB and indexed with SQL the plugin runs itself. An optional soft dependency, the companion
-plugin `local_profilefield_repeatable`, turns stored codes into labels. The plugin supports
+plugin `local_dictionaries`, turns stored codes into labels. The plugin supports
 Moodle 4.5 through 5.2 on one branch.
 
 ## Who is trusted
@@ -59,12 +59,14 @@ Moodle 4.5 through 5.2 on one branch.
 - **Reads prefer the per-set rows and fall back to the JSON copy**; both are rewritten together
   on every save.
 - **The soft dependency is deliberate.** The plugin installs and renders without the
-  companion: every use is guarded by `class_exists()` and `table_exists()`, and it reads the
-  companion's domain table directly. Labels from the companion are escaped by the templates.
+  companion: every use is guarded by `class_exists()`, and it reads the companion only through its
+  public `\local_dictionaries\resolver` API (no direct table access). It resolves stored codes
+  without a visibility check, as the companion's contract allows. Labels from the companion are escaped by the templates.
 - **`define_after_delete()` is not called by core.** The deletion observer and a sweep inside
   the reconcile task remove orphaned indexes instead.
-- **The domain shortname pattern `^[a-z0-9_]+$` is duplicated** in this plugin and the
-  companion on purpose, and must stay identical.
+- **The domain shortname pattern `^[a-z0-9_]+$` is kept here only as a fallback**: when the
+  companion is installed the field reads `\local_dictionaries\resolver::DOMAIN_PATTERN`, and a test
+  pins both to the same value.
 - Uninstall drops the table, which removes its indexes with it.
 
 ## De-emphasise

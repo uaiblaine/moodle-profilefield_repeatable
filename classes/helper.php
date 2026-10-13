@@ -31,12 +31,24 @@ class helper {
     public const MAX_VALUE_LENGTH = 1024;
 
     /**
-     * Domain shortname pattern for param3 reference mappings.
+     * Fallback domain shortname pattern for param3 reference mappings.
      *
-     * Keep in step with the copy in define.class.php and with the companion dictionary plugin's
-     * resolver, which rejects any other domain shortname.
+     * Used only while the companion `local_dictionaries` is absent; {@see self::domain_pattern()} reads the
+     * companion's own pattern when it is installed, and a test pins the two to the same value.
      */
     public const DOMAIN_PATTERN = '/^[a-z0-9_]+$/';
+
+    /**
+     * The domain shortname pattern in force: the companion's when installed, else the fallback.
+     *
+     * @return string A preg pattern.
+     */
+    public static function domain_pattern(): string {
+        if (class_exists('\local_dictionaries\resolver')) {
+            return \local_dictionaries\resolver::DOMAIN_PATTERN;
+        }
+        return self::DOMAIN_PATTERN;
+    }
 
     /**
      * Whether an indexed sub-item can be written into the index DDL.
@@ -137,7 +149,7 @@ class helper {
             }
 
             $domain = \core_text::strtolower($rawdomain);
-            if (!preg_match(self::DOMAIN_PATTERN, $domain)) {
+            if (!preg_match(self::domain_pattern(), $domain)) {
                 continue;
             }
 

@@ -35,7 +35,7 @@ $string['entityrepeatablesetnamed'] = '{$a}';
 $string['errordomainmapduplicatesubitem'] = 'Reference mapping duplicates for sub-item(s): {$a}.';
 $string['errordomainmapformat'] = 'Invalid reference mapping format: {$a}. Use "subitem|domain" (one per line).';
 $string['errordomainmapinvaliddomain'] = 'Invalid domain shortname(s): {$a}. Allowed pattern: lowercase letters, numbers, underscore.';
-$string['errordomainmapmissingdomain'] = 'Reference domain(s) not found in local_profilefield_repeatable: {$a}.';
+$string['errordomainmapmissingdomain'] = 'Reference domain(s) not found in local_dictionaries: {$a}.';
 $string['errordomainmapunknownsubitem'] = 'Reference mapping sub-item(s) not found in Sub-items: {$a}.';
 $string['errorindexedsubitemlimit'] = 'You can index at most {$a} sub-items for this field.';
 $string['errorindexedsubitemplaceholder'] = 'Indexed sub-item(s) cannot contain ":", "?" or "$": {$a}.';
@@ -73,7 +73,7 @@ $string['privacy:metadata:profilefield_repeatable_data:userid'] = 'The user id o
 $string['profilewidgettitle'] = 'Repeatable fields';
 $string['referencesubitemdomains'] = 'Reference mapping (subitem|domain, one per line)';
 $string['referencesubitemdomains_help'] =
-    'Optional mapping to resolve code values to labels in profile display. Format each line as "subitem|domain", where domain is a shortname from local_profilefield_repeatable.';
+    'Optional mapping to resolve code values to labels in profile display. Format each line as "subitem|domain", where domain is a shortname from local_dictionaries.';
 $string['removeset'] = 'Remove set';
 $string['repeatableset'] = 'Set {$a}';
 $string['setcolumn'] = 'SET';

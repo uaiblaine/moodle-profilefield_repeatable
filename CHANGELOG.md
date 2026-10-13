@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
   (core creates the table from `install.xml` before the install hook).
 
 ### Changed
+- The companion dictionary plugin is now `local_dictionaries` (was `local_profilefield_repeatable`):
+  labels come from `\local_dictionaries\resolver`, the "domain exists" check uses
+  `resolver::domain_exists()` instead of reading the companion's table, the domain pattern is read
+  from `resolver::DOMAIN_PATTERN` when the companion is installed, and CI installs the new repository.
 - Code comments audited against the code and Moodle's guidance: contracts stated, comments that
   contradicted the code corrected, history moved out of the code. `amd/build` rebuilt for the
   edited JSDoc of `amd/src/repeatable.js`.

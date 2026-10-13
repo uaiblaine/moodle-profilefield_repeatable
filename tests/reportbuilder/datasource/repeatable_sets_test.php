@@ -81,44 +81,16 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
     }
 
     /**
-     * Whether the companion local plugin tables are installed.
-     *
-     * @return bool
-     */
-    private function local_plugin_available(): bool {
-        global $DB;
-
-        $dbman = $DB->get_manager();
-        return class_exists('\local_profilefield_repeatable\resolver')
-            && $dbman->table_exists('local_profilefield_repeatable_domain')
-            && $dbman->table_exists('local_profilefield_repeatable_item');
-    }
-
-    /**
-     * Seed a reference domain with code/label items.
+     * Seed a reference domain with code/label items through the companion's data generator.
      *
      * @param string $shortname Domain shortname.
      * @param array $codetolabel Code to label map (code => label).
      */
     private function seed_domain(string $shortname, array $codetolabel): void {
-        global $DB;
-
-        $now = time();
-        $domainid = $DB->insert_record('local_profilefield_repeatable_domain', (object) [
-            'shortname' => $shortname,
-            'name' => ucfirst($shortname),
-            'timecreated' => $now,
-            'timemodified' => $now,
-        ]);
-
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => $shortname, 'name' => ucfirst($shortname)]);
         foreach ($codetolabel as $code => $label) {
-            $DB->insert_record('local_profilefield_repeatable_item', (object) [
-                'domainid' => $domainid,
-                'code' => (string) $code,
-                'label' => $label,
-                'timecreated' => $now,
-                'timemodified' => $now,
-            ]);
+            $generator->create_item(['domain' => $shortname, 'code' => (string) $code, 'label' => $label]);
         }
     }
 
@@ -276,8 +248,8 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        if (!$this->local_plugin_available()) {
-            $this->markTestSkipped('local_profilefield_repeatable is not installed.');
+        if (!class_exists('\\local_dictionaries\\resolver')) {
+            $this->markTestSkipped('local_dictionaries is not installed.');
         }
 
         repeatable_set::reset_label_memo();

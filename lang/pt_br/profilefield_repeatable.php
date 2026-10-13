@@ -35,7 +35,7 @@ $string['entityrepeatablesetnamed'] = '{$a}';
 $string['errordomainmapduplicatesubitem'] = 'Mapeamento de referência duplicado para subiten(s): {$a}.';
 $string['errordomainmapformat'] = 'Formato de mapeamento de referência inválido: {$a}. Use "subitem|domínio" (um por linha).';
 $string['errordomainmapinvaliddomain'] = 'Nomes de domínio inválidos: {$a}. Padrão permitido: letras minúsculas, números, sublinhado.';
-$string['errordomainmapmissingdomain'] = 'Domínio(s) de referência não encontrado(s) em local_profilefield_repeatable: {$a}.';
+$string['errordomainmapmissingdomain'] = 'Domínio(s) de referência não encontrado(s) em local_dictionaries: {$a}.';
 $string['errordomainmapunknownsubitem'] = 'Subiten(s) de mapeamento de referência não encontrado(s) em Subitens: {$a}.';
 $string['errorindexedsubitemlimit'] = 'Você pode indexar no máximo {$a} subitens para este campo.';
 $string['errorindexedsubitemplaceholder'] = 'Subitens indexados não podem conter ":", "?" ou "$": {$a}.';
@@ -73,7 +73,7 @@ $string['privacy:metadata:profilefield_repeatable_data:userid'] = 'O ID do usuá
 $string['profilewidgettitle'] = 'Campos repetíveis';
 $string['referencesubitemdomains'] = 'Mapeamento de referência (subitem|domínio, um por linha)';
 $string['referencesubitemdomains_help'] =
-    'Mapeamento opcional para resolver valores codificados em rótulos na exibição do perfil. Formate cada linha como "subitem|domínio", onde domínio é um nome curto de local_profilefield_repeatable.';
+    'Mapeamento opcional para resolver valores codificados em rótulos na exibição do perfil. Formate cada linha como "subitem|domínio", onde domínio é um nome curto de local_dictionaries.';
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
 $string['setcolumn'] = 'CONJUNTO';
