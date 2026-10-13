@@ -1,22 +1,22 @@
 # Claude instructions for `profilefield_repeatable`
 
-This file is auto-loaded as context whenever Claude works in this plugin's
-directory tree. It captures the **Moodle development standards** this plugin
-follows so future edits stay in the same style and pass CI on the first try.
+Auto-loaded whenever Claude works in this plugin's tree. **Fleet-wide standards live in
+`~/dev/CLAUDE.md`** (coding style, CI gates, lang strings, the `mdl` environment, git) — do not
+repeat them here. This file keeps only what is true for this plugin, as rules with a one-line
+reason each; every session and subagent pays for it on every cache write, so the long version of a
+gotcha goes to `docs/` (export-ignored) with a pointer from the rule.
 
-Plugin context: a Moodle **user profile field** plugin (`datatype = repeatable`)
-that stores repeatable sets of sub-items per user. Storage is dual: a canonical
-JSON blob in `user_info_data.data` (compatibility/fallback) plus one row per
-set in `profilefield_repeatable_data`, whose `data` column is converted to
-**JSONB on PostgreSQL** with a base GIN index and per-sub-item expression
-indexes. Optional code→label "reference resolution" delegates to the companion
-plugin **local_profilefield_repeatable** (soft dependency — see contract
-section). Supports Moodle **4.5 through 5.2** (`$plugin->requires = 2024100100`,
-`$plugin->supported = [405, 502]`), MATURITY_STABLE. CI is the
-**moodle-an-hochschulen/moodle-workflows** reusable workflow, called once per
-supported Moodle branch in `.github/workflows/ci.yml`; releases to the Moodle
-plugins directory are automated by `.github/workflows/moodle-release.yml`
-(triggered on `v*` tags).
+Plugin context: a Moodle **user profile field** plugin ("Repeatable", `datatype = repeatable`)
+that stores repeatable sets of sub-items per user. The canonical value is a JSON payload in core's
+`user_info_data.data`; the plugin's own table `profilefield_repeatable_data` holds one row per set
+as a projection for Report Builder (JSONB on PostgreSQL, with a GIN index and per-sub-item
+expression indexes). Optional code→label resolution comes from the companion dictionary plugin
+(soft dependency, see below). Supports Moodle **4.5 through 5.2**
+(`$plugin->requires = 2024100100`, `$plugin->supported = [405, 502]`), MATURITY_STABLE, one
+branch (`main`). CI is the moodle-an-hochschulen reusable workflow, one job per supported
+branch in `.github/workflows/ci.yml` — **update those jobs when `supported` changes**. Development
+happens on the m502 stack; this repo is mounted into m405, m501, m502 and m502b at
+`user/profile/field/repeatable` (see `~/dev/moodle-dev/plugins.conf`).
 
 ## Agent orchestration budget (fleet rule, repeated here on purpose)
 
@@ -47,511 +47,164 @@ definition, and none runs on the session model.
 
 ## Commands
 
-Run from the Moodle root (`/Volumes/N1TB/dev/github/moodle`; this plugin
-lives at `public/user/profile/field/repeatable`):
+```sh
+mdl ci moodle-profilefield_repeatable --matrix --behat   # every CI leg locally: the pre-merge gate
+mdl phpunit m502 profilefield_repeatable                 # targeted tests
+mdl behat m502 @profilefield_repeatable                  # Behat smoke tests
+mdl grunt m502 user/profile/field/repeatable             # rebuild amd/build (commit with src)
+mdl purge m502                                           # after PHP changes that affect output
+# Mutation sweep: absolute spec path, and BOTH database families.
+mdl mutate moodle-profilefield_repeatable /Users/uaiblaine/dev/moodle-profilefield_repeatable/mutations/gates.conf --fast --db pgsql
+mdl mutate moodle-profilefield_repeatable /Users/uaiblaine/dev/moodle-profilefield_repeatable/mutations/gates.conf --fast --db mariadb
+xmllint --noout --schema ~/dev/moodle-502/public/lib/xmldb/xmldb.xsd db/install.xml
+```
 
-Repo layout (Moodle 5.x split): the webroot is `public/` (plugin code +
-`public/config.php`), but **core CLI scripts live in `admin/cli/` at the
-repo root, outside `public/`** — e.g. `php admin/cli/purge_caches.php`.
-The plugin itself also installs on pre-split Moodle 4.5 layouts; never
-hardcode `public/` inside plugin code.
+In a Claude Code cloud session none of `mdl`, the stacks or `~/dev/CLAUDE.md` exist. The cloud
+environment's setup script (`moodle-dev/cloud/setup.sh`) installs `moodle-plugin-ci` and the `mpci`
+runner instead: `mpci` runs every gate on the highest branch in `ci.yml`, `mpci --branch <branch>`
+another one, `mpci --reuse --only phpunit --filter <test>` iterates. It cannot run Behat, PHP 8.4 or
+MariaDB, so the owner runs `mdl ci moodle-profilefield_repeatable --matrix --behat` before merging:
+push a branch, open the pull request, leave the merge to them. If `which mpci` prints nothing, the
+session was resumed on a container that skipped the setup script: attach `moodle-dev` and run
+`bash cloud/setup.sh` from it. See `moodle-dev/cloud/README.md`.
 
-| Command | What it does |
-|---------|--------------|
-| `npx grunt amd --root=public/user/profile/field/repeatable` | Rebuild `amd/build/*.min.js` from `amd/src/`. Required before committing JS. |
-| `xmllint --noout --schema public/lib/xmldb/xmldb.xsd public/user/profile/field/repeatable/db/install.xml` | Validate the XMLDB schema. (Core libs live under `public/` in this 5.x split layout; the bare `lib/xmldb/...` path does not exist.) |
-
-CI (moodle-an-hochschulen/moodle-workflows, full `moodle-plugin-ci install`
-per job) gates on: a static leg (`phplint`, `phpmd`, `phpcs --max-warnings 0`,
-`phpdoc --max-warnings 0`, a **development-leftover checker that fails on
-stray to-do markers, test-me annotations, or merge-conflict markers in ANY
-file — docs included; never write any of those tokens literally, not even
-here**, `validate`, `savepoints`,
-`mustache`, `grunt --max-lint-warnings 0`) plus runtime legs running
-**PHPUnit (`--fail-on-warning`) and Behat (`--profile chrome`) on every
-PHP × DB combination**; Behat faildumps upload as artifacts on failure.
-`ci.yml` calls the workflow once per supported Moodle branch (5.02 full
-matrix; 5.01/5.00/4.05 `one-db-only`) — **update those calls when
-`$plugin->supported` changes**. It runs on every push/PR (no protected-ref
-gate; concurrent runs cancel superseded ones). There is no committed local
-wrapper — run checks through your own `moodle-plugin-ci` checkout before
-pushing. To read a failed job's raw log (the MAH reusable-workflow jobs
-often return empty from `gh run view --log-failed`):
-`gh api repos/uaiblaine/moodle-profilefield_repeatable/actions/jobs/<jobid>/logs`
-(get `<jobid>` from `gh run view <runid> --json jobs`).
-
-Behat locator note: avoid bare "Language"-like field locators on the
-profile edit form — Mink matches labels by substring ("Preferred language"
-collides), so scope to the category fieldset (e.g. `in the "Testing"
-"fieldset"`).
-
-Local raw PHPUnit (if wired up) reads `phpunit.xml` at the **repo root**
-(`$CFG->root`, above `public/`), generated by
-`php public/admin/tool/phpunit/cli/init.php` — not `public/phpunit.xml`.
-
-## Git / repos
-
-This plugin is its **own git repo**
-(`uaiblaine/moodle-profilefield_repeatable`, single branch `main`) nested
-inside the Moodle checkout (branch `MOODLE_501_STABLE`): run git from the
-plugin dir or use `git -C public/user/profile/field/repeatable ...` — git
-from the Moodle root won't see plugin changes. Note `cd` inside a compound
-Bash command doesn't persist (cwd resets between calls); prefer absolute
-paths or `git -C`.
-
-## Companion-plugin contract (local_profilefield_repeatable)
-
-The companion local plugin (`public/local/profilefield_repeatable`, repo
-`uaiblaine/moodle-local_profilefield_repeatable`) provides reference
-dictionaries (domain → code → label). The contract:
-
-- **Soft dependency by design.** `version.php` declares no `dependencies`.
-  Every touchpoint guards with
-  `class_exists('\local_profilefield_repeatable\resolver')` and/or
-  `table_exists('local_profilefield_repeatable_domain')` — keep it that way;
-  this plugin must install, validate, and render with the local plugin absent.
-- **Load-bearing names across repos:**
-  `\local_profilefield_repeatable\resolver::resolve()` / `::resolve_bulk()`
-  (called by `display_renderer`), and the table
-  `local_profilefield_repeatable_domain` (queried directly by
-  `define.class.php::get_missing_reference_domains()`). Renaming either on
-  the local side breaks this plugin.
-- **Domain shortname pattern** `/^[a-z0-9_]+$/` lives in `helper::DOMAIN_PATTERN`
-  (canonical), `define.class.php`, and the local plugin's `resolver`/`manager`.
-  Keep all copies in lockstep. The `subitem|domain` parser is centralized as
-  `helper::parse_subitem_domain_map()` — `display_renderer` and the Report
-  Builder entity both delegate to it; don't re-fork that logic.
-- **CI cross-installs the other repo's `main`** via the `plugin-dependencies`
-  input in `.github/workflows/ci.yml`. A breaking change pushed to either
-  `main` turns the other repo's CI red — coordinate contract changes across
-  both repos.
+`mutations/gates.conf` breaks one guard per gate and names the test that must redden. Gates marked
+`# PG only` are held by tests that skip off PostgreSQL: judge them from the pgsql sweep only.
 
 ## Code layout
 
 ```
-field.class.php              profile_field_repeatable (runtime field: edit/save/display)
-define.class.php             profile_define_repeatable (admin field definition + validation)
-lib.php                      profilefield_repeatable_myprofile_navigation() widget hook
-classes/
-  helper.php                 Payload parse/normalise/encode (+ MAX_SETS / MAX_VALUE_LENGTH
-                             caps) + PostgreSQL helpers + subitem/domain parser +
-                             cross-DB JSON-extract SQL (sql_subitem_value)
-  observer.php               user_deleted / user_info_field_deleted cleanup observers
-  output/display_renderer.php  Accordion/plain display + bulk reference prefetch
-  privacy/provider.php       GDPR metadata + export/delete (one subcontext per field)
-  reportbuilder/datasource/repeatable_sets.php     Report Builder source: one row per set
-  reportbuilder/local/entities/repeatable_set.php  Per-subitem columns/filters + labels
-  task/reconcile_indexes.php Adhoc task managing PG expression indexes
-db/
-  install.xml                profilefield_repeatable_data table
-  events.php                 Observer registrations (cleanup on core deletions)
-  lib.php                    Procedural wrappers for install/upgrade (no autoload there)
-  install.php / upgrade.php / uninstall.php
-amd/src/                     repeatable.js (edit UI), displayaccordion.js
-templates/                   edit_form, display_accordion, display_plain (Mustache)
-lang/en/ + lang/pt_br/       Both maintained in lockstep (same keys)
-tests/                       define_class_test, field_class_test, helper_test,
-                             observer_test, privacy/provider_test, behat/,
-                             reportbuilder/datasource/repeatable_sets_test
+field.class.php        profile_field_repeatable: edit form, validation, save, display entry
+define.class.php       profile_define_repeatable: admin definition, param1..param4 validation
+classes/helper.php     payload parse/normalise/encode, caps, PG helpers, sql_subitem_value()
+classes/local/projection.php       per-set rows: sync(), is_current(), reproject_*()
+classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
+classes/output/display_renderer.php  accordion (profile pages) or plain list, bulk label prefetch
+classes/reportbuilder/             datasource repeatable_sets + entity repeatable_set
+classes/task/reconcile_indexes.php adhoc: PG expression indexes
+classes/task/reproject_sets.php    scheduled, daily: repair stale projections
+amd/src/               repeatable.js (edit widget), displayaccordion.js
 ```
+
+## Versions
+
+`$plugin->version` is date-based (`YYYYMMDDXX`) while `main` serves every supported Moodle version.
+On the split into one branch per Moodle version, each branch numbers itself in that version's
+namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-and-direction-2026-10.md` §3.
 
 ## Architecture gotchas
 
-### Legacy profile-field API (not autoloaded)
+### Legacy profile-field API
 
-`field.class.php` / `define.class.php` follow core's profile-field plugin
-API: class names are **fixed by convention**
-(`profile_field_repeatable extends profile_field_base`,
-`profile_define_repeatable extends profile_define_base`), global namespace,
-no `declare(strict_types=1)`, loaded by core via `require_once`. Tests must
-require them explicitly:
+- `field.class.php` and `define.class.php` keep core's fixed global class names and are loaded by
+  `require_once`: tests require `user/profile/lib.php` and the file explicitly. New code goes under
+  `classes/`, which is autoloaded.
+- Install and upgrade steps call only the `db/lib.php` procedural wrappers: no autoloading there.
 
-```php
-require_once($CFG->dirroot . '/user/profile/lib.php');
-require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
-```
-
-All new support code goes in namespaced classes under `classes/`
-(`\profilefield_repeatable\...`), which ARE autoloaded.
-
-### Field parameter repurposing
-
-Core's `user_info_field` columns carry the field configuration:
+### Field parameters
 
 | Column | Meaning |
-|--------|---------|
-| `param1` | Sub-items, newline-delimited (required, duplicates rejected) |
+|---|---|
+| `param1` | Sub-items, one per line (required, duplicates rejected) |
 | `param2` | Indexed sub-items (max 3, must exist in param1) → PG expression indexes |
 | `param3` | Reference mappings `subitem\|domain`, one per line |
-| `param4` | Subline sub-items (max 3, may not include the primary sub-item) |
+| `param4` | Subline sub-items (max 3, never the primary sub-item) |
 | `defaultdata` | Forced to `'{}'` |
 
-`define_save_preprocess()` canonicalises all four; parsing lives in
-`helper::parse_subitems()` and `define.class.php` parse helpers.
+- `define_save_preprocess()` canonicalises all four; split lines with `preg_split('/\R/u')`, never
+  `explode("\n")`, because CRLF input must keep working.
+- Column schema v2 (one JSON schema in place of the four lists) is planned before r1:
+  `docs/audit-and-direction-2026-10.md` §4.5.
 
-### Dual storage / read–write paths
+### Canonical payload and projection
 
-- **Write** (`edit_save_data`): one delegated transaction upserts
-  `user_info_data` (full JSON payload) then `sync_repeat_data()` upserts one
-  row per set into `profilefield_repeatable_data` keyed `(dataid, set_id)`
-  and deletes rows for vanished sets.
-- **Read** (`edit_load_user_data` / `is_empty` / display): storage-table rows
-  first, fall back to the `user_info_data` JSON when the table has nothing.
-- Set keys in the in-memory payload are `'@@ID#' . $n` (1-based, from
-  `helper::normalise_payload()`); empty sets are dropped on normalise.
-- **Payload limits**: `helper::MAX_SETS` (200) and `helper::MAX_VALUE_LENGTH`
-  (1024 chars). `edit_validate_field()` rejects raw payloads above the caps
-  with `errortoomanysets` / `errorvaluetoolong`; `normalise_payload()`
-  enforces the same caps silently so non-form paths stay bounded. Validation
-  must inspect the **raw** decoded JSON — normalise caps first, so the excess
-  is invisible afterwards.
-- **Storage rows are memoised per field instance** (`get_storage_records()`),
-  shared with `display_renderer` via its `$preloadedrecords` constructor
-  param. `edit_save_data()` invalidates the memo after commit; do the same in
-  any new write path. Renderer semantics: `null` = fetch on demand, `[]` =
-  authoritatively empty (falls back to the `$this->data` JSON).
-- `upsert_set_row()` has **two branches**: PostgreSQL
-  `INSERT ... ON CONFLICT (dataid, set_id) DO UPDATE` and a portable
-  select-then-insert/update fallback. Any schema or semantic change must land
-  in **both** branches.
-- **Cleanup on core deletions** lives in `classes/observer.php`
-  (`db/events.php`): core deletes `user_info_data` directly on user/field
-  deletion, so the observers purge `profilefield_repeatable_data` by
-  `userid` / `fieldid` (the table carries both — no `dataid` join needed) and
-  queue `reconcile_indexes` on PostgreSQL. The privacy API can't see these
-  orphans (context discovery goes through `user_info_data`), so the observers
-  are the only line of defence.
+- **`user_info_data.data` is the single source of truth.** `edit_load_user_data()`, `is_empty()`
+  and `display_data()` all decode it, because core's `profile_save_custom_fields()` (auth_db and
+  auth_ldap attribute sync) writes it without calling this plugin.
+- `profilefield_repeatable_data` is a projection for Report Builder only: `edit_save_data()` writes
+  the payload and `local\projection::sync()` in one delegated transaction, as must any new writer.
+- Drift is repaired by the `user_updated`/`user_created` observers and the daily
+  `task\reproject_sets`, because auth_db sync fires no event and restored users have no rows.
+- `reproject_record()` re-reads inside its transaction and decides staleness again: the snapshot
+  that selected the record may predate a user save, and writing from it would clobber that save.
+- `is_current()` compares sets as key-sorted JSON, because JSONB keeps neither key order nor spacing.
+- The renderer reads projection rows only for each set's last-sync time, matched by content, so a
+  stale row never lends its timestamp to another set.
+- `upsert_set_row()` has a PostgreSQL `ON CONFLICT` branch and a portable select-then-write branch:
+  a schema or semantic change lands in both, or one DB family drifts.
+- Caps `helper::MAX_SETS` (200) and `MAX_VALUE_LENGTH` (1024): `edit_validate_field()` checks the
+  **raw** JSON, because `normalise_payload()` truncates silently and hides the excess.
+- Core deletes `user_info_data` directly on user and field deletion, so the observers purge the
+  projection by `userid`/`fieldid`: the privacy API cannot see those orphans.
 
-### db/lib.php — no autoloading during install/upgrade
+### Edit form
 
-`db/install.php` and `db/upgrade.php` cannot rely on class autoloading, so
-`db/lib.php` `require_once`s `classes/helper.php` and exposes
-`profilefield_repeatable_*()` procedural wrappers. Anything new that
-install/upgrade steps need goes through a wrapper there, not a bare class
-reference.
+- The value travels in a hidden input that `repeatable.js` keeps in step with the widget. The
+  hidden input sits inside a form group named after the field, because QuickForm prints no error
+  for a bare hidden element; the widget points at the error with `aria-describedby`.
+- Several repeatable fields can share one form: never assume a single instance in the JS.
 
-### PostgreSQL-specific layer
+### PostgreSQL layer
 
-- Everything PG-specific starts with a `helper::is_postgres($DB)` (or
-  `get_dbfamily() !== 'postgres'` early-return) guard and must **no-op
-  cleanly on MySQL/MariaDB** — CI runs both.
-- `helper::ensure_postgres_jsonb_support()` converts the `data` column to
-  JSONB and creates the base GIN (`jsonb_path_ops`) index.
-- `task\reconcile_indexes` (adhoc) creates/drops per-sub-item expression
-  indexes named `pfrd_f{fieldid}_{sha1-prefix}`. It uses
-  `CREATE/DROP INDEX CONCURRENTLY`, which **cannot run inside a
-  transaction** — that is exactly why this work is an adhoc task (cron runs
-  them outside explicit transactions) and must never move into a web request
-  or upgrade step.
-- Core never calls anything on field deletion: orphaned indexes are cleaned
-  by `sweep_orphaned_indexes()` piggybacking on every reconcile run
-  (`define_after_delete()` exists only for custom integrations).
-- DDL cannot take bound parameters, so identifiers/literals are quoted via
-  `helper::quote_identifier()` / `reconcile_indexes::quote_literal()`. That
-  pattern is **only** for PG DDL/maintenance SQL; all DML uses `$DB`
-  placeholders. Never build DML with string interpolation.
+- Everything PG-specific sits behind `helper::is_postgres()` and no-ops on MariaDB (CI runs both).
+- `CREATE/DROP INDEX CONCURRENTLY` cannot run inside a transaction, so index work lives in the
+  `reconcile_indexes` adhoc task, never in a web request or an upgrade step. The one synchronous
+  caller is `drop_all_for_field()` via `define_after_delete()`, which core never calls.
+- Index ownership is decided by an exact match on `INDEX_NAME_PATTERN`
+  (`pfrd_f<fieldid>_<16 hex>`), after a `LIKE` prefix whose `_` is escaped: a bare prefix let
+  field 1 claim the indexes of fields 10-19 and 100-199. Every reconcile run also sweeps orphaned
+  indexes, because core calls nothing on field deletion.
+- DDL takes no bound parameters, so `helper::quote_identifier()` / `quote_literal()` quote it; DML
+  stays on placeholders. `db/uninstall.php` drops the PG artefacts XMLDB does not know about.
 
-### Display conventions
+### Report Builder
 
-- `show_field_content()` returns `false` — core must NOT render this field
-  inline. Rendering happens via `profilefield_repeatable_myprofile_navigation()`
-  (lib.php) as a dedicated my-profile category, calling `display_data()`.
-- `display_renderer` picks accordion (profile pages) vs plain list (anywhere
-  else) and **bulk-prefetches reference labels once per domain** before
-  rendering — keep it N+1-free when touching it.
-- Zero `html_writer` calls: all markup comes from the Mustache templates.
+- Core shows a profile field as one column over the raw blob with no per-field hook, so the
+  datasource joins one `repeatable_<shortname>` entity per field to the core `user` entity: one row
+  per set. Internal column names use a 1-based sub-item index (`subitem1`, `subitemcode1`), so
+  identifiers stay stable for Behat and saved reports.
+- Every column value and filter option label goes through `s()`: core's autocomplete prints option
+  labels unescaped (stored XSS otherwise).
+- Every column and filter is `set_is_available(is_visible(system))` on a field instance built with
+  `\core\user::SUPPORT_USER`, mirroring core's `user_profile_fields` helper: with user id 0 the
+  visibility checks take the wrong branch.
+- The datasource is available only on the `postgres` and `mysql` families, because
+  `helper::sql_subitem_value()` (the one path for sub-item SQL) has no SQL Server or Oracle form.
+- Two repeatable fields in one report cross-join their sets: one repeatable field per report.
 
-### Report Builder integration
+### Companion dictionary plugin (soft dependency)
 
-Core exposes each custom profile field as a single column/filter over the raw
-`user_info_data.data` blob (`core_reportbuilder\local\helpers\user_profile_fields`),
-with **no per-field override hook** — so a `repeatable` field shows every set
-concatenated in one cell and its filter only matches the stored code. Both
-limitations are worked around with a dedicated datasource, not by changing core.
+- No `dependencies` in `version.php`; every touchpoint guards with `class_exists()`/`table_exists()`,
+  so the plugin installs, validates and renders without the companion. Touchpoints:
+  `resolver::resolve()`/`resolve_bulk()` (renderer, entity), the domain table read by
+  `define.class.php`, and `/^[a-z0-9_]+$/` in `helper::DOMAIN_PATTERN` and `define.class.php`.
+- The companion is now `local_dictionaries` (repo `uaiblaine/moodle-local_dictionaries`); this
+  branch still calls the old `\local_profilefield_repeatable\resolver` and table
+  `local_profilefield_repeatable_domain`, and a follow-up switches to `\local_dictionaries\resolver`
+  and `\local_dictionaries\resolver::DOMAIN_PATTERN`.
+- `ci.yml` installs the companion's `main` (`plugin-dependencies`): a contract change in either repo
+  turns the other's CI red. The renderer prefetches labels once per domain: keep it N+1-free.
 
-- **`reportbuilder/datasource/repeatable_sets.php`** reuses the core `user`
-  entity (main table `user`, excludes guest/deleted) and adds one
-  `repeatable_set` entity per `repeatable` field via a `LEFT JOIN` on
-  `profilefield_repeatable_data` scoped to that `fieldid`. The join multiplies
-  one user into **one row per set**, which is what makes native aggregation
-  work. Datasources are auto-discovered (`manager::get_report_datasources`);
-  `is_available()` hides the source when no repeatable field exists.
-- **Entity name is `repeatable_<shortname>`** (not the field id) so column/filter
-  unique identifiers (`repeatable_<shortname>:subitem1`, `:setnumber`,
-  `:subitemcode1`) are stable and referenceable from Behat. Column/filter
-  **internal names are 1-based index** per sub-item (`subitem1`, or
-  `subitemname1`+`subitemcode1` when mapped) — never derived from the label.
-- **Sub-item values are read from JSON in SQL** via
-  `helper::sql_subitem_value()` (PG `(data)::jsonb ->> :key`, MySQL/MariaDB
-  `JSON_UNQUOTE(JSON_EXTRACT(...))`), key bound as a param. Any new SQL that
-  touches a sub-item must go through this helper so both DB families stay green.
-- **Mapped sub-items** (param3) get a resolved-name column (callback →
-  `resolver::resolve`, falls back to the code) **and** a raw-code column; plus a
-  code text filter **and** a name autocomplete filter whose options come from the
-  codes present in the data labelled via `resolver::resolve_bulk` (so the filter
-  shows names but filters on the indexed code). All resolver use stays behind the
-  `class_exists` soft-dependency guard — no new cross-repo surface was added.
-- **Caveat:** columns from two different repeatable fields in one report
-  cross-join their sets (each field is its own join). One repeatable field per
-  report.
+### Display and styles
 
-## Coding style
+- `show_field_content()` returns false: the field renders as its own profile category through
+  `profilefield_repeatable_myprofile_navigation()` (`lib.php`), not inline.
+- No Bootstrap 5 utility at all, stricter than the fleet polyfill rule: the field renders inside
+  core pages where the plugin owns no ancestor to gate on, so own each declaration under a
+  `profilefield-repeatable-*` class (`tests/bootstrap_compat_test.php` enforces it).
 
-### File header
+## Testing notes
 
-Every PHP file starts with the GPL block, then:
-
-```php
-/**
- * <One-line file description>.
- *
- * @package    profilefield_repeatable
- * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-```
-
-`defined('MOODLE_INTERNAL') || die();` **only** in files with real top-level
-side-effects: `require_once`, variable assignments (`db/*.php` definition
-arrays, `version.php`), or executable statements (tests bootstrap with
-`global $CFG` + `require_once`). Any pure-declaration file must **omit** the
-guard or the sniff `moodle.Files.MoodleInternal.MoodleInternalNotNeeded`
-fires — and with `phpcs --max-warnings 0` that warning fails CI. This
-applies even to non-namespaced legacy files: `lib.php` (functions only),
-`field.class.php` and `define.class.php` (single class each) carry no guard.
-
-### PHPDoc
-
-Moodle's `phpdoc --max-warnings 0` enforces:
-
-- Every class, method, property, and constant has a `/** */` docblock
-- `@param`, `@return`, `@throws` declared explicitly (even when types are
-  fully implied by signatures)
-- Type hints in PHPDoc use `int|null`, `?int`, `array<int, string>` —
-  match the actual PHP type
-- **`@param` cannot use the `array<k, v>` generic.** The PHPDoc checker splits
-  the type on the space inside `array<string, string>` and loses the `$var`
-  name → `incomplete parameters list` (CI error). Use plain `array` (or
-  `type[]`) in `@param`; the `array<...>` generic is only safe in `@var` and
-  `@return`.
-- File-level docblock has `@package`, `@copyright`, `@license`
-- No `@author` tags (Moodle convention)
-
-### Naming
-
-- Classes: `lower_snake_case` (Moodle convention, not PSR-4 PascalCase) —
-  except the two core-mandated legacy class names above
-- Methods: `lower_snake_case`
-- Constants: `UPPER_SNAKE_CASE`
-- Properties: `lowercase` (no camel/snake mixing — single lowercase word
-  where possible)
-- Frankenstyle prefix on globals: `profilefield_repeatable_*`
-
-### CodeSniffer rules that bite
-
-Rules from `moodle.*` / `PSR2.*` / `PSR12.*` standards that routinely break
-CI. Pre-empt them at write time.
-
-**1. Variables are lower-case only.** No camelCase, no snake_case — a single
-lower-case word (concatenated if needed). Sniff:
-`moodle.NamingConventions.ValidVariableName.VariableNameLowerCase`.
-
-```php
-// ✘ $fieldA, $subItem, $field_a, $sub_item
-// ✓ $fielda, $subitem
-```
-
-**2. PSR-2 multi-line function call layout.** When a call spans lines:
-opening `(` is the last content on its line; one argument per line; closing
-`)` on its own line at the call's indent level. Sniffs:
-`PSR2.Methods.FunctionCallSignature.{ContentAfterOpenBracket,MultipleArguments,Indent,CloseBracketLine}`.
-
-```php
-// ✘ Two args on the wrap line:
-$DB->set_field('profilefield_repeatable_data', 'data', $json,
-    ['dataid' => $dataid, 'set_id' => $setid]);
-
-// ✓ One arg per line, ) on its own line:
-$DB->set_field(
-    'profilefield_repeatable_data',
-    'data',
-    $json,
-    ['dataid' => $dataid, 'set_id' => $setid]
-);
-```
-
-**3. Inline `//` comments — one space, capital first letter, terminal
-punctuation.** The sniff fires on the **first line** of any `//` comment
-block that starts with a lowercase letter, a version tag (`v1.0`), or lacks
-terminal punctuation. Need multi-line or version-tagged commentary? Use a
-block comment (`/* ... */`) — the sniff does not apply inside `/* */`.
-Sniffs: `moodle.Commenting.InlineComment.{NotCapital,InvalidEndChar,SpacingBefore}`.
-
-**4. Property docblocks need `@var`.** A `/** ... */` on a class property
-*must* declare the type even when PHP's typed-property syntax already does.
-Sniff: `moodle.Commenting.VariableComment.MissingVar`.
-
-```php
-/** @var array<string, string>|null Cached subitem/domain mapping. */
-private ?array $subitemdomainmap = null;
-```
-
-**5. Operator spacing: exactly one space.** Aligning columns with extra
-spaces before `!==`, `===`, `?`, `:`, `=>` breaks
-`Squiz.WhiteSpace.OperatorSpacing.SpacingBefore`. No column alignment —
-one space everywhere, including inside array literals.
-
-**6. PSR-12 multi-line `if` layout.** When an `if` condition spans lines, the
-first expression goes on the line **after** `(` and the closing `)` on the
-line **after** the last expression. Sniffs:
-`PSR12.ControlStructures.ControlStructureSpacing.{FirstExpressionLine,CloseParenthesisLine}`.
-
-```php
-// ✓
-if (
-    $setid > 0
-    && $payload !== []
-) {
-```
-
-**7. Line-length limits.** Hard max **180** characters (error); soft max
-**132** (warning) — and the warning count feeds `phpdoc --max-warnings 0`,
-so both matter. Wrap long PHPDoc type annotations at a comma.
-
-**8. Squiz "commented-out code" false positive.** A trailing `//` comment
-containing PHP-looking text (e.g. `// active=0`) triggers
-`Squiz.PHP.CommentedOutCode.Found`. Remove trivial trailing comments, or
-rephrase to avoid `=` inside the comment text.
-
-**9. `defined('MOODLE_INTERNAL')` only in files with top-level
-side-effects.** See "File header" above — the sniff fires on ANY
-pure-declaration file, namespaced or not (`lib.php`, `field.class.php`,
-`define.class.php` carry no guard). Files that DO need it: `db/*.php`
-definition arrays, tests with `global $CFG` + `require_once`, form classes
-with `require_once`.
-
-**10. `\R` line splitting.** User-entered multi-line config (sub-items,
-mappings) is split with `preg_split('/\R/u', ...)` — never `explode("\n")`;
-Windows CRLF input must keep working.
-
-**11. Anonymous functions need a space: `function (`.** Closures (incl.
-`static function`) must have a space before the paren —
-`static function ($x) use ($y) {`, not `function($x)`. Named methods keep
-`function name(`. Sniff:
-`Squiz.Functions.MultiLineFunctionDeclaration.SpaceAfterFunction`.
-
-## Database (XMLDB)
-
-- Every `<FIELD>` element needs `SEQUENCE="true"` or `SEQUENCE="false"`
-  explicitly. Missing → XSD validation fails.
-- Validate with the xmllint command in the Commands table.
-- Upgrade steps mirror `db/install.xml` via the `db/lib.php` wrappers and end
-  with `upgrade_plugin_savepoint(true, <version>, 'profilefield', 'repeatable');`
-  — match `<version>` to the `version.php` bump.
-- `db/uninstall.php` must keep dropping the PG artefacts (indexes, table)
-  that XMLDB doesn't know about.
-
-### Cross-DB SQL
-
-CI runs against both PostgreSQL and MariaDB. Patterns that matter here:
-
-- Raw PG SQL (`information_schema`, `pg_indexes`, `ON CONFLICT`,
-  `jsonb_exists`, `::jsonb` casts) is allowed **only** behind an
-  `is_postgres()` guard, with a portable code path beside it.
-- `\moodle_database::get_records()` returns string values for numeric
-  columns under both drivers. Cast to `(int)` / `(float)` when typing
-  matters.
-- `ORDER BY col ASC NULLS FIRST` is PG-only; use `COALESCE(col, 0) ASC`.
-
-## Lang strings
-
-`lang/en/profilefield_repeatable.php` strings are **alphabetically sorted**
-(CI validate enforces ordering) and `lang/pt_br/profilefield_repeatable.php`
-carries the **same keys** — add/remove strings in both files in the same
-commit. Required: one string per adhoc task (`taskreconcileindexes`) and the
-`privacy:metadata:*` family.
-
-Don't build string IDs dynamically (`get_string('error' . $kind, ...)`);
-use literal switches so the string checker can verify them.
-
-## Mustache templates
-
-Every `templates/*.mustache` file must include an `Example context (json):`
-block in its docblock — Mustache lint renders the template against that
-context and validates the HTML. When a template loops headers/columns, the
-example context must supply non-empty arrays or the validator rejects the
-empty render.
-
-## AMD modules
-
-- Vanilla ES modules, **no jQuery**. DOM hooks via `data-*` attribute
-  selectors collected in a `SELECTORS` const (see `amd/src/repeatable.js`).
-- `repeatable.js` maintains the hidden input's JSON payload as the single
-  form value; `field.class.php::edit_after_data()` passes config
-  (`wrapperid`, `hiddenid`, `subitems`, `readonly`, strings) via
-  `js_call_amd`. Multiple repeatable fields can coexist on one form — never
-  assume a single instance.
-- Every change under `amd/src/` requires the rebuilt `amd/build/*.min.js`
-  (+ `.map`) committed in the same PR (`amd/build/` is tracked; Moodle
-  serves the compiled bundle). Build with the grunt command above.
-- Dev loop: *cachejs = off* stops Moodle caching JavaScript, but it still
-  serves `amd/build/*.min.js`, never `amd/src` (unless the `.map` is missing).
-  Rebuild with `mdl grunt <stack> user/profile/field/repeatable` after each
-  save, then reload. A JS
-  mutation test that skips the rebuild silently tests the old build.
-
-## PHPUnit tests
-
-- Test files in `tests/<thing>_test.php`, namespace
-  `profilefield_repeatable`, `final class <thing>_test extends
-  \advanced_testcase`, `@covers` annotation on the class docblock.
-- Call `$this->resetAfterTest()` in every test that touches the DB.
-- Create fields through
-  `$this->getDataGenerator()->create_custom_profile_field([...])` with
-  `'datatype' => 'repeatable'` (see `field_class_test.php::create_field()`).
-- DB rows and generator results carry **string** ids — cast to `(int)`
-  when passing to typed signatures.
-- PG-only behaviour (JSONB, expression indexes) must be asserted behind a
-  `$DB->get_dbfamily() === 'postgres'` check or `markTestSkipped()` so the
-  MariaDB CI leg stays green.
-
-## MDL Shield reviews
-
-Pull request reviews by MDL Shield are **manual only**. Comment `!mdlshield review` (what is
-new since the last review) or `!mdlshield review full` (the whole pull request) on a pull
-request; the commands work for the repository owner and the `trusted_users` of
-`.mdlshield/config.yml`, and a forced command ignores the filters and a draft's silence.
-Nothing runs on its own because `include.branches` names a branch no pull request targets
-(a non-empty include list is a requirement; an empty one was measured NOT to stop automatic
-reviews).
-
-- **A review is a counted resource, so ask for one on purpose.** The monthly quota is shared by every
-  repository, and only a completed review uses one. The owner posts the command; a session never
-  does without being told to for that pull request. Keep a pull request at or under **3,000 effective
-  changed lines** (additions plus deletions after `exclude.paths`; the limit is MDL Shield's own
-  and 12,000 is the hard one, forced reviews included): `mdl mdlshield size <repo-dir>` estimates it.
-  One `review full` per pull request, after the local matrix is green. The rule and its reasons are
-  in the fleet CLAUDE.md (section 4, "MDL Shield review budget").
-
-- `.mdlshield/config.yml` and `.mdlshield/context.md` are read **from the default branch
-  only** (`main`), so a pull request cannot change the rules that judge it, and the pull
-  request that first adds them is judged by the website settings instead. Both are
-  `export-ignore`d and never reach the release zip. The file overrides the website for each
-  key it names; an invalid file stops reviews for the repository until it is fixed, and an
-  unknown key only raises a warning on the summary comment.
-- **One Moodle version per repository.** There is no per-branch mapping, so the file pins
-  `moodle.versions: ["5.2"]`. The plugin also runs on older cores, so read a finding about a core API with that in mind.
-- `fail_on.severity` is `high`: the check fails on an open finding at or above it. Code
-  quality findings never block, only security findings do.
-- The context file is project knowledge that **influences** the reviewer and is not a
-  filter. Keep it in step with the code it states: capabilities, the web service list and
-  the facts it calls deliberate. The website's own review context is replaced entirely by
-  this file, not merged.
-- On the website the repository still needs *Enable pull request reviews* and a granted
-  preview access; the file cannot do either.
+- Fields come from `create_custom_profile_field()` (`field_class_test.php::create_field()`); form
+  behaviour (the error group) goes through `tests/fixtures/edit_form.php`, which calls the edit
+  hooks in `user/edit.php`'s order.
+- PG-only behaviour is asserted behind a dbfamily check or `markTestSkipped()`, and
+  companion-dependent tests skip when its classes or tables are absent.
+- Behat: scope profile-form locators to the category fieldset (`in the "Testing" "fieldset"`),
+  because a bare "Language" also matches "Preferred language".
+- `.mdlshield/config.yml` pins `versions: ["5.2"]`: read core-API findings knowing 4.5 is supported.
 
 ## When in doubt
 
-Follow the patterns in existing files. The codebase is internally
-consistent — if a new file feels like it doesn't match any existing
-shape, that's a signal to re-examine the approach.
+Follow the patterns in existing files; if a new file matches no existing shape, re-examine the
+approach.
