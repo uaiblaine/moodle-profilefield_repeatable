@@ -93,14 +93,17 @@ class helper {
     /**
      * Whether the companion offers what dictionary columns need on the edit form.
      *
-     * Stage B of the schema needs \local_dictionaries\api::lookup() (server-side validation) and
-     * the search service behind its autocomplete transport, which came before it. Without them
+     * Stage B of the schema needs \local_dictionaries\api::lookup() (server-side validation),
+     * api::can_read() (who may search a dictionary) and the search service behind its autocomplete
+     * transport. Without them
      * dictionary columns are typed as text and their codes are not checked.
      *
      * @return bool
      */
     public static function companion_lookup_available(): bool {
-        return class_exists('\local_dictionaries\api') && method_exists('\local_dictionaries\api', 'lookup');
+        return class_exists('\local_dictionaries\api')
+            && method_exists('\local_dictionaries\api', 'lookup')
+            && method_exists('\local_dictionaries\api', 'can_read');
     }
 
     /**
