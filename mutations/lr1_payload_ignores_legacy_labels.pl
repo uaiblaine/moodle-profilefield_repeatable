@@ -1,2 +1,2 @@
-# normalise_payload() reads only keys, so a version 1 payload looks empty.
-s~\} else if \(isset\(\$legacy\[\$key\]\) && array_key_exists\(\$legacy\[\$key\], \$setdata\)\) \{~} else if (false) {~s;
+# column_value() reads only keys, so a version 1 payload looks empty.
+s~if \(\$legacylabel !== null && isset\(\$set\[\$legacylabel\]\)\) \{~if (false) {~s;
