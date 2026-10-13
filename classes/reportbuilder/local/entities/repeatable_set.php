@@ -35,9 +35,8 @@ use profilefield_repeatable\local\schema;
  * a column keeps saved reports working: a free column "<key>"; a dictionary column "<key>_name"
  * (the companion's label, with an autocomplete filter over the codes present) and "<key>_code";
  * a pattern column "<key>", shown as customfield_pattern formats it, filtered on the stored value.
- * {@see schema::report_identifiers()} names them; the 2.x upgrade maps the index-based names of
- * version 1 onto them ({@see \profilefield_repeatable\local\migration}). The owning datasource
- * joins the storage table per field so a user with N sets yields N rows.
+ * {@see schema::report_identifiers()} names them. The owning datasource joins the storage table
+ * per field so a user with N sets yields N rows.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine

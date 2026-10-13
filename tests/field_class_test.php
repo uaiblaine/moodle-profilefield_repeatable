@@ -1077,7 +1077,7 @@ final class field_class_test extends \advanced_testcase {
         set_config(local\schema::legacy_config_name((int)$field->field->id), json_encode($legacy), 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
 
-        // Set 1 has the version 1 shape; set 2 was saved after the upgrade, keyed by key.
+        // Set 1 has the version 1 shape; set 2 was saved after the conversion, keyed by key.
         $field->data = '{"@@ID#1":{"Name (old)":"Alice","role":"Lead","Req":"yes"},'
             . '"@@ID#2":{"full_name":"Bob","role":"","required_x":"no","Name (old)":"ignored"}}';
 
@@ -1121,7 +1121,7 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * A field still on the version 1 parameters reads its label-keyed payloads, e.g. before the upgrade step.
+     * A field still on the version 1 parameters reads its label-keyed payloads.
      */
     public function test_reads_accept_a_v1_field(): void {
         $this->resetAfterTest();

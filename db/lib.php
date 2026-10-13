@@ -17,7 +17,7 @@
 /**
  * Procedural wrapper delegating to \profilefield_repeatable\helper.
  *
- * Loaded by db/install.php and db/upgrade.php. Plugin classes do autoload during install and
+ * Loaded by db/install.php. Plugin classes do autoload during install and
  * upgrade (the caches are disabled, so core rescans the class map), so the wrapper is not needed
  * for that; it is kept as the single procedural entry point the install hook calls, and the
  * require_once below makes the helper available without relying on the class map being fresh.

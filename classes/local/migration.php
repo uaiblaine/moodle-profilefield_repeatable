@@ -22,20 +22,17 @@ use profilefield_repeatable\task\reconcile_indexes;
 /**
  * Re-keys the stored payloads of a field converted to the version 2 schema.
  *
- * The upgrade step ({@see xmldb_profilefield_repeatable_upgrade()}) writes the schema and the
- * field's legacy labels, then calls {@see self::finish_field()} at once for a small field or
- * queues {@see \profilefield_repeatable\task\rekey_payloads} for a large one. Until the legacy
- * labels are removed, every reader resolves label-keyed sets through them, so a field halfway
- * through hides nothing.
+ * Saving a field still on the version 1 parameters in the definition form
+ * ({@see \profile_define_repeatable::define_save()}) writes the field's legacy labels, then the
+ * schema, and queues {@see \profilefield_repeatable\task\rekey_payloads}, which calls
+ * {@see self::finish_field()}. Until the legacy labels are removed, every reader resolves
+ * label-keyed sets through them, so a field halfway through hides nothing.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class migration {
-    /** @var int A field with more {user_info_data} rows than this is re-keyed by an adhoc task. */
-    public const INLINE_LIMIT = 500;
-
     /** @var int Rows read and written per transaction. */
     public const CHUNK_SIZE = 200;
 
@@ -57,7 +54,7 @@ final class migration {
             return 0;
         }
         if (schema::decode((string)$field->param1) === null) {
-            // Still on the version 1 parameters: nothing to re-key until the upgrade converts it.
+            // Still on the version 1 parameters: nothing to re-key until the definition form converts it.
             return 0;
         }
 

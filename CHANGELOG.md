@@ -4,15 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+First release on the one-branch-per-Moodle-version layout: `MOODLE_405_STABLE` (`v4.5-r1`),
+`MOODLE_501_STABLE` (`v5.1-r1`), `MOODLE_502_STABLE` (`v5.2-r1`, also `main`) and
+`MOODLE_503_STABLE` (`v5.3-r1`). Each branch numbers itself in its Moodle version's namespace
+(4.5 `20241007XX`, 5.1 `20251006XX`, 5.2 `20260420XX`, 5.3 `20261005XX`), declares
+`$plugin->supported` for that version only, is `MATURITY_STABLE`, and runs CI against its own
+core branch with the full PHP x database matrix, installing the companion `local_dictionaries`
+from its matching branch (and `customfield_pattern` from `main` on 5.1 and later).
+
+### Removed
+- The pre-release upgrade step (the column schema v2 step, 2026101301), `db/upgradelib.php` with
+  its tests and mutation gates, and `migration::INLINE_LIMIT`, which only that step read. Its
+  savepoint is above every branch's version, so it could never run there, and no 2.x install
+  exists to need it: the branches start fresh in their version namespaces. A field still holding
+  the version 1 parameters keeps reading through them and is converted when it is saved in the
+  definition form; reports saved by 2.x under its `subitemN` names are no longer renamed.
+  `install.xml` carries `VERSION="2024100700"` on every branch.
+
 ### Security
 - Columns holding stored values are locked on the server too: the definition form reads the
   keys in use from the stored payloads (not the projection) and rejects a schema that removes or
   re-keys one; the editor disables "Remove column" for them.
 - A stored schema is re-checked when read: a column with a bad or colliding key is dropped before
   any SQL, index name or Report Builder identifier is built from it.
-- The 2.x upgrade is resumable (a half-converted field is finished on the next run), its
-  compare-and-set is exact on MariaDB's case- and accent-insensitive collation, and no generated
-  key equals another column's 2.x label, which would cross-wire the reads of label-keyed sets.
+- Re-keying a converted field's payloads uses an exact compare-and-set, also on MariaDB's case-
+  and accent-insensitive collation, and no generated key equals another column's 2.x label, which
+  would cross-wire the reads of label-keyed sets.
 
 ### Added
 - **Pattern columns (schema v2, stage C)**: with `customfield_pattern` installed (Moodle 5.1 or
@@ -54,16 +71,10 @@ All notable changes to this project will be documented in this file.
 - Privacy export lists each set's values under the column names, with the key appended when two
   names collide, and exports values under names no current column reads under those names.
 - A field still on the 2.x lists opens in the definition form as its schema; saving it converts
-  it the way the upgrade does. The column editor lists domains through
+  it, and the ad hoc task `rekey_payloads` re-keys its stored values; until then readers accept
+  both payload shapes. The column editor lists domains through
   `\local_dictionaries\api::list_domains()` (an older companion gives an empty list).
-- Upgrade step (3.0): converts every field's four lists into the schema (keys from the labels,
-  mapped columns as strict dictionaries, the first column as title), re-keys the stored payloads and
-  the projection, queues the index reconciliation, and renames the identifiers of saved reports,
-  filters, conditions and users' filter values. Fields with more than 500 values are finished by
-  the new ad hoc task `rekey_payloads`; until then readers accept both payload shapes.
 - A test data generator for repeatable fields.
-- Moodle 5.3 support: `$plugin->supported` is now `[405, 503]`, and CI runs the full PHP x database
-  matrix on 5.3 (5.2 runs one database).
 
 ### Changed
 - `param2`..`param4` are no longer used and are cleared when a field is saved; the strings of the

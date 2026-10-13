@@ -234,9 +234,9 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Save repeatable field configuration and, on PostgreSQL, enqueue index reconciliation.
      *
-     * Saving a field still on the version 1 parameters converts it as the upgrade does: its
-     * key => label map is written before param1 changes, so the label-keyed payloads keep
-     * reading, and {@see \profilefield_repeatable\task\rekey_payloads} re-keys them.
+     * Saving a field still on the version 1 parameters converts it: its key => label map is
+     * written before param1 changes, so the label-keyed payloads keep reading, and
+     * {@see \profilefield_repeatable\task\rekey_payloads} re-keys them.
      *
      * @param array|stdClass $data
      */
