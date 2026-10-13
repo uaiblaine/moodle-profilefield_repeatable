@@ -53,19 +53,23 @@ class helper {
     /**
      * The companion's domains for the column editor, or null when the companion is absent.
      *
-     * The companion has no public listing API yet, so this reads its management class
-     * (\local_dictionaries\local\manager::list_domains()) and degrades to an empty list on
-     * any failure; the editor then asks for the shortname as text.
+     * Read through \local_dictionaries\api::list_domains(), which runs no capability check: only
+     * the definition form, behind moodle/site:config, calls this. A companion too old to have
+     * that method, or one that fails, gives an empty list; the editor then asks for the
+     * shortname as text.
      *
-     * @return array|null List of ['shortname', 'name' (plain), 'itemcount', 'visibility'].
+     * @return array|null List of ['shortname', 'name' (plain), 'itemcount', 'visibility', 'parentdomain'].
      */
     public static function companion_domains(): ?array {
         if (!class_exists('\local_dictionaries\resolver')) {
             return null;
         }
+        if (!method_exists('\local_dictionaries\api', 'list_domains')) {
+            return [];
+        }
 
         try {
-            $records = (new \local_dictionaries\local\manager())->list_domains();
+            $records = \local_dictionaries\api::list_domains();
         } catch (\Throwable $e) {
             return [];
         }
@@ -73,11 +77,13 @@ class helper {
         $context = \core\context\system::instance();
         $domains = [];
         foreach ($records as $record) {
+            $record = (array)$record;
             $domains[] = [
-                'shortname' => (string)$record->shortname,
-                'name' => format_string((string)$record->name, true, ['context' => $context, 'escape' => false]),
-                'itemcount' => (int)($record->itemcount ?? 0),
-                'visibility' => (int)($record->visibility ?? 0),
+                'shortname' => (string)($record['shortname'] ?? ''),
+                'name' => format_string((string)($record['name'] ?? ''), true, ['context' => $context, 'escape' => false]),
+                'itemcount' => (int)($record['itemcount'] ?? 0),
+                'visibility' => (int)($record['visibility'] ?? 0),
+                'parentdomain' => isset($record['parentdomain']) ? (string)$record['parentdomain'] : null,
             ];
         }
 
@@ -297,13 +303,8 @@ class helper {
             $set = [];
             $hasvalue = false;
             foreach ($keys as $key) {
-                $value = '';
-                if (array_key_exists($key, $setdata)) {
-                    $value = $setdata[$key];
-                } else if (isset($legacy[$key]) && array_key_exists($legacy[$key], $setdata)) {
-                    $value = $setdata[$legacy[$key]];
-                }
-                if (!is_scalar($value) && $value !== null) {
+                $value = self::column_value($setdata, $key, $legacy[$key] ?? null) ?? '';
+                if (!is_scalar($value)) {
                     $value = '';
                 }
 
@@ -324,6 +325,27 @@ class helper {
         }
 
         return $normalised;
+    }
+
+    /**
+     * The raw value of one column in a decoded set: under the key, else under its legacy label.
+     *
+     * A JSON null counts as absent, as the SQL reader treats it ({@see self::sql_column_value()}:
+     * PostgreSQL's ->> gives NULL for it, which COALESCE passes over).
+     *
+     * @param array $set Decoded set.
+     * @param string $key Column key.
+     * @param string|null $legacylabel The key's legacy label, if any.
+     * @return mixed|null Null when the set holds no value for the column.
+     */
+    public static function column_value(array $set, string $key, ?string $legacylabel) {
+        if (isset($set[$key])) {
+            return $set[$key];
+        }
+        if ($legacylabel !== null && isset($set[$legacylabel])) {
+            return $set[$legacylabel];
+        }
+        return null;
     }
 
     /**

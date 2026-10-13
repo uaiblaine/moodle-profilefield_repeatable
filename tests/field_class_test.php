@@ -1128,4 +1128,20 @@ final class field_class_test extends \advanced_testcase {
         $field->edit_load_user_data($loaded);
         $this->assertSame('{"@@ID#1":{"full_name":"Alice","role":"Lead"}}', $loaded->{$field->inputname});
     }
+
+    /**
+     * A JSON null under a key counts as absent, so the legacy label is read, as the SQL reader does.
+     */
+    public function test_null_under_a_key_falls_back_to_the_legacy_label(): void {
+        $this->resetAfterTest();
+
+        $field = $this->create_field(['param1' => $this->schema([['key' => 'name', 'label' => 'Name'], 'role'])]);
+        set_config(local\schema::legacy_config_name((int)$field->field->id), '{"name":"Old name"}', 'profilefield_repeatable');
+        $field = new \profile_field_repeatable(0, 0, $field->field);
+        $field->data = '{"@@ID#1":{"name":null,"Old name":"Alice","role":null}}';
+
+        $loaded = new \stdClass();
+        $field->edit_load_user_data($loaded);
+        $this->assertSame('{"@@ID#1":{"name":"Alice","role":""}}', $loaded->{$field->inputname});
+    }
 }

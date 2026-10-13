@@ -129,8 +129,9 @@ class reconcile_indexes extends adhoc_task {
     /**
      * Resolve desired indexes for a field from its indexed columns.
      *
-     * Keys match {@see schema::KEY_PATTERN}, so their literal is safe in the index DDL, which
-     * moodle_database::execute() scans for placeholders even inside quotes.
+     * Keys match {@see schema::KEY_PATTERN} (a stored schema drops any other column on read), so
+     * their literal is safe in the index DDL, which moodle_database::execute() scans for
+     * placeholders even inside quotes.
      *
      * @param int $fieldid
      * @return array<string, string> Index name => column key; empty once the field is gone.
@@ -149,9 +150,6 @@ class reconcile_indexes extends adhoc_task {
 
         $desired = [];
         foreach (schema::from_field($field)->indexed_keys() as $key) {
-            if (!preg_match(schema::KEY_PATTERN, $key)) {
-                continue;
-            }
             $desired[$this->build_index_name($fieldid, $key)] = $key;
         }
 

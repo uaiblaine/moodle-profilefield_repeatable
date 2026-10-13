@@ -154,9 +154,12 @@ class provider implements
     }
 
     /**
-     * The sets of one stored payload, keyed "Set N", each mapping column label to value.
+     * The sets of one stored payload, keyed "Set N", each mapping a column name to its value.
      *
-     * Read through the field's schema, so a payload not yet re-keyed exports the same way.
+     * Every stored set with a value is exported, read through the field's schema (so a payload
+     * not yet re-keyed exports the same way). Values stored under a name the schema no longer
+     * reads (a removed column) are exported under that raw name. A name already used in the set
+     * gets the key or the raw name appended, so no value overwrites another.
      *
      * @param \stdClass $record A {@see self::get_records()} row: data, fieldid, param1..param4.
      * @return array
@@ -169,21 +172,69 @@ class provider implements
             'param3' => $record->param3,
             'param4' => $record->param4,
         ]);
+        $legacy = $schema->legacy_labels();
         $context = \core\context\system::instance();
+        $decoded = json_decode((string)$record->data, true);
 
         $sets = [];
-        $setnumber = 0;
-        foreach (\profilefield_repeatable\helper::normalise_payload($record->data, $schema) as $set) {
-            $setnumber++;
-            $values = [];
-            foreach ($set as $key => $value) {
-                $label = format_string($schema->label($key), true, ['context' => $context, 'escape' => false]);
-                $values[$label] = $value;
+        foreach (is_array($decoded) ? $decoded : [] as $rawset) {
+            if (!is_array($rawset)) {
+                continue;
             }
-            $sets[get_string('repeatableset', 'profilefield_repeatable', $setnumber)] = $values;
+            $values = [];
+            $read = [];
+            foreach ($schema->keys() as $key) {
+                $read[$key] = true;
+                if (isset($legacy[$key])) {
+                    $read[$legacy[$key]] = true;
+                }
+                $label = format_string($schema->label($key), true, ['context' => $context, 'escape' => false]);
+                $value = \profilefield_repeatable\helper::column_value($rawset, $key, $legacy[$key] ?? null);
+                $values[self::unique_name($values, $label, $key)] = self::export_value($value);
+            }
+            foreach ($rawset as $name => $value) {
+                if (!isset($read[$name])) {
+                    $values[self::unique_name($values, (string)$name, (string)$name)] = self::export_value($value);
+                }
+            }
+
+            if (array_filter($values, static fn(string $value): bool => trim($value) !== '')) {
+                $sets[get_string('repeatableset', 'profilefield_repeatable', count($sets) + 1)] = $values;
+            }
         }
 
         return $sets;
+    }
+
+    /**
+     * A name not yet used in an exported set: the name itself, else "name (suffix)", numbered if needed.
+     *
+     * @param array $values The set built so far.
+     * @param string $name
+     * @param string $suffix The column key or raw name.
+     * @return string
+     */
+    private static function unique_name(array $values, string $name, string $suffix): string {
+        $candidate = $name;
+        $counter = 1;
+        while (array_key_exists($candidate, $values)) {
+            $candidate = $name . ' (' . $suffix . ($counter > 1 ? ' ' . $counter : '') . ')';
+            $counter++;
+        }
+        return $candidate;
+    }
+
+    /**
+     * One stored value as exported text.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private static function export_value($value): string {
+        if ($value === null) {
+            return '';
+        }
+        return is_scalar($value) ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE);
     }
 
     /**

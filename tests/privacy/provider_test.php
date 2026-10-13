@@ -250,4 +250,35 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         provider::delete_data_for_user(new approved_contextlist($requester, 'profilefield_repeatable', [$context->id]));
         $this->assertFalse($DB->record_exists('profilefield_repeatable_data', ['userid' => $user->id]));
     }
+
+    /**
+     * Names that format to the same text stay apart, and values under no current column are exported raw.
+     */
+    public function test_export_keeps_colliding_names_and_leftover_values(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        $field = $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field([
+            ['key' => 'name', 'label' => 'Name'],
+            ['key' => 'name_tagged', 'label' => '<b>Name</b>'],
+        ], ['shortname' => 'collide', 'name' => 'Collide']);
+        $DB->insert_record('user_info_data', (object)[
+            'userid' => $user->id,
+            'fieldid' => $field->id,
+            'data' => '{"@@ID#1":{"name":"one","name_tagged":"two","removed":"three","Name":"four"}}',
+            'dataformat' => 0,
+        ]);
+
+        $context = \context_user::instance($user->id);
+        provider::export_user_data(new approved_contextlist($user, 'profilefield_repeatable', [$context->id]));
+
+        $data = writer::with_context($context)->get_data([get_string('pluginname', 'profilefield_repeatable'), 'Collide']);
+        $this->assertSame([get_string('repeatableset', 'profilefield_repeatable', 1) => [
+            'Name' => 'one',
+            'Name (name_tagged)' => 'two',
+            'removed' => 'three',
+            'Name (Name)' => 'four',
+        ]], $data->sets);
+    }
 }

@@ -65,8 +65,8 @@ final class reconcile_indexes_test extends \advanced_testcase {
      * The desired indexes are the indexed columns, named after the field and the key.
      *
      * Runs on every database family: the desired map is built from the field record alone. A stored
-     * key the schema rules reject (here with ":") is never written into the DDL, whose placeholder
-     * scan would misread it.
+     * key the schema rules reject (here with ":") is dropped when the schema is read, so it never
+     * reaches the DDL, whose placeholder scan would misread it.
      */
     public function test_desired_indexes_follow_the_indexed_keys(): void {
         $this->resetAfterTest();
@@ -87,6 +87,7 @@ final class reconcile_indexes_test extends \advanced_testcase {
         $task = new reconcile_indexes();
         $map = new \ReflectionMethod(reconcile_indexes::class, 'get_desired_index_map');
         $desired = $map->invoke($task, (int)$field->id);
+        $this->resetDebugging();
 
         $prefix = 'pfrd_f' . $field->id . '_';
         $this->assertSame([

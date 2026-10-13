@@ -65,11 +65,11 @@ final class schema_test extends \advanced_testcase {
         $this->assertSame([
             ['key' => 'language', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'iso639', 'title' => true],
             ['key' => 'notes', 'label' => 'Notes', 'mode' => 'free', 'required' => true],
-            ['key' => '', 'label' => '', 'mode' => 'free'],
-        ], $schema->columns());
+        ], $schema->columns(), 'The entry that is no column has no valid key and is dropped');
+        $this->assertDebuggingCalled();
         $this->assertSame(
             '{"version":2,"columns":[{"key":"language","label":"Language","mode":"dictionary","domain":"iso639","title":true},'
-                . '{"key":"notes","label":"Notes","mode":"free","required":true},{"key":"","label":"","mode":"free"}]}',
+                . '{"key":"notes","label":"Notes","mode":"free","required":true}]}',
             $schema->to_json()
         );
     }
@@ -335,5 +335,44 @@ final class schema_test extends \advanced_testcase {
         $this->assertSame(['full_name', 'role'], $v1->keys());
         $this->assertSame(['role' => 'roles'], $v1->domain_map());
         $this->assertSame(['full_name' => 'Full name', 'role' => 'Role'], $v1->legacy_labels());
+    }
+
+    /**
+     * A generated key never equals another column's version 1 label, so v1 sets read the right value.
+     */
+    public function test_from_v1_keys_never_equal_another_label(): void {
+        $schema = schema::from_v1("A B\na_b\nX\nx_name");
+
+        $this->assertSame(['a_b_2', 'a_b', 'x_2', 'x_name'], $schema->keys());
+        $payload = \profilefield_repeatable\helper::normalise_payload(
+            '{"@@ID#1":{"A B":"first","a_b":"second","X":"third","x_name":"fourth"}}',
+            $schema
+        );
+        $this->assertSame(['a_b_2' => 'first', 'a_b' => 'second', 'x_2' => 'third', 'x_name' => 'fourth'], $payload['@@ID#1']);
+    }
+
+    /**
+     * A stored schema drops the columns no reader may see: bad key, repeated key, taken report identifier.
+     */
+    public function test_from_json_drops_unsafe_stored_columns(): void {
+        $json = json_encode(['version' => 2, 'columns' => [
+            ['key' => 'name', 'label' => 'Name', 'title' => true],
+            ['key' => "x' OR 1=1", 'label' => 'Injected'],
+            ['key' => 'name', 'label' => 'Again'],
+            ['key' => 'lang', 'label' => 'Lang', 'mode' => 'dictionary', 'domain' => 'iso639'],
+            ['key' => 'lang_name', 'label' => 'Lang name'],
+            ['key' => 'setnumber', 'label' => 'Set'],
+            ['key' => 'role', 'label' => 'Role'],
+        ]]);
+
+        $this->assertSame(['name', 'lang', 'role'], schema::from_json($json)->keys());
+        $this->assertDebuggingCalledCount(4);
+
+        // Each dropped column is reported once per request.
+        schema::from_json($json);
+        $this->assertDebuggingNotCalled();
+
+        // Validation still sees every submitted column, so it can name them.
+        $this->assertCount(7, schema::from_columns(json_decode($json, true)['columns'])->columns());
     }
 }

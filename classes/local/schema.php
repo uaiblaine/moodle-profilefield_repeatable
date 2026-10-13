@@ -139,7 +139,50 @@ final class schema {
             return null;
         }
         $columns = $decoded['columns'] ?? [];
-        return new self(is_array($columns) ? array_values($columns) : []);
+        return (new self(is_array($columns) ? array_values($columns) : []))->without_unsafe_columns();
+    }
+
+    /**
+     * A copy without the columns a stored schema must not hand to the readers.
+     *
+     * The definition form validates before saving, but param1 can be written behind it (a
+     * restore, a direct update). A column whose key breaks {@see self::KEY_PATTERN}, repeats an
+     * earlier key or produces a Report Builder identifier an earlier column already has is
+     * dropped, so no reader, SQL expression or index name ever sees it; debugging() reports
+     * each dropped column once per request.
+     *
+     * @return self
+     */
+    private function without_unsafe_columns(): self {
+        static $reported = [];
+
+        $kept = [];
+        $seen = [self::SETNUMBER_IDENTIFIER => true];
+        foreach ($this->columns as $column) {
+            $identifiers = self::column_identifiers($column);
+            $safe = (bool)preg_match(self::KEY_PATTERN, $column['key']) && !isset($seen[$column['key']]);
+            foreach ($identifiers as $identifier) {
+                $safe = $safe && !isset($seen[$identifier]);
+            }
+            if (!$safe) {
+                $message = 'profilefield_repeatable: ignoring the stored column with key "' . $column['key'] . '"';
+                if (!isset($reported[$message])) {
+                    $reported[$message] = true;
+                    debugging($message, DEBUG_DEVELOPER);
+                }
+                continue;
+            }
+            $kept[] = $column;
+            $seen[$column['key']] = true;
+            foreach ($identifiers as $identifier) {
+                $seen[$identifier] = true;
+            }
+        }
+
+        $copy = clone $this;
+        $copy->columns = $kept;
+        $copy->domainmap = null;
+        return $copy;
     }
 
     /**
@@ -149,6 +192,10 @@ final class schema {
      * dictionaries, the others free text; the first column is the title, as version 1 displayed
      * it. Unknown, duplicate and surplus entries of param2 and param4 are dropped, as version 1
      * reads them. Every key remembers its label as a legacy label.
+     *
+     * A key never equals another column's label (or that label's "_name"/"_code" form): a
+     * version 1 set holds values under the labels, and a key matching another column's label
+     * would read that column's value ({@see helper::column_value()}).
      *
      * @param string $param1 Labels, one per line.
      * @param string $param2 Indexed labels, one per line.
@@ -166,7 +213,13 @@ final class schema {
         $taken = [];
         $legacy = [];
         foreach ($labels as $position => $label) {
-            $key = self::generate_key($label, $taken);
+            $otherlabels = [];
+            foreach ($labels as $other) {
+                if ($other !== $label) {
+                    $otherlabels = array_merge($otherlabels, self::reserved_identifiers($other));
+                }
+            }
+            $key = self::generate_key($label, array_merge($taken, $otherlabels));
             $taken = array_merge($taken, self::reserved_identifiers($key));
             $column = ['key' => $key, 'label' => $label, 'mode' => self::MODE_FREE];
             if (isset($domains[$label])) {
@@ -345,9 +398,11 @@ final class schema {
      * @param mixed $document Decoded document ({@see self::decode()}), or anything else.
      * @param callable|null $domainexists fn(string $domain): bool, asked only for well-formed
      *                                    domains; null skips the check (companion absent).
+     * @param array $lockedlabels Key => label of the stored columns holding values: each of
+     *                            these keys must still be in the document.
      * @return string[] Error messages; empty when the schema may be saved.
      */
-    public static function validate($document, ?callable $domainexists = null): array {
+    public static function validate($document, ?callable $domainexists = null, array $lockedlabels = []): array {
         $rawcolumns = is_array($document) ? ($document['columns'] ?? null) : null;
         if (!is_array($rawcolumns) || ($document['version'] ?? null) !== self::VERSION || !array_is_list($rawcolumns)) {
             return [self::error('errorschemainvalid')];
@@ -370,6 +425,12 @@ final class schema {
             self::validate_roles($columns),
             self::validate_identifiers($columns)
         );
+
+        // A key holding stored values may be neither removed nor renamed: either hides the values.
+        $removed = array_diff_key($lockedlabels, array_flip(array_column($columns, 'key')));
+        if (!empty($removed)) {
+            $errors[] = self::error('errorkeylocked', implode(', ', array_map('strval', $removed)));
+        }
 
         return array_values(array_unique($errors));
     }
