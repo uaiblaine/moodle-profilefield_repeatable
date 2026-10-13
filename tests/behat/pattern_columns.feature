@@ -26,9 +26,9 @@ Feature: Pattern columns of a repeatable profile field
     And I press "Add column"
     And I set the field "Column name" to "CPF"
     And I click on "Pattern" "radio"
-    And I set the field "Preset" to "CPF"
-    And the field "Mask" matches value "999.999.999-99"
-    And I set the field "Store as" to "Raw (12345678909)"
+    And I set the field "Preset" to "cpf"
+    And the field with xpath "//input[@data-field='mask']" matches value "999.999.999-99"
+    And I set the field "Store as" to "raw"
     And I click on "Save changes" "button"
     And I should see "Documents"
     And I log out
