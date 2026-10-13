@@ -17,12 +17,18 @@
 namespace profilefield_repeatable;
 
 /**
- * Event observers cleaning up storage rows orphaned by core deletions.
+ * Event observers keeping {profilefield_repeatable_data} in step with core writes.
  *
  * Core deletes {user_info_data} directly when a user or a custom profile
  * field is removed, so {profilefield_repeatable_data} rows must be purged
  * here or they are retained forever and become invisible to the privacy
  * API (which discovers contexts through user_info_data).
+ *
+ * Core's profile_save_custom_fields() also rewrites {user_info_data} directly. auth_ldap's
+ * sync task does it inside a delegated transaction before user_updated is dispatched (or
+ * user_created, for new accounts), so the observers below see the new payload and rebuild
+ * the projection. auth_db's sync passes no event at all; the reproject_sets scheduled task
+ * covers it ({@see \profilefield_repeatable\task\reproject_sets}).
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
@@ -43,6 +49,24 @@ class observer {
         }
 
         $DB->delete_records('profilefield_repeatable_data', ['userid' => $userid]);
+    }
+
+    /**
+     * Rebuild the projection of an updated user when it no longer matches the payload.
+     *
+     * @param \core\event\user_updated $event
+     */
+    public static function user_updated(\core\event\user_updated $event): void {
+        local\projection::reproject_user((int)$event->objectid);
+    }
+
+    /**
+     * Rebuild the projection of a created user when it no longer matches the payload.
+     *
+     * @param \core\event\user_created $event
+     */
+    public static function user_created(\core\event\user_created $event): void {
+        local\projection::reproject_user((int)$event->objectid);
     }
 
     /**

@@ -47,7 +47,7 @@ class display_renderer {
     /** @var moodle_page */
     private $page;
 
-    /** @var \stdClass[]|null Preloaded storage rows; null means fetch on demand. */
+    /** @var \stdClass[]|null Projection rows already fetched by the caller; null fetches them on demand. */
     private ?array $preloadedrecords;
 
     /**
@@ -58,8 +58,9 @@ class display_renderer {
      * @param string $data Raw field data.
      * @param \core_renderer|null $output Core renderer (optional, uses global if null).
      * @param \moodle_page|null $page Moodle page (optional, uses global if null).
-     * @param \stdClass[]|null $preloadedrecords Storage rows already fetched by the caller
-     *                                           (avoids re-querying); null fetches on demand.
+     * @param \stdClass[]|null $preloadedrecords Projection rows (set_id, data, timemodified) already
+     *                                           fetched by the caller; null fetches them on demand.
+     *                                           They only supply each set's last-sync time.
      */
     public function __construct(
         object $field,
@@ -314,110 +315,64 @@ class display_renderer {
     }
 
     /**
-     * Build sets for display with optional metadata.
+     * Build sets for display from the canonical payload.
+     *
+     * The sets always come from the user_info_data payload. A projection row only lends its
+     * timemodified to the set it still mirrors: a row left stale by a direct write to
+     * user_info_data ({@see \profilefield_repeatable\local\projection}) is ignored.
      *
      * @return array
      */
     private function get_display_sets(): array {
-        $displaysets = $this->get_display_sets_from_storage();
-        if (!empty($displaysets)) {
-            return $displaysets;
-        }
-
         $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
-        return $this->convert_payload_to_display_sets($payload);
-    }
-
-    /**
-     * Resolve display sets from storage table or preloaded rows.
-     *
-     * @return array
-     */
-    private function get_display_sets_from_storage(): array {
-        global $DB;
-
-        $records = $this->preloadedrecords;
-        if ($records === null) {
-            if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
-                return [];
-            }
-
-            $dataid = $DB->get_field('user_info_data', 'id', [
-                'userid' => $this->userid,
-                'fieldid' => (int)$this->field->id,
-            ]);
-            $records = $dataid ? $DB->get_records(
-                'profilefield_repeatable_data',
-                ['dataid' => (int)$dataid],
-                'set_id ASC, id ASC',
-                'id, set_id, data, timemodified'
-            ) : [];
-        }
-
-        $subitems = $this->get_subitems();
-        if (empty($records) || empty($subitems)) {
+        $displaysets = $this->convert_payload_to_display_sets($payload);
+        if (empty($displaysets)) {
             return [];
         }
 
-        $rawsets = [];
-        foreach ($records as $record) {
-            $result = $this->decode_record_to_set($record, $subitems);
-            if ($result !== null) {
-                $rawsets[$result['setid']] = $result;
+        $timemodifiedbyset = [];
+        foreach ($this->get_projection_records() as $record) {
+            $canonical = \profilefield_repeatable\local\projection::canonical_set(json_decode((string)$record->data, true));
+            if ($canonical !== null && !empty($record->timemodified)) {
+                $timemodifiedbyset[(int)$record->set_id] = [$canonical, (int)$record->timemodified];
             }
         }
 
-        ksort($rawsets);
-        $displaysets = [];
-        $setnumber = 1;
-        foreach ($rawsets as $rawset) {
-            $displaysets[] = [
-                'setnumber' => $setnumber,
-                'values' => $rawset['values'],
-                'timemodified' => $rawset['timemodified'],
-            ];
-            $setnumber++;
+        foreach ($displaysets as &$displayset) {
+            $stored = $timemodifiedbyset[$displayset['setnumber']] ?? null;
+            $canonical = \profilefield_repeatable\local\projection::canonical_set($displayset['values']);
+            if ($stored !== null && $stored[0] === $canonical) {
+                $displayset['timemodified'] = $stored[1];
+            }
         }
+        unset($displayset);
 
         return $displaysets;
     }
 
     /**
-     * Decode a single storage record into a display set.
+     * Projection rows of this user and field, preloaded or fetched once.
      *
-     * @param object $record
-     * @param string[] $subitems
-     * @return array|null Null when the record should be skipped.
+     * @return \stdClass[]
      */
-    private function decode_record_to_set(object $record, array $subitems): ?array {
-        $setid = (int)$record->set_id;
-        $decoded = ($setid > 0) ? json_decode((string)$record->data, true) : null;
-        if (!is_array($decoded)) {
-            return null;
+    private function get_projection_records(): array {
+        global $DB;
+
+        if ($this->preloadedrecords !== null) {
+            return $this->preloadedrecords;
         }
 
-        $set = [];
-        $hasvalue = false;
-        foreach ($subitems as $subitem) {
-            $value = $decoded[$subitem] ?? '';
-            if (!is_scalar($value) && $value !== null) {
-                $value = '';
-            }
-
-            $value = (string)$value;
-            if (trim($value) !== '') {
-                $hasvalue = true;
-            }
-            $set[$subitem] = $value;
+        $this->preloadedrecords = [];
+        if ($this->userid > 0 && !empty($this->field->id)) {
+            $this->preloadedrecords = array_values($DB->get_records(
+                'profilefield_repeatable_data',
+                ['fieldid' => (int)$this->field->id, 'userid' => $this->userid],
+                'set_id ASC, id ASC',
+                'id, set_id, data, timemodified'
+            ));
         }
 
-        $timemodified = empty($record->timemodified) ? null : (int)$record->timemodified;
-
-        return $hasvalue ? [
-            'setid' => $setid,
-            'values' => $set,
-            'timemodified' => $timemodified,
-        ] : null;
+        return $this->preloadedrecords;
     }
 
     /**

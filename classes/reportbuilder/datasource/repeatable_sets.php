@@ -47,10 +47,18 @@ class repeatable_sets extends datasource {
     /**
      * Only offer this datasource when at least one repeatable profile field exists.
      *
+     * Only on PostgreSQL and MySQL/MariaDB: {@see \profilefield_repeatable\helper::sql_subitem_value()}
+     * has no other form, and its JSON_EXTRACT fallback does not exist on SQL Server (nor on
+     * Oracle, which Moodle 4.5 still installs on), so every sub-item column would fail there.
+     *
      * @return bool
      */
     public static function is_available(): bool {
         global $DB;
+
+        if (!in_array($DB->get_dbfamily(), ['postgres', 'mysql'], true)) {
+            return false;
+        }
 
         return $DB->record_exists('user_info_field', ['datatype' => 'repeatable']);
     }

@@ -184,4 +184,38 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
         $this->assertSame(0, $DB->count_records('profilefield_repeatable_data', ['userid' => $user->id]));
     }
+    /**
+     * Export and deletion match the user to the context whatever the id types.
+     *
+     * A context loaded from the database carries a string instanceid, one created in the same
+     * request an int, and a user record either; a strict comparison skipped the user.
+     */
+    public function test_export_and_delete_compare_ids_as_integers(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->create_field_with_data(
+            'repeatable_priv_types',
+            'Repeatable Types',
+            (int)$user->id,
+            '{"@@ID#1":{"name":"Alice","role":"Manager"}}'
+        );
+
+        $context = \context_user::instance($user->id);
+        $requester = clone $user;
+        $requester->id = is_int($context->instanceid) ? (string)$user->id : (int)$user->id;
+
+        provider::export_user_data(new approved_contextlist($requester, 'profilefield_repeatable', [$context->id]));
+        $data = writer::with_context($context)->get_data([
+            get_string('pluginname', 'profilefield_repeatable'),
+            'Repeatable Types',
+        ]);
+        $this->assertStringContainsString('Alice', (string)($data->data ?? ''));
+
+        provider::delete_data_for_user(new approved_contextlist($requester, 'profilefield_repeatable', [$context->id]));
+        $this->assertFalse($DB->record_exists('profilefield_repeatable_data', ['userid' => $user->id]));
+    }
 }

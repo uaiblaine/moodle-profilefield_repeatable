@@ -34,22 +34,19 @@ class profile_field_repeatable extends profile_field_base {
     /** @var string Hidden element identifier used by AMD init. */
     protected $hiddenid = '';
 
-    /** @var stdClass[]|null Memoised storage rows for this field instance. */
-    protected ?array $storagerecords = null;
-
-    /** @var bool Whether storage rows were already loaded for this instance. */
-    protected bool $storagerecordsloaded = false;
-
     /**
      * Adds elements for this field type to the edit form.
+     *
+     * The value travels in a hidden input that the AMD module keeps in step with the widget.
+     * QuickForm prints no error for a hidden element, so the hidden input is wrapped in a
+     * group carrying the field's input name: the group is a visible form row placed under
+     * the widget, and a validation error keyed by the input name renders there. The widget
+     * points at that error with aria-describedby.
      *
      * @param moodleform $mform
      */
     public function edit_field_add($mform) {
         global $OUTPUT;
-
-        $mform->addElement('hidden', $this->inputname, '', ['id' => $this->get_hidden_id()]);
-        $mform->setType($this->inputname, PARAM_RAW_TRIMMED);
 
         $context = \core\context\system::instance();
         $subitems = $this->get_subitems();
@@ -60,6 +57,8 @@ class profile_field_repeatable extends profile_field_base {
 
         $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
             'fieldlabel' => format_string($this->field->name),
+            'labelid' => $this->get_wrapper_id() . '-label',
+            'errorid' => $this->get_error_id(),
             'wrapperid' => $this->get_wrapper_id(),
             'subitems' => $subitemdata,
             'setcolumn' => get_string('setcolumn', 'profilefield_repeatable'),
@@ -68,20 +67,26 @@ class profile_field_repeatable extends profile_field_base {
         ]);
 
         $mform->addElement('html', $html);
+        $mform->addGroup(
+            [$mform->createElement('hidden', $this->inputname, '', ['id' => $this->get_hidden_id()])],
+            $this->inputname,
+            '',
+            '',
+            false
+        );
+        $mform->setType($this->inputname, PARAM_RAW_TRIMMED);
     }
 
     /**
      * Load user data for this profile field, ready for editing.
      *
-     * Source of truth: profilefield_repeatable_data; fallback: user_info_data.data.
+     * Reads the canonical payload in user_info_data.data, never the per-set projection:
+     * core's profile_save_custom_fields() can change the payload without touching it.
      *
      * @param stdClass $user
      */
     public function edit_load_user_data($user) {
-        $payload = $this->get_payload_from_storage();
-        if (empty($payload)) {
-            $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
-        }
+        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
 
         $user->{$this->inputname} = \profilefield_repeatable\helper::encode_payload($payload);
     }
@@ -165,14 +170,12 @@ class profile_field_repeatable extends profile_field_base {
             $dataid = (int)$DB->insert_record('user_info_data', $data);
         }
 
-        $this->sync_repeat_data($dataid, (int)$data->userid, $payload);
+        \profilefield_repeatable\local\projection::sync($dataid, (int)$data->fieldid, (int)$data->userid, $payload);
 
         $transaction->allow_commit();
 
         // Keep local instance data consistent for callers in same request.
         $this->data = $fallbackjson;
-        $this->storagerecords = null;
-        $this->storagerecordsloaded = false;
     }
 
     /**
@@ -275,12 +278,7 @@ class profile_field_repeatable extends profile_field_base {
      * @return bool
      */
     public function is_empty() {
-        $payload = $this->get_payload_from_storage();
-        if (empty($payload)) {
-            $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems());
-        }
-
-        return empty($payload);
+        return empty(\profilefield_repeatable\helper::normalise_payload($this->data, $this->get_subitems()));
     }
 
     /**
@@ -305,10 +303,7 @@ class profile_field_repeatable extends profile_field_base {
         $renderer = new \profilefield_repeatable\output\display_renderer(
             $this->field,
             (int)($this->userid ?? 0),
-            (string)$this->data,
-            null,
-            null,
-            $this->get_storage_records()
+            (string)$this->data
         );
         return $renderer->render();
     }
@@ -323,94 +318,6 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Fetch and memoise the storage rows for this field instance.
-     *
-     * One instance serves several read calls per request (is_empty, edit
-     * load, display); without the memo each call re-queried the database.
-     *
-     * @return stdClass[]
-     */
-    protected function get_storage_records(): array {
-        global $DB;
-
-        if ($this->storagerecordsloaded) {
-            return $this->storagerecords ?? [];
-        }
-
-        $this->storagerecordsloaded = true;
-        $this->storagerecords = [];
-
-        if (empty($this->userid) || empty($this->field) || empty($this->field->id)) {
-            return [];
-        }
-
-        $dataid = $DB->get_field('user_info_data', 'id', [
-            'userid' => (int)$this->userid,
-            'fieldid' => (int)$this->field->id,
-        ]);
-
-        if ($dataid) {
-            $this->storagerecords = array_values($DB->get_records(
-                'profilefield_repeatable_data',
-                ['dataid' => (int)$dataid],
-                'set_id ASC, id ASC',
-                'id, set_id, data, timemodified'
-            ));
-        }
-
-        return $this->storagerecords;
-    }
-
-    /**
-     * Resolve payload from storage table for the current user.
-     *
-     * @return array
-     */
-    protected function get_payload_from_storage(): array {
-        return $this->get_payload_from_records($this->get_storage_records());
-    }
-
-    /**
-     * Resolve payload from storage rows.
-     *
-     * @param stdClass[] $records
-     * @return array
-     */
-    protected function get_payload_from_records(array $records): array {
-        if (empty($records)) {
-            return [];
-        }
-
-        $allowedsubitems = array_fill_keys($this->get_subitems(), true);
-        $rawsets = [];
-
-        foreach ($records as $record) {
-            $setid = (int)$record->set_id;
-            if ($setid <= 0) {
-                continue;
-            }
-
-            $decoded = json_decode((string)$record->data, true);
-            if (!is_array($decoded)) {
-                continue;
-            }
-
-            if (!empty($allowedsubitems)) {
-                $decoded = array_intersect_key($decoded, $allowedsubitems);
-            }
-
-            $rawsets[$setid] = $decoded;
-        }
-
-        if (empty($rawsets)) {
-            return [];
-        }
-
-        ksort($rawsets);
-        return \profilefield_repeatable\helper::normalise_payload($rawsets, $this->get_subitems());
-    }
-
-    /**
      * Normalise payload for the current field configuration.
      *
      * @param mixed $rawpayload
@@ -418,126 +325,6 @@ class profile_field_repeatable extends profile_field_base {
      */
     private function normalise_payload($rawpayload): array {
         return \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_subitems());
-    }
-
-    /**
-     * Synchronise JSON-per-set rows for one user_info_data.id.
-     *
-     * @param int $dataid
-     * @param int $userid
-     * @param array $payload
-     */
-    protected function sync_repeat_data(int $dataid, int $userid, array $payload): void {
-        global $DB;
-
-        $fieldid = (int)$this->field->id;
-        $now = time();
-        $persistedsetids = [];
-        $setid = 1;
-
-        foreach ($payload as $setdata) {
-            if (!is_array($setdata)) {
-                $setid++;
-                continue;
-            }
-
-            $jsonset = json_encode($setdata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if ($jsonset === false) {
-                debugging(
-                    'profilefield_repeatable: JSON encode failed for field ' . $fieldid .
-                    ', user ' . $userid . ', set ' . $setid . ': ' . json_last_error_msg(),
-                    DEBUG_DEVELOPER
-                );
-                $setid++;
-                continue;
-            }
-
-            $this->upsert_set_row($dataid, $fieldid, $userid, $setid, $jsonset, $now);
-            $persistedsetids[] = $setid;
-            $setid++;
-        }
-
-        if (empty($persistedsetids)) {
-            $DB->delete_records('profilefield_repeatable_data', ['dataid' => $dataid]);
-            return;
-        }
-
-        [$insql, $params] = $DB->get_in_or_equal($persistedsetids, SQL_PARAMS_NAMED, 'setid', false);
-        $params['dataid'] = $dataid;
-        $DB->delete_records_select('profilefield_repeatable_data', "dataid = :dataid AND set_id $insql", $params);
-    }
-
-    /**
-     * Insert or update one set row, preserving timecreated on update.
-     *
-     * @param int $dataid
-     * @param int $fieldid
-     * @param int $userid
-     * @param int $setid
-     * @param string $jsonset
-     * @param int $now
-     */
-    protected function upsert_set_row(
-        int $dataid,
-        int $fieldid,
-        int $userid,
-        int $setid,
-        string $jsonset,
-        int $now
-    ): void {
-        global $DB;
-
-        if (!\profilefield_repeatable\helper::is_postgres($DB)) {
-            $existing = $DB->get_record(
-                'profilefield_repeatable_data',
-                ['dataid' => $dataid, 'set_id' => $setid],
-                'id',
-                IGNORE_MISSING
-            );
-
-            if ($existing) {
-                $DB->update_record('profilefield_repeatable_data', (object) [
-                    'id' => (int)$existing->id,
-                    'fieldid' => $fieldid,
-                    'userid' => $userid,
-                    'data' => $jsonset,
-                    'timemodified' => $now,
-                ]);
-                return;
-            }
-
-            $DB->insert_record('profilefield_repeatable_data', (object) [
-                'dataid' => $dataid,
-                'fieldid' => $fieldid,
-                'userid' => $userid,
-                'set_id' => $setid,
-                'data' => $jsonset,
-                'timecreated' => $now,
-                'timemodified' => $now,
-            ]);
-            return;
-        }
-
-        $sql = "INSERT INTO {profilefield_repeatable_data}
-                    (dataid, fieldid, userid, set_id, data, timecreated, timemodified)
-                VALUES
-                    (:dataid, :fieldid, :userid, :setid, :data, :timecreated, :timemodified)
-                ON CONFLICT (dataid, set_id)
-                DO UPDATE SET
-                    fieldid = EXCLUDED.fieldid,
-                    userid = EXCLUDED.userid,
-                    data = EXCLUDED.data,
-                    timemodified = EXCLUDED.timemodified";
-
-        $DB->execute($sql, [
-            'dataid' => $dataid,
-            'fieldid' => $fieldid,
-            'userid' => $userid,
-            'setid' => $setid,
-            'data' => $jsonset,
-            'timecreated' => $now,
-            'timemodified' => $now,
-        ]);
     }
 
     /**
@@ -575,6 +362,18 @@ class profile_field_repeatable extends profile_field_base {
         }
 
         return $this->wrapperid;
+    }
+
+    /**
+     * Get the id of the error region core renders for the group carrying the input name.
+     *
+     * Mirrors the renderer: the group's id is "fgroup_id_<name>" and its error region swaps
+     * "_id_" for "_id_error_" ({@see \templatable_form_element}).
+     *
+     * @return string
+     */
+    protected function get_error_id(): string {
+        return 'fgroup_id_error_' . $this->inputname;
     }
 
     /**

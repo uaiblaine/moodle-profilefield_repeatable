@@ -85,3 +85,4 @@ $string['sublinesubitems_help'] =
     'Opcionalmente liste subitens a exibir como linha secundária sob o título quando o conjunto estiver fechado (por exemplo, "Disciplina · Escola"). Cada linha deve corresponder exatamente a um subitem. O primeiro subitem é reservado para o título e não pode ser usado aqui. Máximo de 3 entradas. Deixe em branco para ocultar a linha auxiliar.';
 $string['synchronisedat'] = 'Sincronizado em: {$a}';
 $string['taskreconcileindexes'] = 'Reconciliar índices JSON do campo de perfil repetível';
+$string['taskreprojectsets'] = 'Reconstruir os conjuntos do campo de perfil repetível para relatórios';

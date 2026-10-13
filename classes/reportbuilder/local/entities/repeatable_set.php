@@ -78,16 +78,38 @@ class repeatable_set extends base {
     public function initialise(): base {
         $subitems = helper::parse_subitems((string)($this->field->param1 ?? ''));
         $domainmap = helper::parse_subitem_domain_map((string)($this->field->param3 ?? ''), $subitems);
+        $available = $this->is_field_visible();
 
         foreach ($this->get_all_columns($subitems, $domainmap) as $column) {
-            $this->add_column($column);
+            $this->add_column($column->set_is_available($available));
         }
 
         foreach ($this->get_all_filters($subitems, $domainmap) as $filter) {
-            $this->add_filter($filter);
+            $this->add_filter($filter->set_is_available($available));
         }
 
         return $this;
+    }
+
+    /**
+     * Whether the current user may see this profile field in reports.
+     *
+     * Same gate as core's own profile-field columns and filters
+     * ({@see \core_reportbuilder\local\helpers\user_profile_fields}): the field's visibility
+     * setting checked at system level, for a field instance bound to a user id that matches nobody.
+     * Core passes {@see \core\user::SUPPORT_USER} for the same reason: with user id 0 the TEACHERS
+     * branch checks moodle/site:viewuseridentity in the global course instead of
+     * moodle/user:viewalldetails, and TEACHERS and PRIVATE fields are visible when $USER->id is 0.
+     *
+     * @return bool
+     */
+    protected function is_field_visible(): bool {
+        global $CFG;
+
+        require_once($CFG->dirroot . '/user/profile/lib.php');
+
+        $profilefield = profile_get_user_field('repeatable', (int)$this->field->id, \core\user::SUPPORT_USER, $this->field);
+        return $profilefield->is_visible(\core\context\system::instance());
     }
 
     /**
@@ -136,7 +158,7 @@ class repeatable_set extends base {
                     ->add_field($valuesql, 'val' . $index, $valueparams)
                     ->set_is_sortable(true)
                     ->add_callback(static function (?string $value) use ($domain): string {
-                        return self::resolve_label($domain, $value);
+                        return s(self::resolve_label($domain, $value));
                     });
 
                 [$codesql, $codeparams] = helper::sql_subitem_value(
@@ -154,7 +176,10 @@ class repeatable_set extends base {
                     ->add_joins($this->get_joins())
                     ->set_type(column::TYPE_TEXT)
                     ->add_field($codesql, 'code' . $index, $codeparams)
-                    ->set_is_sortable(true);
+                    ->set_is_sortable(true)
+                    ->add_callback(static function (?string $value): string {
+                        return s($value);
+                    });
             } else {
                 $columns[] = (new column(
                     'subitem' . $index,
@@ -164,7 +189,10 @@ class repeatable_set extends base {
                     ->add_joins($this->get_joins())
                     ->set_type(column::TYPE_TEXT)
                     ->add_field($valuesql, 'val' . $index, $valueparams)
-                    ->set_is_sortable(true);
+                    ->set_is_sortable(true)
+                    ->add_callback(static function (?string $value): string {
+                        return s($value);
+                    });
             }
         }
 
@@ -283,6 +311,7 @@ class repeatable_set extends base {
      *
      * The option keys are the stored codes (so filtering happens on the code), while the
      * displayed labels are the resolved names, falling back to the code when unresolved.
+     * Labels are escaped here: core's autocomplete element prints option text unescaped.
      *
      * @param int $fieldid The profile field id.
      * @param string $subitem Sub-item key whose codes are listed.
@@ -326,7 +355,7 @@ class repeatable_set extends base {
         $options = [];
         foreach ($cleancodes as $code) {
             $label = $labels[$code] ?? null;
-            $options[$code] = (is_string($label) && trim($label) !== '') ? $label : $code;
+            $options[$code] = s((is_string($label) && trim($label) !== '') ? $label : $code);
         }
 
         asort($options, SORT_NATURAL | SORT_FLAG_CASE);

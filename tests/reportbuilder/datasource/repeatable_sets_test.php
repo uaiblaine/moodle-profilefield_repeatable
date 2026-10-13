@@ -17,7 +17,9 @@
 namespace profilefield_repeatable\reportbuilder\datasource;
 
 use core_reportbuilder\local\filters\text;
+use core_reportbuilder\manager;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
+use profilefield_repeatable\reportbuilder\local\entities\repeatable_set;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -27,6 +29,9 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
 
 /**
  * Tests for the repeatable_sets Report Builder datasource.
+ *
+ * Metadata stays in docblock annotations: the plugin supports Moodle 4.5, whose moodle-cs
+ * cannot read PHPUnit attributes.
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\reportbuilder\datasource\repeatable_sets
@@ -270,5 +275,206 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
 
         $this->assertCount(1, $filtered);
         $this->assertSame('Diretoria Centro', array_values($filtered[0])[0]);
+    }
+    /**
+     * The source is hidden on databases its sub-item SQL has no form for.
+     */
+    public function test_is_available_only_on_supported_db_families(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->create_repeatable_field();
+
+        $realdb = $DB;
+        try {
+            foreach (['mssql' => false, 'oracle' => false, 'postgres' => true, 'mysql' => true] as $family => $expected) {
+                $mock = $this->createMock(\moodle_database::class);
+                $mock->method('get_dbfamily')->willReturn($family);
+                $mock->method('record_exists')->willReturn(true);
+                $DB = $mock;
+                $this->assertSame($expected, repeatable_sets::is_available(), "Database family {$family}");
+            }
+        } finally {
+            $DB = $realdb;
+        }
+    }
+
+    /**
+     * Value, code and resolved-name columns escape stored text.
+     */
+    public function test_value_columns_escape_stored_text(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
+        $user = $this->getDataGenerator()->create_user();
+        $this->save_sets($fielddef, $user, json_encode([
+            '@@ID#1' => ['diretoria' => '<img src=x onerror=alert(1)>', 'escola' => '<script>alert(2)</script>'],
+        ]));
+
+        $entity = $this->entity_name($fielddef);
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
+        $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemname1']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitemcode1']);
+        $generator->create_column(['reportid' => $report->get('id'), 'uniqueidentifier' => $entity . ':subitem2']);
+        $generator->create_filter(['reportid' => $report->get('id'), 'uniqueidentifier' => 'user:username']);
+
+        $content = $this->get_custom_report_content($report->get('id'), 0, [
+            'user:username_operator' => text::IS_EQUAL_TO,
+            'user:username_value' => $user->username,
+        ]);
+
+        $this->assertCount(1, $content);
+        [$name, $code, $value] = array_values($content[0]);
+        $this->assertSame('&lt;img src=x onerror=alert(1)&gt;', $name, 'Resolved-name column');
+        $this->assertSame('&lt;img src=x onerror=alert(1)&gt;', $code, 'Code column');
+        $this->assertSame('&lt;script&gt;alert(2)&lt;/script&gt;', $value, 'Value column');
+    }
+
+    /**
+     * Name filter options keep the raw code as key and escape the label core prints unescaped.
+     */
+    public function test_name_filter_options_escape_labels(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias']);
+        $user = $this->getDataGenerator()->create_user();
+        $code = '<img src=x onerror=alert(1)>';
+        $this->save_sets($fielddef, $user, json_encode(['@@ID#1' => ['diretoria' => $code, 'escola' => '1']]));
+
+        $method = new \ReflectionMethod(repeatable_set::class, 'name_filter_options');
+        $options = $method->invoke(null, (int)$fielddef->id, 'diretoria', 'diretorias');
+
+        $this->assertSame([$code => s($code)], $options);
+    }
+
+    /**
+     * Visibility cases: field visibility, whether the viewer is an admin, expected availability.
+     *
+     * @return array
+     */
+    public static function visibility_provider(): array {
+        return [
+            'private, plain user' => [PROFILE_VISIBLE_PRIVATE, false, false],
+            'teachers, plain user' => [PROFILE_VISIBLE_TEACHERS, false, false],
+            'nobody, plain user' => [PROFILE_VISIBLE_NONE, false, false],
+            'everyone, plain user' => [PROFILE_VISIBLE_ALL, false, true],
+            'private, admin' => [PROFILE_VISIBLE_PRIVATE, true, true],
+            'teachers, admin' => [PROFILE_VISIBLE_TEACHERS, true, true],
+        ];
+    }
+
+    /**
+     * Every column and filter of a field follows the field's visibility, as core's own do.
+     *
+     * @dataProvider visibility_provider
+     * @param string $visible The field's visibility setting (PROFILE_VISIBLE_*).
+     * @param bool $asadmin Whether the report is viewed by an admin.
+     * @param bool $expected Whether the columns and filters are available.
+     */
+    public function test_columns_and_filters_follow_field_visibility(string $visible, bool $asadmin, bool $expected): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fielddef = $this->create_repeatable_field(['param3' => 'diretoria|diretorias', 'visible' => $visible]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
+        $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
+
+        if (!$asadmin) {
+            $this->setUser($this->getDataGenerator()->create_user());
+        }
+        manager::reset_caches();
+        $instance = manager::get_report_from_persistent($report);
+
+        $entity = $this->entity_name($fielddef);
+        foreach (['setnumber', 'subitemname1', 'subitemcode1', 'subitem2'] as $name) {
+            $column = $instance->get_column("{$entity}:{$name}");
+            $this->assertNotNull($column, "Column {$name}");
+            $this->assertSame($expected, $column->get_is_available(), "Column {$name}");
+
+            $filter = $instance->get_filter("{$entity}:{$name}");
+            $this->assertNotNull($filter, "Filter {$name}");
+            $this->assertSame($expected, $filter->get_is_available(), "Filter {$name}");
+        }
+
+        // Control: the user entity of the same report is always available.
+        $this->assertTrue($instance->get_column('user:fullname')->get_is_available());
+    }
+
+    /**
+     * Availability of the columns and filters of a field's entity as seen by the current user.
+     *
+     * @param \stdClass $fielddef The field record.
+     * @param \stdClass $report The report persistent.
+     * @return bool
+     */
+    private function sets_available(\stdClass $fielddef, $report): bool {
+        manager::reset_caches();
+        $instance = manager::get_report_from_persistent($report);
+        $entity = $this->entity_name($fielddef);
+
+        $column = $instance->get_column("{$entity}:setnumber");
+        $filter = $instance->get_filter("{$entity}:setnumber");
+        $this->assertNotNull($column);
+        $this->assertNotNull($filter);
+        $this->assertSame($column->get_is_available(), $filter->get_is_available());
+
+        return $column->get_is_available();
+    }
+
+    /**
+     * Visibility is decided with the same capabilities as core's profile-field columns.
+     *
+     * The field instance has no user, so a TEACHERS field follows moodle/site:viewuseridentity in
+     * the global course (moodle/user:viewalldetails opens only PRIVATE and NONE fields), and
+     * without a user (cron, CLI) a PRIVATE field is not available.
+     */
+    public function test_visibility_uses_the_capabilities_core_checks(): void {
+        global $COURSE;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $teachers = $this->create_repeatable_field([
+            'param3' => 'diretoria|diretorias',
+            'visible' => PROFILE_VISIBLE_TEACHERS,
+            'shortname' => 'teachersfield',
+            'name' => 'Teachers field',
+        ]);
+        $private = $this->create_repeatable_field([
+            'param3' => 'diretoria|diretorias',
+            'visible' => PROFILE_VISIBLE_PRIVATE,
+            'shortname' => 'privatefield',
+            'name' => 'Private field',
+        ]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
+        $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
+
+        // Only moodle/user:viewalldetails, assigned at system level: PRIVATE yes, TEACHERS no (as in core).
+        $roleid = $this->getDataGenerator()->create_role();
+        assign_capability('moodle/user:viewalldetails', CAP_ALLOW, $roleid, \core\context\system::instance());
+        $viewer = $this->getDataGenerator()->create_user();
+        role_assign($roleid, $viewer->id, \core\context\system::instance());
+        $this->setUser($viewer);
+        $this->assertFalse(has_capability('moodle/site:viewuseridentity', \core\context\course::instance(SITEID)));
+        $this->assertTrue($this->sets_available($private, $report), 'viewalldetails sees PRIVATE');
+        $this->assertFalse($this->sets_available($teachers, $report), 'viewalldetails alone does not open TEACHERS');
+
+        // Only moodle/site:viewuseridentity, through an editing teacher role in a course that is the global course.
+        $course = $this->getDataGenerator()->create_course();
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->setUser($teacher);
+        $this->assertTrue(has_capability('moodle/site:viewuseridentity', \core\context\course::instance($course->id)));
+        $this->assertFalse(has_capability('moodle/user:viewalldetails', \core\context\system::instance()));
+        $this->assertFalse($this->sets_available($teachers, $report), 'site course: other course teacher, no TEACHERS');
+        $COURSE = $course;
+        $this->assertTrue($this->sets_available($teachers, $report), 'global course: viewuseridentity there sees TEACHERS');
+        $this->assertFalse($this->sets_available($private, $report), 'course teacher does not see PRIVATE');
+
+        // No user at all: a PRIVATE field is not available.
+        $this->setUser(0);
+        $this->assertFalse($this->sets_available($private, $report), 'no user does not see PRIVATE');
     }
 }

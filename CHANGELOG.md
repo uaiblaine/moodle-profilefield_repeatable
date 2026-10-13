@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- **Stored XSS in Report Builder**: the sub-item value, code and resolved-name columns now
+  escape their output, and the name filter escapes its option labels (core's autocomplete
+  element prints them unescaped).
+- **Field visibility in Report Builder**: every column and filter of a repeatable field is
+  available only when the field is visible to the viewer, the same gate core applies to its own
+  profile-field columns (`is_visible()` at system level).
+
+### Fixed
+- **Profile reads follow the canonical payload**: the edit form, `is_empty()` and the profile
+  display read `user_info_data.data`. Values written by core's `profile_save_custom_fields()`
+  (auth_db and auth_ldap attribute sync) no longer hide behind stale per-set rows.
+- **Per-set rows are rebuilt when they drift**: observers on `user_updated` and `user_created`
+  (auth_ldap sync) and a new daily scheduled task (`reproject_sets`, for auth_db sync and
+  restored users) rewrite `profilefield_repeatable_data` when it no longer matches the payload.
+- **Validation errors are visible**: the value's hidden input sits in a form group named after
+  the field, so invalid-JSON, too-many-sets, value-too-long and required errors render under the
+  widget, which references them with `aria-describedby`.
+- **Index reconciliation dropped other fields' indexes**: the `pfrd_f<id>_` prefix is matched
+  with an escaped `LIKE` and an exact name check, so field 1 no longer claims the indexes of
+  fields 10-19 and 100-199.
+- Privacy export and deletion compare context and user ids as integers.
+
+### Changed
+- The Report Builder source is offered only on PostgreSQL and MySQL/MariaDB; its per-sub-item
+  SQL has no SQL Server or Oracle form.
+- Per-set row writes moved to `\profilefield_repeatable\local\projection`.
+
 ## [2.2.0] - 2026-06-16
 
 ### Added

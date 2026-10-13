@@ -28,6 +28,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\observer
+ * @covers     \profilefield_repeatable\local\projection
  * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -185,5 +186,93 @@ final class observer_test extends \advanced_testcase {
         profile_delete_field((int)$textfield->id);
 
         $this->assertSame(1, $DB->count_records('profilefield_repeatable_data', ['fieldid' => $repeatableid]));
+    }
+    /**
+     * Decoded sets of the projection rows of one user, keyed by set_id.
+     *
+     * @param int $userid
+     * @return array
+     */
+    private function projected_sets(int $userid): array {
+        global $DB;
+
+        $sets = [];
+        foreach ($DB->get_records('profilefield_repeatable_data', ['userid' => $userid], 'set_id ASC') as $row) {
+            $sets[(int)$row->set_id] = json_decode((string)$row->data, true);
+        }
+
+        return $sets;
+    }
+
+    /**
+     * Event cases: event class, as dispatched after profile_save_custom_fields() by auth_ldap's sync.
+     *
+     * @return array
+     */
+    public static function user_event_provider(): array {
+        return [
+            'user_updated' => [\core\event\user_updated::class],
+            'user_created' => [\core\event\user_created::class],
+        ];
+    }
+
+    /**
+     * A user event rebuilds the projection from a payload core wrote directly.
+     *
+     * @dataProvider user_event_provider
+     * @param string $eventclass
+     */
+    public function test_user_event_reprojects_direct_write(string $eventclass): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $this->create_repeatable_field('repeatable_obs_sync');
+        $user = $this->getDataGenerator()->create_user();
+        $userid = (int)$user->id;
+        profile_save_data((object) [
+            'id' => $userid,
+            'profile_field_repeatable_obs_sync' => '{"@@ID#1":{"name":"Alice","role":"Manager"}}',
+        ]);
+
+        profile_save_custom_fields($userid, [
+            'repeatable_obs_sync' => '{"@@ID#1":{"name":"Bob","role":"Teacher"},"@@ID#2":{"name":"Carol","role":""}}',
+        ]);
+        // Precondition: the direct write left the projection behind.
+        $this->assertSame([1 => ['name' => 'Alice', 'role' => 'Manager']], $this->projected_sets($userid));
+
+        $eventclass::create_from_userid($userid)->trigger();
+        $this->assertSame([
+            1 => ['name' => 'Bob', 'role' => 'Teacher'],
+            2 => ['name' => 'Carol', 'role' => ''],
+        ], $this->projected_sets($userid));
+
+        // An emptied payload empties the projection.
+        profile_save_custom_fields($userid, ['repeatable_obs_sync' => '']);
+        $eventclass::create_from_userid($userid)->trigger();
+        $this->assertSame([], $this->projected_sets($userid));
+    }
+
+    /**
+     * A user event leaves a projection that still matches the payload untouched.
+     */
+    public function test_user_updated_keeps_current_projection(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $fieldid = $this->create_repeatable_field('repeatable_obs_current');
+        $user = $this->getDataGenerator()->create_user();
+        $this->save_field_data($fieldid, (int)$user->id);
+        $DB->set_field('profilefield_repeatable_data', 'timemodified', 1, ['userid' => $user->id]);
+
+        \core\event\user_updated::create_from_userid($user->id)->trigger();
+        $this->assertSame(1, (int)$DB->get_field('profilefield_repeatable_data', 'timemodified', ['userid' => $user->id]));
+
+        // Control: the same event does rewrite a stale row.
+        $DB->set_field('profilefield_repeatable_data', 'data', '{"name":"Old","role":"Manager"}', ['userid' => $user->id]);
+        \core\event\user_updated::create_from_userid($user->id)->trigger();
+        $this->assertGreaterThan(1, (int)$DB->get_field('profilefield_repeatable_data', 'timemodified', ['userid' => $user->id]));
+        $this->assertSame([1 => ['name' => 'Alice', 'role' => 'Manager']], $this->projected_sets((int)$user->id));
     }
 }

@@ -85,3 +85,4 @@ $string['sublinesubitems_help'] =
     'Optionally list sub-items to display as a secondary line under the title when the set is collapsed (e.g. "Subject · School"). Each line must match a sub-item exactly. The first sub-item is reserved for the title and cannot be used here. Maximum of 3 entries. Leave empty to hide the subline entirely.';
 $string['synchronisedat'] = 'Synchronised at: {$a}';
 $string['taskreconcileindexes'] = 'Reconcile repeatable profile field JSON indexes';
+$string['taskreprojectsets'] = 'Rebuild repeatable profile field sets for reports';
