@@ -18,15 +18,15 @@
  * Repeatable profile field version information.
  *
  * @package    profilefield_repeatable
- * @copyright  2026 Anderson Blaine (anderson@blaine.com.br)
+ * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026080704;
+$plugin->version   = 2026080705;
 $plugin->requires  = 2024100100;
 $plugin->component = 'profilefield_repeatable';
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = 'v2.2.0';
-$plugin->supported = [405, 502];
+$plugin->supported = [405, 503];

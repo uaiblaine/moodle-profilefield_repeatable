@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Moodle 5.3 support: `$plugin->supported` is now `[405, 503]`, and CI runs the full PHP x database
+  matrix on 5.3 (5.2 runs one database).
+
+### Changed
+- Copyright headers carry the name only (no e-mail address); `amd/build` rebuilt for the edited
+  module docblocks.
+- `.gitattributes` and `.stylelintrc.json` follow the fleet templates.
+
 ### Removed
 - The GIN `REINDEX` right after its `CREATE INDEX` (it rebuilt the same index under a write lock),
   the unused PostgreSQL feature helpers, the per-run index-task `debugging()` line, the

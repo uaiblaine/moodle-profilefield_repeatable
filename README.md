@@ -9,14 +9,15 @@ A Moodle user profile field plugin that stores repeatable field data as sets of 
 Requirements
 ------------
 
-This plugin requires Moodle 4.5+ (tested through Moodle 5.2).
+- Moodle 4.5 or later (tested up to Moodle 5.3).
+- Optional: [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries) for reference resolution.
 
 Database baseline follows Moodle requirements:
 
-- PostgreSQL 13+
-- MySQL 8.0+ / MariaDB (supported fallback mode)
+- PostgreSQL 13+ (Moodle 5.3 requires PostgreSQL 17)
+- MySQL 8.0+ / MariaDB (Moodle 5.3 requires MariaDB 11.4); supported fallback mode
 
-Recommended for best performance: PostgreSQL 13+.
+Recommended for best performance: PostgreSQL.
 
 Microsoft SQL Server (and Oracle, on Moodle 4.5) is not supported by the Report Builder source: its
 per-sub-item SQL exists only for PostgreSQL and MySQL/MariaDB, so the "Repeatable profile field
