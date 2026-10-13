@@ -116,10 +116,10 @@ class profile_field_repeatable extends profile_field_base {
      * What the widget needs to offer a dictionary column through the companion's autocomplete.
      *
      * A dictionary column gets its domain, whether it accepts new codes ('open') and whether it
-     * is searched ('autocomplete'): only when the companion has its lookup-era API and the
-     * current user may read the domain ({@see \local_dictionaries\api::can_read()}), because the
-     * search service refuses everyone else; the column is then typed as a code, as without the
-     * companion. A column with a parent also gets the parent's key, domain and plain label.
+     * is searched ('autocomplete'): only when the current user may read the domain, and the
+     * parent column's domain too for a dependent column ({@see self::can_read_domain()}), because
+     * the search service refuses everyone else; the column is then typed as a code, as without
+     * the companion. A column with a parent also gets the parent's key, domain and plain label.
      *
      * @param array $column Normalised schema column.
      * @return array Empty for a free column.
@@ -131,14 +131,14 @@ class profile_field_repeatable extends profile_field_base {
         }
 
         $domain = $domains[$column['key']];
+        $parent = $column['parent'] ?? '';
+        $hasparent = $parent !== '' && isset($domains[$parent]);
         $properties = [
             'domain' => $domain,
             'open' => $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY_OPEN,
-            'autocomplete' => $this->companion_available()
-                && \local_dictionaries\api::can_read($domain),
+            'autocomplete' => $this->can_read_domain($domain) && (!$hasparent || $this->can_read_domain($domains[$parent])),
         ];
-        $parent = $column['parent'] ?? '';
-        if ($parent !== '' && isset($domains[$parent])) {
+        if ($hasparent) {
             $properties['parent'] = $parent;
             $properties['parentdomain'] = $domains[$parent];
             $properties['parentlabel'] = format_string($this->get_schema()->label($parent), true, [
@@ -151,11 +151,26 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * Labels of the codes a payload holds in the searched dictionary columns, for the widget.
+     * Whether the current (editing) user may search a domain, as the companion's search service decides.
+     *
+     * False without the companion's lookup-era API. Every code check and label that could tell a
+     * user something about a dictionary they cannot read is decided on this.
+     *
+     * @param string $domain
+     * @return bool
+     */
+    protected function can_read_domain(string $domain): bool {
+        return $this->companion_available() && \local_dictionaries\api::can_read($domain);
+    }
+
+    /**
+     * Labels of the codes a payload holds in the dictionary columns, for the widget.
      *
      * The widget shows each preloaded value as "label (code)", as the search does, without a
-     * request. Read through the resolver, which needs no gate: these are codes the form already
-     * holds. Labels are formatted and left unescaped; the widget escapes.
+     * request. The payload is the stored one or, after a failed validation, the submitted one:
+     * in a domain the editing user cannot read, only codes stored for the profile owner under
+     * that key get a label, or submitting codes would read a restricted dictionary through the
+     * ungated resolver. Labels are formatted and left unescaped; the widget escapes.
      *
      * @param string $payload Raw payload the form holds.
      * @return array Domain => [code => plain label]; codes without a label are absent.
@@ -167,11 +182,19 @@ class profile_field_repeatable extends profile_field_base {
 
         $schema = $this->get_schema();
         $domains = $schema->domain_map();
+        $readable = [];
+        foreach (array_unique($domains) as $domain) {
+            $readable[$domain] = $this->can_read_domain($domain);
+        }
+        $stored = $this->stored_codes();
         $codes = [];
         foreach (\profilefield_repeatable\helper::normalise_payload($payload, $schema) as $set) {
             foreach ($domains as $key => $domain) {
                 $code = trim((string)($set[$key] ?? ''));
-                if ($code !== '') {
+                if ($code === '') {
+                    continue;
+                }
+                if ($readable[$domain] || isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)])) {
                     $codes[$domain][$code] = true;
                 }
             }
@@ -449,17 +472,25 @@ class profile_field_repeatable extends profile_field_base {
     /**
      * Check the codes of the dictionary columns against the companion.
      *
-     * A "codes only" column accepts a code that exists and is active, or the code the user
-     * already has stored under that column (a code deactivated since stays until the user
-     * changes it); an "any code" column accepts every code, its length capped like any value.
-     * A column with a parent accepts an item whose parent code (folded like the companion's
-     * code key) is the parent column's value, when both are filled and the item has a parent.
+     * In a domain the editing user may read ({@see self::can_read_domain()}):
+     * - a "codes only" column accepts a code that exists and is active, or the code the profile
+     *   owner already has stored under that column (a code deactivated or removed since stays
+     *   until it is changed); an "any code" column accepts every code, its length capped like any
+     *   value;
+     * - a column with a parent, when the parent column's domain is readable too and the item has
+     *   a parent: the parent column must be filled, with the item's parent code (folded like the
+     *   companion's code key) in the item's parent domain.
+     *
+     * In a domain the editing user may not read, nothing derived from the dictionary reaches them:
+     * a "codes only" column accepts the stored codes and refuses every other code with one message,
+     * whether it exists or not; an "any code" column takes the code as text. The dictionary is not
+     * even looked up.
      *
      * Runs only when the companion offers \local_dictionaries\api::lookup(): without it the codes
-     * are kept as typed text. One lookup per domain, however many sets.
+     * are kept as typed text. One lookup per readable domain, however many sets.
      *
      * @param array $payload Normalised payload.
-     * @return string|null Error naming the first set, column and code that fail, or null.
+     * @return string|null Error naming the first set and column that fail, or null.
      */
     protected function validate_dictionary_codes(array $payload): ?string {
         if (empty($payload) || !$this->companion_available()) {
@@ -470,12 +501,16 @@ class profile_field_repeatable extends profile_field_base {
         if (empty($domains)) {
             return null;
         }
+        $readable = [];
+        foreach (array_unique($domains) as $domain) {
+            $readable[$domain] = $this->can_read_domain($domain);
+        }
 
         $codes = [];
         foreach ($payload as $set) {
             foreach ($domains as $key => $domain) {
                 $code = trim((string)($set[$key] ?? ''));
-                if ($code !== '') {
+                if ($code !== '' && $readable[$domain]) {
                     $codes[$domain][$code] = true;
                 }
             }
@@ -490,34 +525,73 @@ class profile_field_repeatable extends profile_field_base {
         foreach ($payload as $set) {
             $setnumber++;
             foreach ($schema->columns() as $column) {
-                $key = $column['key'];
-                $code = trim((string)($set[$key] ?? ''));
-                if ($code === '' || !isset($domains[$key])) {
-                    continue;
-                }
-                $item = $items[$domains[$key]][$code] ?? null;
-
-                if (
-                    $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY
-                    && ($item === null || !$item['active'])
-                    && !isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)])
-                ) {
-                    return $this->code_error($item === null ? 'errorcodeunknown' : 'errorcodeinactive', $setnumber, $key, $code);
-                }
-
-                $parentkey = $column['parent'] ?? '';
-                if ($item === null || $item['parentcode'] === null || $parentkey === '' || !isset($domains[$parentkey])) {
-                    continue;
-                }
-                $parentcode = trim((string)($set[$parentkey] ?? ''));
-                if (
-                    $parentcode !== ''
-                    && \profilefield_repeatable\helper::fold_code($item['parentcode'])
-                        !== \profilefield_repeatable\helper::fold_code($parentcode)
-                ) {
-                    return $this->code_error('errorcodeparent', $setnumber, $key, $code, $parentkey, $parentcode);
+                $error = $this->column_code_error($column, $set, $setnumber, $domains, $readable, $items, $stored);
+                if ($error !== null) {
+                    return $error;
                 }
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * The error of one column in one set, or null ({@see self::validate_dictionary_codes()}).
+     *
+     * @param array $column Normalised schema column.
+     * @param array $set Normalised set: key => value.
+     * @param int $setnumber
+     * @param array $domains Key => domain of the dictionary columns.
+     * @param array $readable Domain => whether the editing user may read it.
+     * @param array $items Domain => caller code => item, from \local_dictionaries\api::lookup().
+     * @param array $stored Key => [folded code => true] stored for the profile owner.
+     * @return string|null
+     */
+    protected function column_code_error(
+        array $column,
+        array $set,
+        int $setnumber,
+        array $domains,
+        array $readable,
+        array $items,
+        array $stored
+    ): ?string {
+        $key = $column['key'];
+        $code = trim((string)($set[$key] ?? ''));
+        if ($code === '' || !isset($domains[$key])) {
+            return null;
+        }
+        $strict = $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY;
+        $isstored = isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)]);
+
+        if (!$readable[$domains[$key]]) {
+            if ($strict && !$isstored) {
+                return $this->code_error('errorcoderestricted', $setnumber, $key, $code);
+            }
+            return null;
+        }
+
+        $item = $items[$domains[$key]][$code] ?? null;
+        if ($strict && ($item === null || !$item['active']) && !$isstored) {
+            return $this->code_error($item === null ? 'errorcodeunknown' : 'errorcodeinactive', $setnumber, $key, $code);
+        }
+
+        $parentkey = $column['parent'] ?? '';
+        if (
+            $item === null || $item['parentcode'] === null || $parentkey === '' || !isset($domains[$parentkey])
+            || !$readable[$domains[$parentkey]]
+        ) {
+            return null;
+        }
+        $parentcode = trim((string)($set[$parentkey] ?? ''));
+        if ($parentcode === '') {
+            return $this->code_error('errorcodeparentmissing', $setnumber, $key, $code, $parentkey);
+        }
+        $sameparent = \profilefield_repeatable\helper::fold_code($item['parentcode'])
+            === \profilefield_repeatable\helper::fold_code($parentcode);
+        $samedomain = \core_text::strtolower(trim((string)$item['parentdomain'])) === $domains[$parentkey];
+        if (!$sameparent || !$samedomain) {
+            return $this->code_error('errorcodeparent', $setnumber, $key, $code, $parentkey, $parentcode);
         }
 
         return null;
@@ -551,7 +625,7 @@ class profile_field_repeatable extends profile_field_base {
      * @param int $setnumber
      * @param string $key Column key.
      * @param string $code The submitted code.
-     * @param string $parentkey Parent column key, for errorcodeparent.
+     * @param string $parentkey Parent column key, for errorcodeparent and errorcodeparentmissing.
      * @param string $parentcode The parent column's code, for errorcodeparent.
      * @return string
      */

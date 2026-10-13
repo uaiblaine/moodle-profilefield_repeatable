@@ -1,2 +1,2 @@
-# validate_dictionary_codes(): a deactivated code counts as offered.
-s~&& \(\$item === null \|\| !\$item\['active'\]\)~&& (\$item === null)~s;
+# column_code_error(): a deactivated code counts as offered.
+s~\(\$item === null \|\| !\$item\['active'\]\) && !\$isstored~(\$item === null) && !\$isstored~s;

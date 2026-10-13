@@ -1,2 +1,2 @@
-# dictionary_widget_properties(): a column is searched even when the user may not read its domain.
-s~\n\s+&& \\local_dictionaries\\api::can_read\(\$domain\),~,~s;
+# can_read_domain(): every domain counts as readable, so restricted dictionaries are searched, labelled and checked.
+s~return \$this->companion_available\(\) && \\local_dictionaries\\api::can_read\(\$domain\);~return \$this->companion_available();~s;

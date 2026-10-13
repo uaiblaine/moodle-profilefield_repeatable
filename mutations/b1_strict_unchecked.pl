@@ -1,2 +1,2 @@
-# validate_dictionary_codes(): a codes-only column no longer checks its codes.
-s~(\$column\['mode'\] === \\profilefield_repeatable\\local\\schema::MODE_DICTIONARY\n)~false && $1~s;
+# column_code_error(): a codes-only column no longer checks its codes in a readable domain.
+s~if \(\$strict && \(\$item === null \|\| !\$item\['active'\]\) && !\$isstored\) \{~if (false) {~s;

@@ -21,9 +21,12 @@ All notable changes to this project will be documented in this file.
   the item, a value shows as "name (code)" and stores the code. A column that depends on another
   only suggests the items of the parent's code and is emptied when the parent changes. A "codes
   only" column refuses an unknown or deactivated code on save, except the code the user already
-  has; an "any code" column offers "Use code ..." and marks a code that has no name yet. A child
-  whose item belongs to another parent code is refused. A user who may not search a restricted
-  dictionary types the code instead. Without the companion, codes stay typed text, unchecked.
+  has (deactivated or removed since); an "any code" column offers "Use code ..." and marks a code
+  that has no name yet. A child whose item belongs to another parent code or parent dictionary, or
+  whose parent column is blank, is refused. A user who may not read a restricted dictionary types
+  the code instead and learns nothing about the dictionary: labels only for the codes already
+  stored, one message for every other code in a "codes only" column, text in an "any code" one.
+  Without the companion, codes stay typed text, unchecked.
 - The column editor warns, and the definition form refuses, a parent column that does not use
   the dictionary holding the parents of the column's dictionary (when the companion knows it).
 - **Column schema v2**: a field's columns are one JSON schema in `param1`

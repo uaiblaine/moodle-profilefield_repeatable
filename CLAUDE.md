@@ -187,9 +187,14 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   on the hidden input's `data-labels` (resolver, read in `edit_after_data()` from the element value,
   so a failed validation keeps them).
 - Code checks live in `edit_validate_field()` → `validate_dictionary_codes()` (one `api::lookup()`
-  per domain); like `required`, web services and sync skip them. A codes-only column accepts the
-  code already stored for that user and key (folded), read from `$this->data`, never the submission.
+  per readable domain); like `required`, web services and sync skip them. A codes-only column accepts
+  the code already stored for that user and key (folded), read from `$this->data`, never the submission.
   `companion_available()` is the seam tests override to run without the companion.
+- **No oracle on restricted dictionaries**: `lookup()` and `resolve_bulk()` are ungated, so every
+  path that turns a SUBMITTED code into an answer is decided on `can_read_domain()` (the editing
+  user): unreadable domains get labels only for stored codes, one uniform error for any other code
+  of a codes-only column, no lookup and no parent check (also when only the parent's domain is
+  unreadable), and no autocomplete.
 
 ### PostgreSQL layer
 

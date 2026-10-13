@@ -40,8 +40,10 @@ final class dictionary_codes_test extends \advanced_testcase {
     /**
      * Skip without the companion's lookup API, then create the dictionaries.
      *
-     * 'langs': pt, es, and xx (inactive). 'uf': SP, RJ. 'cities', whose items have their state
-     * in 'uf' as parent: 3550308 (SP), 3304557 (RJ).
+     * 'langs' (open to logged-in users): pt, es, and xx (inactive). 'uf' (open): SP, RJ.
+     * 'cities' (restricted to local/dictionaries:view), whose items have their state in 'uf' as
+     * parent: 3550308 (SP), 3304557 (RJ); 0000000 has no parent. The tests run as the admin
+     * unless they say otherwise.
      *
      * @return void
      */
@@ -66,10 +68,13 @@ final class dictionary_codes_test extends \advanced_testcase {
             'parentdomain' => 'uf']);
         $generator->create_item(['domain' => 'cities', 'code' => '3304557', 'label' => 'Rio', 'parentcode' => 'RJ',
             'parentdomain' => 'uf']);
+        $generator->create_item(['domain' => 'cities', 'code' => '0000000', 'label' => 'Nowhere']);
+        $this->setAdminUser();
     }
 
     /**
-     * The columns of the test field: strict language, open level, strict state, city depending on the state.
+     * The columns of the test field: strict language, open level, strict state, city depending on
+     * the state, and an open column on the restricted cities.
      *
      * @param string $cityparent Key of the city column's parent.
      * @return array
@@ -80,6 +85,7 @@ final class dictionary_codes_test extends \advanced_testcase {
             ['key' => 'level', 'label' => 'Level', 'mode' => 'dictionary_open', 'domain' => 'langs'],
             ['key' => 'state', 'label' => 'State', 'mode' => 'dictionary', 'domain' => 'uf'],
             ['key' => 'city', 'label' => 'City', 'mode' => 'dictionary', 'domain' => 'cities', 'parent' => $cityparent],
+            ['key' => 'othercity', 'label' => 'Other city', 'mode' => 'dictionary_open', 'domain' => 'cities'],
         ];
     }
 
@@ -219,14 +225,33 @@ final class dictionary_codes_test extends \advanced_testcase {
     }
 
     /**
-     * A dependent column refuses an item of another parent code, and accepts a matching one.
+     * A dependent column refuses an item of another parent code or parent domain, or one whose
+     * parent is blank, and accepts a matching one or an item without a parent.
      */
     public function test_dependent_column_checks_the_parent_code(): void {
         $record = $this->create_field_record();
         $field = new \profile_field_repeatable((int)$record->id, 0);
 
         $this->assertSame([], $this->validate($field, [['state' => 'sp', 'city' => '3550308']]), 'Parent codes fold case');
-        $this->assertSame([], $this->validate($field, [['city' => '3304557']]), 'No parent value, nothing to compare');
+        $this->assertSame([], $this->validate($field, [['city' => '0000000']]), 'An item without a parent needs none');
+        $this->assertSame(
+            [$field->inputname => $this->code_error('errorcodeparentmissing', 1, 'City', '3304557', ['parent' => 'State'])],
+            $this->validate($field, [['city' => '3304557']])
+        );
+        // The parent code matches, but it is the SP of another dictionary.
+        /** @var \local_dictionaries_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => 'regions', 'visibility' => 1]);
+        $generator->create_item(['domain' => 'regions', 'code' => 'SP', 'label' => 'South Pole']);
+        $generator->create_item(['domain' => 'cities', 'code' => 'ice', 'label' => 'Ice city', 'parentcode' => 'SP',
+            'parentdomain' => 'regions']);
+        $this->assertSame(
+            [$field->inputname => $this->code_error('errorcodeparent', 1, 'City', 'ice', [
+                'parent' => 'State',
+                'parentcode' => 'SP',
+            ])],
+            $this->validate($field, [['state' => 'SP', 'city' => 'ice']])
+        );
         $this->assertSame(
             [$field->inputname => $this->code_error('errorcodeparent', 1, 'City', '3304557', [
                 'parent' => 'State',
@@ -268,7 +293,7 @@ final class dictionary_codes_test extends \advanced_testcase {
 
         $this->setAdminUser();
         $html = $this->render_form($field, '{"@@ID#1":{"lang":"pt","level":"","state":"","city":""}}');
-        $this->assertSame([false, false, false, false], array_column($this->widget_columns($html), 'autocomplete'));
+        $this->assertSame([false, false, false, false, false], array_column($this->widget_columns($html), 'autocomplete'));
         $this->assertStringContainsString('data-labels="{}"', $html);
     }
 
@@ -340,6 +365,132 @@ final class dictionary_codes_test extends \advanced_testcase {
                 'parentdomain' => 'uf',
             ])],
             $define->define_validate_specific((object)['param1' => $schema('lang')], [])
+        );
+    }
+
+    /**
+     * Store a payload for a user, as their saved profile value.
+     *
+     * @param int $fieldid
+     * @param int $userid
+     * @param array $set One set: key => code.
+     * @return void
+     */
+    private function store(int $fieldid, int $userid, array $set): void {
+        global $DB;
+        $DB->insert_record('user_info_data', [
+            'userid' => $userid,
+            'fieldid' => $fieldid,
+            'data' => json_encode(['@@ID#1' => $set]),
+            'dataformat' => 0,
+        ]);
+    }
+
+    /**
+     * A user who may not read a dictionary gets no label for a code they submit, only for the ones stored.
+     */
+    public function test_restricted_domain_labels_only_stored_codes(): void {
+        $record = $this->create_field_record();
+        $user = $this->getDataGenerator()->create_user();
+        $this->store((int)$record->id, (int)$user->id, ['city' => '3550308']);
+        $this->setUser($user);
+        $field = new \profile_field_repeatable((int)$record->id, (int)$user->id);
+
+        $html = $this->render_form($field, json_encode([
+            '@@ID#1' => ['state' => 'SP', 'city' => '3550308'],
+            '@@ID#2' => ['state' => 'RJ', 'city' => '3304557', 'othercity' => '0000000'],
+        ]));
+        $this->assertSame(1, preg_match('~<input[^>]*name="' . preg_quote($field->inputname, '~') . '"[^>]*>~', $html, $input));
+        $this->assertSame(1, preg_match('~data-labels="([^"]*)"~', $input[0], $matches));
+        $this->assertSame([
+            'uf' => ['SP' => 'São Paulo', 'RJ' => 'Rio de Janeiro'],
+            'cities' => ['3550308' => 'São Paulo'],
+        ], json_decode(html_entity_decode($matches[1]), true));
+
+        // Control: the admin, who may read the dictionary, gets every label.
+        $this->setAdminUser();
+        $html = $this->render_form(new \profile_field_repeatable((int)$record->id, (int)$user->id), json_encode([
+            '@@ID#1' => ['state' => 'RJ', 'city' => '3304557'],
+        ]));
+        $this->assertStringContainsString('&quot;3304557&quot;:&quot;Rio&quot;', $html);
+    }
+
+    /**
+     * A user who may not read a dictionary cannot tell its codes apart: every code not stored gets one message.
+     */
+    public function test_restricted_domain_refuses_every_unstored_code_alike(): void {
+        $record = $this->create_field_record();
+        $user = $this->getDataGenerator()->create_user();
+        $this->store((int)$record->id, (int)$user->id, ['city' => '3550308']);
+        $this->setUser($user);
+        $field = new \profile_field_repeatable((int)$record->id, (int)$user->id);
+
+        $expected = [$field->inputname => $this->code_error('errorcoderestricted', 1, 'City', '')];
+        $this->assertSame($expected, $this->validate($field, [['state' => 'RJ', 'city' => '3304557']]), 'An existing code');
+        $this->assertSame($expected, $this->validate($field, [['state' => 'RJ', 'city' => 'nope']]), 'An unknown code');
+        $this->assertSame($expected, $this->validate($field, [['state' => 'RJ', 'city' => '0000000']]), 'A code with no parent');
+        // The stored code stays, and no parent check reaches the user: RJ is not its state.
+        $this->assertSame([], $this->validate($field, [['state' => 'RJ', 'city' => '3550308']]));
+        // An open column on the restricted dictionary takes any code as text.
+        $this->assertSame([], $this->validate($field, [['othercity' => 'anything']]));
+
+        // Control: the admin gets the dictionary's answers.
+        $this->setAdminUser();
+        $admin = new \profile_field_repeatable((int)$record->id, (int)$user->id);
+        $this->assertSame(
+            [$admin->inputname => $this->code_error('errorcodeunknown', 1, 'City', 'nope')],
+            $this->validate($admin, [['state' => 'RJ', 'city' => 'nope']])
+        );
+    }
+
+    /**
+     * A dependent column is neither searched nor checked against its parent when the parent column's dictionary cannot be read.
+     */
+    public function test_widget_needs_the_parent_domain_too(): void {
+        /** @var \local_dictionaries_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_domain(['shortname' => 'secret', 'visibility' => 0]);
+        /** @var \profilefield_repeatable_generator $fieldgenerator */
+        $fieldgenerator = $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable');
+        $record = $fieldgenerator->create_field([
+            ['key' => 'zone', 'label' => 'Zone', 'mode' => 'dictionary', 'domain' => 'secret'],
+            ['key' => 'town', 'label' => 'Town', 'mode' => 'dictionary_open', 'domain' => 'langs', 'parent' => 'zone'],
+            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'langs'],
+        ], ['shortname' => 'zones']);
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+
+        $field = new \profile_field_repeatable((int)$record->id, (int)$user->id);
+        $columns = $this->widget_columns($this->render_form($field));
+        $this->assertSame([false, false, true], array_column($columns, 'autocomplete'));
+
+        // Nor is its item checked against the unreadable parent: a blank parent would tell that it has one.
+        $generator->create_item(['domain' => 'secret', 'code' => 'Z1', 'label' => 'Zone one']);
+        $generator->create_item(['domain' => 'langs', 'code' => 'tw', 'label' => 'Town', 'parentcode' => 'Z1',
+            'parentdomain' => 'secret']);
+        $this->assertSame([], $this->validate($field, [['town' => 'tw']]));
+    }
+
+    /**
+     * A stored code removed from the dictionary since stays accepted for its owner, and only for them.
+     */
+    public function test_stored_removed_code_is_kept(): void {
+        global $DB;
+
+        /** @var \local_dictionaries_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
+        $generator->create_item(['domain' => 'langs', 'code' => 'gone', 'label' => 'Gone']);
+        $record = $this->create_field_record();
+        $user = $this->getDataGenerator()->create_user();
+        $this->store((int)$record->id, (int)$user->id, ['lang' => 'gone']);
+        $DB->delete_records('local_dictionaries_item', ['codekey' => 'gone']);
+
+        $field = new \profile_field_repeatable((int)$record->id, (int)$user->id);
+        $this->assertSame([], $this->validate($field, [['lang' => 'gone']]));
+        $other = new \profile_field_repeatable((int)$record->id, (int)$this->getDataGenerator()->create_user()->id);
+        $this->assertSame(
+            [$other->inputname => $this->code_error('errorcodeunknown', 1, 'Language', 'gone')],
+            $this->validate($other, [['lang' => 'gone']])
         );
     }
 }

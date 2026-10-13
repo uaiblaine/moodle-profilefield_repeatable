@@ -134,13 +134,17 @@ asks for the parent first while it is empty, and is emptied when the parent chan
 - **Dictionary, any code**: when no item has the typed code, the list offers `Use code "X"`
   (Enter does the same), and the value is marked "New code, no name yet" until the dictionary
   gets it.
-- A dependent column's item must belong to the parent column's code, whatever the mode.
+- A dependent column's item must belong to the parent column's code (in the parent column's
+  dictionary), whatever the mode; an item that has a parent needs the parent column filled.
 
 Searching goes through the companion's `local_dictionaries_search_items` service, which applies
 the dictionary's visibility: a dictionary restricted to `local/dictionaries:view` can be searched
-only by users holding that capability (system context). For everyone else the column is a text box
-where the code is typed, and the same server checks apply. Give the capability, or open the
-dictionary to logged-in users, when users fill such a column themselves.
+only by users holding that capability (system context). For everyone else the column is a text box,
+and nothing about the dictionary reaches them: a "codes only" column keeps the codes an
+administrator already set for the user (shown with their names) and refuses any other code with one
+message, whether the code exists or not; an "any code" column takes the code as text. The same holds
+for a dependent column whose parent column's dictionary is restricted. Give the capability, or open
+the dictionary to logged-in users, when users fill such a column themselves.
 
 Without the companion (or with one older than `api::lookup()`), dictionary columns are text boxes
 and their codes are not checked.

@@ -1,2 +1,2 @@
-# validate_dictionary_codes(): an any-code column is checked like a codes-only one.
-s~\$column\['mode'\] === \\profilefield_repeatable\\local\\schema::MODE_DICTIONARY\n~\\profilefield_repeatable\\local\\schema::is_dictionary_mode(\$column['mode'])\n~s;
+# column_code_error(): an any-code column is checked like a codes-only one.
+s~\$strict = \$column\['mode'\] === \\profilefield_repeatable\\local\\schema::MODE_DICTIONARY;~\$strict = true;~s;
