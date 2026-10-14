@@ -2,21 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - version 2026042003
+## [Unreleased] - version 2026042004
 
 ### Upgrade notes
 - The field now requires `local_repeatable` (the repeatable-sets engine, `uaiblaine/moodle-local_repeatable`,
-  version 2026042001 or later): place `local/repeatable` before upgrading. Core checks the dependency
-  against the version on disk, then upgrades the field before it installs the engine, because local
-  plugins come last; that is safe, because the field's upgrade steps read no engine database state
-  (the engine has none) and `db/upgradelib.php` calls no engine code.
+  version 2026042003 or later since version 2026042004): place `local/repeatable` before upgrading.
+  Core checks the dependency against the version on disk, then upgrades the field before it installs
+  the engine, because local plugins come last; that is safe, because the field's upgrade steps read
+  no engine database state (the engine has none) and `db/upgradelib.php` calls no engine code.
 - Lang strings moved to `local_repeatable` with the same keys: the schema and validation errors
   (`errorcode*`, `errorcolumnrequired`, `errorcolumnslimit`, `errorcolumnsrequired`, `errordomain*`,
   `errorinvalidjson`, `errorkey*`, `errorlabel*`, `errormodeinvalid`, `errorparent*`, `errorpattern*`,
   `errorschemainvalid`, `errorsubline*`, `errortitlecount`, `errortoomanysets`, `errorvaluetoolong`).
-  `repeatableset` is now in both: the engine's names a set in the privacy export, the field's in the
-  edit form and the profile. An administrator's customisation of a moved string (language
-  customisation) must be redone under `local_repeatable`.
+  An administrator's customisation of a moved string (language customisation) must be redone under
+  `local_repeatable`.
+- Version 2026042004 moves more lang strings to `local_repeatable` with the same keys and the same
+  text: the edit widget's, the column editor's, the profile display's and the Report Builder
+  entity's (`actioncolumn`, `addcolumn`, `addnewset`, `choosefirst`, `column*` except `columns` and
+  `columns_help`, `domain*`, `entityrepeatableset`, `mode*`, `movedown`, `moveup`, `newcode`,
+  `newcolumn`, `nomatchstrict`, `parent*`, `pattern*`, `remove*`, `repeatableset`, `role*`,
+  `searchplaceholder`, `setcolumn`, `setnumber`, `summary*`, `synchronisedat`, `usecode`; 71 keys).
+  Language customisations of these must be redone under `local_repeatable` too.
+- Version 2026042004: the CSS classes of the edit widget, the column editor and the profile display
+  are renamed from `profilefield-repeatable-*` to `local-repeatable-*` (the stylesheet now ships with
+  `local_repeatable`; the `--pfr-*` custom properties keep their names). A theme that overrides the
+  old classes must follow the rename. The element ids the field builds (`profilefield-repeatable-<id>`
+  for the edit widget, `profilefield-repeatable-display-<id>` for the profile accordion) are unchanged.
+- Version 2026042004: the AMD modules are `local_repeatable/repeatable`, `local_repeatable/markup`,
+  `local_repeatable/dictionary_transport`, `local_repeatable/columneditor` and
+  `local_repeatable/displayaccordion`; the `profilefield_repeatable/*` modules no longer exist. Nothing
+  stores a module name, and the upgrade's cache purge drops the old ones.
 
 ### Removed
 - The PostgreSQL index layer (owner decision D3, `docs/engine-extraction-design.md` §8). Measured on
@@ -59,6 +74,17 @@ All notable changes to this project will be documented in this file.
   `locked_labels()` and `usage()`, which reads the field's `{user_info_data}` payloads and hands them
   to the engine. `db/upgradelib.php` keeps its own identifier quoting. Behaviour, messages, Report
   Builder identifiers and the stored data are unchanged.
+- Engine extraction stage C4, version 2026042004: the edit widget (`\local_repeatable\form\widget`), the
+  column editor (`form\column_editor`), the sets renderer (`output\sets_renderer`), their templates,
+  stylesheet and AMD modules, the projection writer (`local\projection\{store,source,projector}`) and
+  the abstract Report Builder entity (`reportbuilder\local\entities\sets`) now come from
+  `local_repeatable`. The field keeps the adapter: `field.class.php` (form integration, the save
+  transaction, the `can_read_domain()` / `companion_available()` / `pattern_available()` seams),
+  `define.class.php` (locked keys from the stored field), `display_renderer` (layout, accordion id,
+  projection rows), `local\source` (implements the engine's `local\projection\source`),
+  `local\projection::reproject_user()`, the observers and tasks, `repeatable_set` (extends the engine's
+  entity; availability through `\core\user::SUPPORT_USER`) and the `repeatable_sets` datasource, whose
+  saved-report identifiers are unchanged.
 
 ### Removed (stage B3)
 - The field's copies of what moved: `classes/helper.php`, `local\schema`, `local\pattern_columns`,
@@ -67,6 +93,17 @@ All notable changes to this project will be documented in this file.
   the field, dictionary, pattern and privacy tests; the field keeps the adapter's integration tests,
   and `local\field_schema_test` keeps the version 1 reader's), and the mutation gates the engine now
   holds.
+
+### Removed (stage C4)
+- The field's copies of what stages C1-C3 moved: `classes/form/widget.php`,
+  `classes/form/column_editor.php`, `classes/output/sets_renderer.php`,
+  `classes/local/projection/{store,source,projector}.php`,
+  `classes/reportbuilder/local/entities/sets.php`, `templates/` (`edit_form`, `display_accordion`,
+  `display_plain`), `styles.css`, `amd/` (source and build), the 71 moved lang strings,
+  `tests/bootstrap_compat_test.php`, the tests that duplicated the engine's unit tests
+  (`tests/local/projection_test.php` and two entity unit tests of the datasource test) and the
+  mutation gates the engine now holds (ES1-ES5, X1, D1, K1, B10, B11, B18, PT5, PT6, PT12, PT13, J1-J3,
+  J6-J9, E1-E6, R1).
 
 ## [v5.2-r1] - 2026-10-13
 

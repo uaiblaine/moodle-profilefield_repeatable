@@ -29,7 +29,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\observer
  * @covers     \profilefield_repeatable\local\projection
- * @covers     \profilefield_repeatable\local\projection\projector
+ * @covers     \local_repeatable\local\projection\projector
  * @covers     \profilefield_repeatable\local\source
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

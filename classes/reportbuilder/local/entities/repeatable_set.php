@@ -16,8 +16,9 @@
 
 namespace profilefield_repeatable\reportbuilder\local\entities;
 
-use profilefield_repeatable\local\field_schema;
 use local_repeatable\local\schema;
+use local_repeatable\reportbuilder\local\entities\sets;
+use profilefield_repeatable\local\field_schema;
 use profilefield_repeatable\local\source;
 
 /**

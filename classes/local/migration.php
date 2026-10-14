@@ -17,6 +17,7 @@
 namespace profilefield_repeatable\local;
 
 use local_repeatable\local\payload;
+use local_repeatable\local\projection\projector;
 use local_repeatable\local\schema;
 
 /**
@@ -59,7 +60,7 @@ final class migration {
 
         $schema = field_schema::from_field($field);
         $rewritten = self::rekey_payloads($fieldid, $schema);
-        projection\projector::reproject_field(new source(), $fieldid, $schema);
+        projector::reproject_field(new source(), $fieldid, $schema);
         unset_config(field_schema::legacy_config_name($fieldid), 'profilefield_repeatable');
 
         return $rewritten;

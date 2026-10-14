@@ -26,7 +26,7 @@
  * Admin definition of a repeatable profile field.
  *
  * param1 holds the column schema as JSON ({@see \local_repeatable\local\schema}), edited
- * through the column editor (amd/src/columneditor.js) or, without JavaScript, as text;
+ * through the engine's column editor (AMD local_repeatable/columneditor) or, without JavaScript, as text;
  * param2..param4 are unused since version 2 and cleared on save. defaultdata is always '{}'.
  *
  * @package    profilefield_repeatable
@@ -42,7 +42,7 @@ class profile_define_repeatable extends profile_define_base {
             'textarea',
             'param1',
             get_string('columns', 'profilefield_repeatable'),
-            \profilefield_repeatable\form\column_editor::element_attributes()
+            \local_repeatable\form\column_editor::element_attributes()
         );
         $form->setType('param1', PARAM_RAW);
         $form->addHelpButton('param1', 'columns', 'profilefield_repeatable');
@@ -69,7 +69,7 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Hand the column editor what it needs: locked keys, the users with data and the domains.
      *
-     * The engine's {@see \profilefield_repeatable\form\column_editor} builds the textarea's data
+     * The engine's {@see \local_repeatable\form\column_editor} builds the textarea's data
      * attributes; this adapter reads the locked keys from the stored field, never from the
      * submitted schema, and {@see self::define_validate_specific()} enforces them. A field still on
      * the version 1 parameters is shown as its version 2 schema.
@@ -95,13 +95,13 @@ class profile_define_repeatable extends profile_define_base {
             }
         }
 
-        $pretty = \profilefield_repeatable\form\column_editor::pretty((string)$element->getValue());
+        $pretty = \local_repeatable\form\column_editor::pretty((string)$element->getValue());
         if ($pretty !== null) {
             $element->setValue($pretty);
         }
 
-        $element->updateAttributes(\profilefield_repeatable\form\column_editor::attributes($usage, $this->pattern_available()));
-        \profilefield_repeatable\form\column_editor::init_js();
+        $element->updateAttributes(\local_repeatable\form\column_editor::attributes($usage, $this->pattern_available()));
+        \local_repeatable\form\column_editor::init_js();
     }
 
     /**
@@ -120,7 +120,7 @@ class profile_define_repeatable extends profile_define_base {
      * Validate the submitted column schema.
      *
      * Every broken rule is listed under the schema, which the column editor shows with the
-     * error region of the form row ({@see \profilefield_repeatable\form\column_editor::errors()}).
+     * error region of the form row ({@see \local_repeatable\form\column_editor::errors()}).
      * The keys holding values are read from the stored field's payloads, whatever the editor
      * sent: a schema that drops one is rejected. Pattern columns are checked by customfield_pattern;
      * without it, only the stored field's pattern columns may be submitted, unchanged.
@@ -141,7 +141,7 @@ class profile_define_repeatable extends profile_define_base {
             $storedpatterns = \profilefield_repeatable\local\field_schema::from_field($stored)->pattern_objects();
         }
 
-        $errors = \profilefield_repeatable\form\column_editor::errors(
+        $errors = \local_repeatable\form\column_editor::errors(
             $document,
             $lockedlabels,
             $storedpatterns,
@@ -164,7 +164,7 @@ class profile_define_repeatable extends profile_define_base {
      * @return array|stdClass
      */
     public function define_save_preprocess($data) {
-        $canonical = \profilefield_repeatable\form\column_editor::canonical((string)($data->param1 ?? ''));
+        $canonical = \local_repeatable\form\column_editor::canonical((string)($data->param1 ?? ''));
         if ($canonical !== null) {
             $data->param1 = $canonical;
         }

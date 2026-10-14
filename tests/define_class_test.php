@@ -33,7 +33,7 @@ require_once($CFG->libdir . '/formslib.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_define_repeatable
- * @covers     \profilefield_repeatable\form\column_editor
+ * @covers     \local_repeatable\form\column_editor
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -189,7 +189,7 @@ final class define_class_test extends \advanced_testcase {
         $this->assertSame(['renamed'], \local_repeatable\local\schema::from_json($element->getValue())->keys());
 
         $amdjscode = (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires);
-        $this->assertStringContainsString('profilefield_repeatable/columneditor', implode("\n", $amdjscode));
+        $this->assertStringContainsString('local_repeatable/columneditor', implode("\n", $amdjscode));
     }
 
     /**

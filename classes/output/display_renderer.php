@@ -16,6 +16,7 @@
 
 namespace profilefield_repeatable\output;
 
+use local_repeatable\output\sets_renderer;
 use profilefield_repeatable\local\field_schema;
 use profilefield_repeatable\local\source;
 

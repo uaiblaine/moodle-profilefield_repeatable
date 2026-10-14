@@ -6,7 +6,9 @@ same columns. The canonical value is a JSON object in core's `user_info_data.dat
 own table `profilefield_repeatable_data` holds one row per set as a projection for Report
 Builder (a JSON text column on every database, with no index on its values). The field is an
 adapter of the required engine plugin `local_repeatable`, which holds the column schema, payload
-normalisation, validation and the bridges to two optional plugins: `local_dictionaries`
+normalisation, validation, the edit widget, the column editor, the display renderer with its
+templates, stylesheet and AMD modules, the projection writer, the Report Builder entity and the
+bridges to two optional plugins: `local_dictionaries`
 (code-to-label dictionaries) and `customfield_pattern` (masks and checks). The plugin has one
 branch per Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 
@@ -34,21 +36,23 @@ branch per Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 - Keys holding values are read from the stored field's `user_info_data` payloads and are locked
   in the definition form (`define_validate_specific()`), never from the submission.
 - SQL uses placeholders; the JSON extraction binds the column key as a parameter on PostgreSQL
-  and MariaDB (`\local_repeatable\local\sql::subitem_value()`). The projection upsert
-  interpolates only the fixed table and owner column names.
+  and MariaDB (`\local_repeatable\local\sql::subitem_value()`). The engine's projection upsert
+  (`\local_repeatable\local\projection\projector`) interpolates only the fixed table and owner
+  column names the field's `local\source` hands it.
 - `db/upgrade.php` step 2026042001 (PostgreSQL only) drops indexes an r1 release created on the
   projection table, matched by their exact name shapes (`pfrd_f<id>_<16 hex>`,
   `pfrd_<8 hex>_gin_ix`) read from `pg_indexes` and quoted, then turns the column to text.
 - `db/events.php` registers observers on `user_deleted` and `user_info_field_deleted` that
   delete the plugin's rows, because core deletes `user_info_data` directly, and on
   `user_updated`/`user_created` that reproject drifted rows.
-- A Report Builder datasource (`repeatable_sets`) offers one row per set. Every column and
-  filter is available only when the field is visible to `\core\user::SUPPORT_USER` in the
-  system context, mirroring core's own profile field helper; every value and filter option
-  label goes through `s()`.
-- Display goes through Mustache templates with double stashes; `lib.php` adds a profile page
-  widget that skips fields the viewer may not see (`is_visible()`). The AMD modules build DOM
-  with `createElement` and `textContent`.
+- A Report Builder datasource (`repeatable_sets`) offers one row per set through the field's
+  `repeatable_set` entity, a subclass of the engine's. Every column and filter is available only
+  when the field is visible to `\core\user::SUPPORT_USER` in the system context, mirroring core's
+  own profile field helper; every value and filter option label goes through `s()` (engine).
+- Display goes through the engine's Mustache templates with double stashes; `lib.php` adds a
+  profile page widget that skips fields the viewer may not see (`is_visible()`). The engine's AMD
+  modules build DOM with `createElement` and `textContent`; the field ships no templates, CSS or
+  JavaScript of its own.
 - Privacy: a full provider (metadata, contexts, user list, export, delete) covering
   `user_info_data` rows of this field type and `profilefield_repeatable_data`.
 
@@ -69,6 +73,5 @@ branch per Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 
 ## De-emphasise
 
-- `amd/build/**` is minified output of `amd/src/**`; review the source.
-- `lang/**`, `tests/**`, `docs/**`, `mutations/**`, `CHANGELOG.md` and `styles.css` carry no
+- `lang/**`, `tests/**`, `docs/**`, `mutations/**` and `CHANGELOG.md` carry no
   production behaviour.
