@@ -310,7 +310,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
 
-        $pattern = \profilefield_repeatable\local\pattern_columns::available();
+        $pattern = \local_repeatable\local\bridge\pattern::available();
         $columns = [
             ['key' => 'name', 'label' => 'Name', 'title' => true],
             ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'langs'],
@@ -596,7 +596,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
      * A pattern column shows its values as customfield_pattern formats them, escaped.
      */
     public function test_pattern_column_is_formatted_and_escaped(): void {
-        if (!\profilefield_repeatable\local\pattern_columns::available()) {
+        if (!\local_repeatable\local\bridge\pattern::available()) {
             $this->markTestSkipped('customfield_pattern with its public API is not installed (Moodle 5.1 or later).');
         }
         $this->resetAfterTest();
@@ -609,7 +609,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
      * Without customfield_pattern a pattern column shows its values as stored, escaped.
      */
     public function test_pattern_column_without_the_plugin_shows_stored_values(): void {
-        if (\profilefield_repeatable\local\pattern_columns::available()) {
+        if (\local_repeatable\local\bridge\pattern::available()) {
             $this->markTestSkipped('customfield_pattern is installed; its absence is tested on Moodle 4.5 and 5.0.');
         }
         $this->resetAfterTest();

@@ -1,76 +1,74 @@
 # Review context for profilefield_repeatable
 
 `profilefield_repeatable` is a Moodle user profile field type (`datatype = repeatable`) that
-stores repeatable sets of named sub-items for each user, for example several qualifications
-with the same columns. A value is kept twice: as a JSON object in core's
-`user_info_data.data`, and as one row per set in the plugin's own table
-`profilefield_repeatable_data`. On PostgreSQL that table's `data` column is converted to
-JSONB and indexed with SQL the plugin runs itself. An optional soft dependency, the companion
-plugin `local_dictionaries`, turns stored codes into labels. The plugin has one branch per
-Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
+stores repeatable sets of sub-items for each user, for example several qualifications with the
+same columns. The canonical value is a JSON object in core's `user_info_data.data`; the plugin's
+own table `profilefield_repeatable_data` holds one row per set as a projection for Report
+Builder (a JSON text column on every database, with no index on its values). The field is an
+adapter of the required engine plugin `local_repeatable`, which holds the column schema, payload
+normalisation, validation and the bridges to two optional plugins: `local_dictionaries`
+(code-to-label dictionaries) and `customfield_pattern` (masks and checks). The plugin has one
+branch per Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 
 ## Who is trusted
 
-- Site administrators are fully trusted. They define the field through core's profile field
-  administration: the sub-item names (`param1`), the indexed sub-items (`param2`), the
-  code-to-domain mappings (`param3`) and the sub-line items (`param4`). Those definitions
-  are the only text that reaches the index SQL.
+- Site administrators are fully trusted. They define the field's column schema (a JSON
+  document in `param1`) through core's profile field administration.
 - The plugin declares **no capabilities, web services or page scripts**. Who may read or edit a
   value is core's profile field logic: the field's visibility and locked settings, and
   `moodle/user:update` for a locked field.
-- The user who owns the profile, and anyone allowed to edit that user, are untrusted
-  input for every value. Sub-item names and values are markup-bearing text.
+- The user who owns the profile, and anyone allowed to edit that user, are untrusted input for
+  every value. Values are markup-bearing text.
+- Dictionary domains can be restricted: a user who cannot read a domain must learn nothing about
+  its codes from the edit form.
 
 ## Surfaces
 
 - `field.class.php` (runtime: edit, validate, save, display) and `define.class.php`
-  (administrator definition and validation). `edit_save_data()` writes `user_info_data`
-  itself and then synchronises the per-set rows in one delegated transaction. Payloads are
-  capped at 200 sets and 1024 characters per value; only configured sub-items with scalar
-  values are kept.
-- **Index SQL, PostgreSQL only** (`classes/helper.php`, `classes/task/reconcile_indexes.php`).
-  Installation converts the column to JSONB and creates one GIN index. An adhoc task,
-  queued when a field is saved or deleted, creates and drops up to three expression indexes
-  per field with `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`. Index names are
-  `pfrd_f<fieldid>_<sha1 prefix>`, so no user text reaches an identifier; identifiers are
-  quoted and the field id is cast to an integer. The one value interpolated into DDL is the
-  sub-item name, as a string literal with single quotes doubled and NUL bytes rejected;
-  DDL cannot bind parameters, and core's PostgreSQL driver (checked on 5.2) refuses to run
-  with `standard_conforming_strings` off, so a backslash is not an escape. Any other value
-  interpolated into these statements is a finding. In the task, a failed index statement is
-  caught and logged at developer level, never thrown, so a retry loop cannot start.
-- All other SQL uses placeholders; the JSON extraction helper binds the sub-item key as a
-  parameter on both PostgreSQL and MariaDB (`helper::sql_subitem_value()`).
+  (administrator definition). `edit_save_data()` writes `user_info_data` itself and then
+  synchronises the per-set rows in one delegated transaction. Validation runs in the engine's
+  `\local_repeatable\local\validator`, built by the field with the STORED payload
+  (`$this->data`) and a closure for `can_read_domain()` of the editing user: a codes-only
+  column accepts an unknown code only if it is already stored for that user, and every
+  submitted code in an unreadable domain gets one uniform error, no lookup and no autocomplete.
+- Keys holding values are read from the stored field's `user_info_data` payloads and are locked
+  in the definition form (`define_validate_specific()`), never from the submission.
+- SQL uses placeholders; the JSON extraction binds the column key as a parameter on PostgreSQL
+  and MariaDB (`\local_repeatable\local\sql::subitem_value()`). The projection upsert
+  interpolates only the fixed table and owner column names.
+- `db/upgrade.php` step 2026042001 (PostgreSQL only) drops indexes an r1 release created on the
+  projection table, matched by their exact name shapes (`pfrd_f<id>_<16 hex>`,
+  `pfrd_<8 hex>_gin_ix`) read from `pg_indexes` and quoted, then turns the column to text.
 - `db/events.php` registers observers on `user_deleted` and `user_info_field_deleted` that
-  delete the plugin's rows, because core deletes `user_info_data` directly.
-- A Report Builder datasource (`repeatable_sets`) offers one row per set. The plugin adds no
-  visibility check there; access follows Report Builder's own report permissions.
-- Display goes through `display_renderer` and three Mustache templates with double stashes.
-  `lib.php` adds a profile page widget that skips fields the viewer may not see
-  (`is_visible()`). Neither AMD module assigns `innerHTML`; the editor builds its rows with `createElement`
-  and `textContent`.
+  delete the plugin's rows, because core deletes `user_info_data` directly, and on
+  `user_updated`/`user_created` that reproject drifted rows.
+- A Report Builder datasource (`repeatable_sets`) offers one row per set. Every column and
+  filter is available only when the field is visible to `\core\user::SUPPORT_USER` in the
+  system context, mirroring core's own profile field helper; every value and filter option
+  label goes through `s()`.
+- Display goes through Mustache templates with double stashes; `lib.php` adds a profile page
+  widget that skips fields the viewer may not see (`is_visible()`). The AMD modules build DOM
+  with `createElement` and `textContent`.
 - Privacy: a full provider (metadata, contexts, user list, export, delete) covering
   `user_info_data` rows of this field type and `profilefield_repeatable_data`.
 
 ## Facts that look like findings but are by design
 
-- **The plugin writes `user_info_data` itself** in `edit_save_data()`, because it stores the
-  normalised JSON there as the fallback copy alongside the per-set rows.
-- **Reads prefer the per-set rows and fall back to the JSON copy**; both are rewritten together
-  on every save.
-- **The soft dependency is deliberate.** The plugin installs and renders without the
-  companion: every use is guarded by `class_exists()`, and it reads the companion only through its
-  public `\local_dictionaries\resolver` API (no direct table access). It resolves stored codes
-  without a visibility check, as the companion's contract allows. Labels from the companion are escaped by the templates.
-- **`define_after_delete()` is not called by core.** The deletion observer and a sweep inside
-  the reconcile task remove orphaned indexes instead.
-- **The domain shortname pattern `^[a-z0-9_]+$` is kept here only as a fallback**: when the
-  companion is installed the field reads `\local_dictionaries\resolver::DOMAIN_PATTERN`, and a test
-  pins both to the same value.
-- Uninstall drops the table, which removes its indexes with it.
+- **The plugin writes `user_info_data` itself** in `edit_save_data()`, because the JSON there is
+  the canonical value and the per-set rows are rebuilt from it.
+- **Web services, CSV upload and auth sync skip `edit_validate_field()`** (core behaviour), so
+  required columns, code checks and the cap errors apply to the form only; on every save path the
+  payload is still normalised (caps by silent truncation) and pattern values are
+  normalised.
+- **The optional plugins are soft dependencies.** Every use is guarded by `class_exists()` and
+  goes through their public APIs. Stored codes are resolved to labels without a visibility check,
+  as the dictionary plugin's contract allows; submitted codes are not.
+- **`define_after_delete()` is not called by core**; the deletion observer removes the rows.
+- A pattern column's error message comes from `customfield_pattern` already escaped and is
+  passed into the form error unescaped on purpose.
 
 ## De-emphasise
 
 - `amd/build/**` is minified output of `amd/src/**`; review the source.
-- `lang/**`, `tests/**`, `docs/**`, `CHANGELOG.md` and `styles.css` carry no production
-  behaviour.
+- `lang/**`, `tests/**`, `docs/**`, `mutations/**`, `CHANGELOG.md` and `styles.css` carry no
+  production behaviour.

@@ -16,7 +16,8 @@
 
 namespace profilefield_repeatable\local;
 
-use profilefield_repeatable\helper;
+use local_repeatable\local\payload;
+use local_repeatable\local\schema;
 
 /**
  * Re-keys the stored payloads of a field converted to the version 2 schema.
@@ -97,7 +98,7 @@ final class migration {
             $transaction = $DB->start_delegated_transaction();
             foreach ($rows as $row) {
                 $lastid = (int)$row->id;
-                $json = helper::encode_payload(helper::normalise_payload($row->data, $schema));
+                $json = payload::encode(payload::normalise($row->data, $schema));
                 if ($json === (string)$row->data) {
                     continue;
                 }

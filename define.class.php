@@ -25,7 +25,7 @@
 /**
  * Admin definition of a repeatable profile field.
  *
- * param1 holds the column schema as JSON ({@see \profilefield_repeatable\local\schema}), edited
+ * param1 holds the column schema as JSON ({@see \local_repeatable\local\schema}), edited
  * through the column editor (amd/src/columneditor.js) or, without JavaScript, as text;
  * param2..param4 are unused since version 2 and cleared on save. defaultdata is always '{}'.
  *
@@ -85,11 +85,11 @@ class profile_define_repeatable extends profile_define_base {
         $usage = ['users' => 0, 'keys' => []];
         $stored = $this->stored_field((int)$mform->getElementValue('id'));
         if ($stored) {
-            $usage = \profilefield_repeatable\local\stored_values::keys_in_use(
+            $usage = \profilefield_repeatable\local\stored_values::usage(
                 (int)$stored->id,
                 \profilefield_repeatable\local\field_schema::from_field($stored)
             );
-            $isv1 = \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
+            $isv1 = \local_repeatable\local\schema::decode((string)$stored->param1) === null;
             if ($isv1 && trim((string)$element->getValue()) === trim((string)$stored->param1)) {
                 $element->setValue(\profilefield_repeatable\local\field_schema::from_field($stored)->to_json());
             }
@@ -107,13 +107,13 @@ class profile_define_repeatable extends profile_define_base {
     /**
      * Whether pattern columns can be configured: customfield_pattern offers its API.
      *
-     * The one seam between the definition and {@see \profilefield_repeatable\local\pattern_columns::available()},
+     * The one seam between the definition and {@see \local_repeatable\local\bridge\pattern::available()},
      * so tests can run it as if the plugin were absent.
      *
      * @return bool
      */
     protected function pattern_available(): bool {
-        return \profilefield_repeatable\local\pattern_columns::available();
+        return \local_repeatable\local\bridge\pattern::available();
     }
 
     /**
@@ -131,7 +131,7 @@ class profile_define_repeatable extends profile_define_base {
      */
     public function define_validate_specific($data, $files) {
         $data = (object)$data;
-        $document = \profilefield_repeatable\local\schema::decode((string)($data->param1 ?? ''));
+        $document = \local_repeatable\local\schema::decode((string)($data->param1 ?? ''));
 
         $lockedlabels = [];
         $storedpatterns = [];
@@ -187,7 +187,7 @@ class profile_define_repeatable extends profile_define_base {
      */
     public function define_save($data) {
         $stored = $this->stored_field((int)($data->id ?? 0));
-        $convert = $stored && \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
+        $convert = $stored && \local_repeatable\local\schema::decode((string)$stored->param1) === null;
         if ($convert) {
             $legacy = \profilefield_repeatable\local\field_schema::from_field($stored)->legacy_labels();
             set_config(

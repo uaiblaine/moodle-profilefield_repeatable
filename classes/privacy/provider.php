@@ -29,6 +29,7 @@ use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
 use core_privacy\local\request\userlist;
+use local_repeatable\privacy\set_exporter;
 
 /**
  * Privacy provider for repeatable field payloads and their per-set projection rows.

@@ -17,7 +17,7 @@
 namespace profilefield_repeatable\output;
 
 use profilefield_repeatable\local\projection\projector;
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\schema;
 
 /**
  * Renders the sets of one stored payload: an accordion or a plain list.
@@ -346,7 +346,7 @@ final class sets_renderer {
      * @return array
      */
     private function get_display_sets(): array {
-        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->schema);
+        $payload = \local_repeatable\local\payload::normalise($this->data, $this->schema);
         $displaysets = $this->convert_payload_to_display_sets($payload);
         if (empty($displaysets)) {
             return [];
@@ -418,7 +418,7 @@ final class sets_renderer {
 
         $patternconfig = $this->schema->pattern_config($key);
         if ($patternconfig !== null) {
-            return \profilefield_repeatable\local\pattern_columns::format($patternconfig, $rawvalue);
+            return \local_repeatable\local\bridge\pattern::format($patternconfig, $rawvalue);
         }
 
         $domainmap = $this->schema->domain_map();

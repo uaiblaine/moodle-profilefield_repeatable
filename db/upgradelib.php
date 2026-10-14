@@ -38,6 +38,25 @@ function profilefield_repeatable_is_index_layer_index(string $indexname): bool {
 }
 
 /**
+ * Quote a SQL identifier for PostgreSQL DDL, which takes no bound parameters.
+ *
+ * Kept here rather than calling local_repeatable's copy ({@see \local_repeatable\local\sql::quote_identifier()}):
+ * an upgrade step is frozen history and runs before core installs local plugins, so it depends on
+ * nothing outside this plugin. DML stays on placeholders.
+ *
+ * @param string $identifier
+ * @return string
+ * @throws coding_exception When the identifier contains a NUL byte.
+ */
+function profilefield_repeatable_quote_identifier(string $identifier): string {
+    if (strpos($identifier, "\0") !== false) {
+        throw new coding_exception('Invalid SQL identifier provided.');
+    }
+
+    return '"' . str_replace('"', '""', $identifier) . '"';
+}
+
+/**
  * Remove the r1 PostgreSQL index layer: its indexes, the jsonb column type and its queued tasks.
  *
  * Every database family: the queued reconcile_indexes adhoc tasks are deleted, because their class
@@ -45,7 +64,7 @@ function profilefield_repeatable_is_index_layer_index(string $indexname): bool {
  * {profilefield_repeatable_data} are dropped (plain DROP INDEX, the upgrade runs no transaction
  * around a step and the site is in maintenance), then the data column goes back to text, as
  * install.xml declares it; the readers cast it to jsonb
- * ({@see \profilefield_repeatable\helper::sql_subitem_value()}). The indexes go first, because
+ * ({@see \local_repeatable\local\sql::subitem_value()}). The indexes go first, because
  * neither a jsonb_path_ops index nor a ->> expression accepts a text column. Index names come from
  * pg_indexes and are quoted, never taken from user input. Idempotent.
  *
@@ -72,7 +91,7 @@ function profilefield_repeatable_drop_index_layer(moodle_database $db): void {
     );
     foreach ($indexnames as $indexname) {
         if (profilefield_repeatable_is_index_layer_index($indexname)) {
-            $db->execute('DROP INDEX IF EXISTS ' . \profilefield_repeatable\helper::quote_identifier($indexname));
+            $db->execute('DROP INDEX IF EXISTS ' . profilefield_repeatable_quote_identifier($indexname));
         }
     }
 
@@ -85,7 +104,7 @@ function profilefield_repeatable_drop_index_layer(moodle_database $db): void {
         ['tablename' => $tablename, 'columnname' => 'data']
     );
     if ($columntype === 'jsonb') {
-        $quotedtable = \profilefield_repeatable\helper::quote_identifier($tablename);
+        $quotedtable = profilefield_repeatable_quote_identifier($tablename);
         $db->execute("ALTER TABLE {$quotedtable} ALTER COLUMN data TYPE text USING data::text");
         $db->reset_caches(['profilefield_repeatable_data']);
     }

@@ -16,6 +16,7 @@
 
 namespace profilefield_repeatable\local;
 
+use local_repeatable\local\schema;
 use profilefield_repeatable\local\projection\projector;
 
 /**

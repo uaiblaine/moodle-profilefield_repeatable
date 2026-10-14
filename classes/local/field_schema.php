@@ -16,7 +16,9 @@
 
 namespace profilefield_repeatable\local;
 
-use profilefield_repeatable\helper;
+use local_repeatable\local\bridge\dictionaries;
+use local_repeatable\local\payload;
+use local_repeatable\local\schema;
 
 /**
  * The column schema of a {user_info_field} record, version 2 or version 1.
@@ -48,7 +50,7 @@ final class field_schema {
      *
      * A key never equals another column's label (or that label's "_name"/"_code" form): a
      * version 1 set holds values under the labels, and a key matching another column's label
-     * would read that column's value ({@see helper::column_value()}).
+     * would read that column's value ({@see payload::column_value()}).
      *
      * @param string $param1 Labels, one per line.
      * @param string $param2 Indexed labels, one per line; ignored, because nothing is indexed.
@@ -232,7 +234,7 @@ final class field_schema {
             }
 
             $domain = \core_text::strtolower($rawdomain);
-            if (!preg_match(helper::domain_pattern(), $domain)) {
+            if (!preg_match(dictionaries::domain_pattern(), $domain)) {
                 continue;
             }
 

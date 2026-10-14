@@ -16,8 +16,9 @@
 
 namespace profilefield_repeatable\local\projection;
 
-use profilefield_repeatable\helper;
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\payload;
+use local_repeatable\local\schema;
+use local_repeatable\local\sql;
 
 /**
  * Keeps an adapter's projection table a projection of its canonical payloads.
@@ -42,14 +43,14 @@ final class projector {
      *
      * Internal API, not for other plugins: only an adapter's payload write and the reprojection
      * paths ({@see self::reproject_record()}) call it. The dataid, fieldid and owner id must belong
-     * to the same canonical record, and the payload must come from {@see helper::normalise_payload()};
+     * to the same canonical record, and the payload must come from {@see payload::normalise()};
      * nothing here checks either.
      *
      * @param source $source The adapter.
      * @param int $dataid The canonical record's id.
      * @param int $fieldid The field id.
      * @param int $ownerid The owner id (the user, for a profile field).
-     * @param array $payload Normalised payload ({@see helper::normalise_payload()}).
+     * @param array $payload Normalised payload ({@see payload::normalise()}).
      * @return void
      */
     public static function sync(source $source, int $dataid, int $fieldid, int $ownerid, array $payload): void {
@@ -98,13 +99,13 @@ final class projector {
      * Rows are compared as decoded arrays with sorted keys, because PostgreSQL JSONB does not
      * keep the key order or spacing of the JSON it was given.
      *
-     * @param array $payload Normalised payload ({@see helper::normalise_payload()}).
+     * @param array $payload Normalised payload ({@see payload::normalise()}).
      * @param \stdClass[] $records Stored rows (set_id, data) of one canonical record.
      * @return bool
      */
     public static function is_current(array $payload, array $records): bool {
         // Every set of a normalised payload is an array that encodes to JSON, so sync() writes one row per set
-        // ({@see helper::normalise_payload()}); a count mismatch therefore always means stale rows.
+        // ({@see payload::normalise()}); a count mismatch therefore always means stale rows.
         if (count($payload) !== count($records)) {
             return false;
         }
@@ -181,7 +182,7 @@ final class projector {
                 $rowrs->next();
             }
 
-            $payload = helper::normalise_payload($datarecord->data, $schema);
+            $payload = payload::normalise($datarecord->data, $schema);
             if (!self::is_current($payload, $records)) {
                 $stale[] = [$dataid, $schema];
             }
@@ -236,7 +237,7 @@ final class projector {
             return false;
         }
 
-        $payload = helper::normalise_payload($datarecord->data, $schema);
+        $payload = payload::normalise($datarecord->data, $schema);
         $records = $DB->get_records(
             $source->store()->table(),
             ['dataid' => $dataid],
@@ -282,7 +283,7 @@ final class projector {
 
         $table = $store->table();
         $owner = $store->owner_column();
-        if (!helper::is_postgres($DB)) {
+        if (!sql::is_postgres($DB)) {
             $existing = $DB->get_record(
                 $table,
                 ['dataid' => $dataid, 'set_id' => $setid],

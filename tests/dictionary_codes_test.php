@@ -16,6 +16,8 @@
 
 namespace profilefield_repeatable;
 
+use local_repeatable\local\bridge\dictionaries;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -32,7 +34,6 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
- * @covers     \profilefield_repeatable\local\validator
  * @covers     \profilefield_repeatable\form\widget
  * @covers     \profile_define_repeatable
  * @covers     \profilefield_repeatable\form\column_editor
@@ -52,7 +53,7 @@ final class dictionary_codes_test extends \advanced_testcase {
      */
     protected function setUp(): void {
         parent::setUp();
-        if (!helper::companion_lookup_available()) {
+        if (!dictionaries::lookup_available()) {
             $this->markTestSkipped('local_dictionaries with api::lookup() is not installed.');
         }
         $this->resetAfterTest();
@@ -129,7 +130,7 @@ final class dictionary_codes_test extends \advanced_testcase {
      * @return string
      */
     private function code_error(string $identifier, int $set, string $column, string $code, array $extra = []): string {
-        return get_string($identifier, 'profilefield_repeatable', (object)(['set' => $set, 'column' => $column,
+        return get_string($identifier, 'local_repeatable', (object)(['set' => $set, 'column' => $column,
             'code' => $code] + $extra));
     }
 
@@ -161,33 +162,6 @@ final class dictionary_codes_test extends \advanced_testcase {
     }
 
     /**
-     * A codes-only column refuses an unknown code and accepts a known one in any case.
-     */
-    public function test_strict_column_refuses_an_unknown_code(): void {
-        $record = $this->create_field_record();
-        $field = new \profile_field_repeatable((int)$record->id, 0);
-
-        $this->assertSame([], $this->validate($field, [['lang' => 'PT'], ['lang' => 'es']]), 'Codes fold case');
-        $this->assertSame(
-            [$field->inputname => $this->code_error('errorcodeunknown', 2, 'Language', 'zz')],
-            $this->validate($field, [['lang' => 'pt'], ['lang' => 'zz']])
-        );
-    }
-
-    /**
-     * A codes-only column refuses a deactivated code the user does not have.
-     */
-    public function test_strict_column_refuses_an_inactive_code(): void {
-        $record = $this->create_field_record();
-        $field = new \profile_field_repeatable((int)$record->id, 0);
-
-        $this->assertSame(
-            [$field->inputname => $this->code_error('errorcodeinactive', 1, 'Language', 'xx')],
-            $this->validate($field, [['lang' => 'xx']])
-        );
-    }
-
-    /**
      * A deactivated code the user already has stored under that column stays accepted; only there.
      */
     public function test_stored_inactive_code_is_kept(): void {
@@ -215,65 +189,6 @@ final class dictionary_codes_test extends \advanced_testcase {
             [$other->inputname => $this->code_error('errorcodeinactive', 1, 'Language', 'xx')],
             $this->validate($other, [['lang' => 'xx']])
         );
-    }
-
-    /**
-     * An any-code column accepts a code no dictionary item has.
-     */
-    public function test_open_column_accepts_a_new_code(): void {
-        $record = $this->create_field_record();
-        $field = new \profile_field_repeatable((int)$record->id, 0);
-
-        $this->assertSame([], $this->validate($field, [['level' => 'Z9 new'], ['level' => 'xx']]));
-    }
-
-    /**
-     * A dependent column refuses an item of another parent code or parent domain, or one whose
-     * parent is blank, and accepts a matching one or an item without a parent.
-     */
-    public function test_dependent_column_checks_the_parent_code(): void {
-        $record = $this->create_field_record();
-        $field = new \profile_field_repeatable((int)$record->id, 0);
-
-        $this->assertSame([], $this->validate($field, [['state' => 'sp', 'city' => '3550308']]), 'Parent codes fold case');
-        $this->assertSame([], $this->validate($field, [['city' => '0000000']]), 'An item without a parent needs none');
-        $this->assertSame(
-            [$field->inputname => $this->code_error('errorcodeparentmissing', 1, 'City', '3304557', ['parent' => 'State'])],
-            $this->validate($field, [['city' => '3304557']])
-        );
-        // The parent code matches, but it is the SP of another dictionary.
-        /** @var \local_dictionaries_generator $generator */
-        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
-        $generator->create_domain(['shortname' => 'regions', 'visibility' => 1]);
-        $generator->create_item(['domain' => 'regions', 'code' => 'SP', 'label' => 'South Pole']);
-        $generator->create_item(['domain' => 'cities', 'code' => 'ice', 'label' => 'Ice city', 'parentcode' => 'SP',
-            'parentdomain' => 'regions']);
-        $this->assertSame(
-            [$field->inputname => $this->code_error('errorcodeparent', 1, 'City', 'ice', [
-                'parent' => 'State',
-                'parentcode' => 'SP',
-            ])],
-            $this->validate($field, [['state' => 'SP', 'city' => 'ice']])
-        );
-        $this->assertSame(
-            [$field->inputname => $this->code_error('errorcodeparent', 1, 'City', '3304557', [
-                'parent' => 'State',
-                'parentcode' => 'SP',
-            ])],
-            $this->validate($field, [['state' => 'SP', 'city' => '3304557']])
-        );
-    }
-
-    /**
-     * The submitted code is escaped in the message.
-     */
-    public function test_error_escapes_the_code(): void {
-        $record = $this->create_field_record();
-        $field = new \profile_field_repeatable((int)$record->id, 0);
-
-        $errors = $this->validate($field, [['lang' => '<b>x</b>']]);
-        $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt;', $errors[$field->inputname]);
-        $this->assertStringNotContainsString('<b>', $errors[$field->inputname]);
     }
 
     /**
@@ -362,7 +277,7 @@ final class dictionary_codes_test extends \advanced_testcase {
 
         $this->assertSame([], $define->define_validate_specific((object)['param1' => $schema('state')], []));
         $this->assertSame(
-            ['param1' => get_string('errorparentmismatch', 'profilefield_repeatable', (object)[
+            ['param1' => get_string('errorparentmismatch', 'local_repeatable', (object)[
                 'column' => 'City',
                 'domain' => 'cities',
                 'parentdomain' => 'uf',
@@ -472,28 +387,5 @@ final class dictionary_codes_test extends \advanced_testcase {
         $generator->create_item(['domain' => 'langs', 'code' => 'tw', 'label' => 'Town', 'parentcode' => 'Z1',
             'parentdomain' => 'secret']);
         $this->assertSame([], $this->validate($field, [['town' => 'tw']]));
-    }
-
-    /**
-     * A stored code removed from the dictionary since stays accepted for its owner, and only for them.
-     */
-    public function test_stored_removed_code_is_kept(): void {
-        global $DB;
-
-        /** @var \local_dictionaries_generator $generator */
-        $generator = $this->getDataGenerator()->get_plugin_generator('local_dictionaries');
-        $generator->create_item(['domain' => 'langs', 'code' => 'gone', 'label' => 'Gone']);
-        $record = $this->create_field_record();
-        $user = $this->getDataGenerator()->create_user();
-        $this->store((int)$record->id, (int)$user->id, ['lang' => 'gone']);
-        $DB->delete_records('local_dictionaries_item', ['codekey' => 'gone']);
-
-        $field = new \profile_field_repeatable((int)$record->id, (int)$user->id);
-        $this->assertSame([], $this->validate($field, [['lang' => 'gone']]));
-        $other = new \profile_field_repeatable((int)$record->id, (int)$this->getDataGenerator()->create_user()->id);
-        $this->assertSame(
-            [$other->inputname => $this->code_error('errorcodeunknown', 1, 'Language', 'gone')],
-            $this->validate($other, [['lang' => 'gone']])
-        );
     }
 }

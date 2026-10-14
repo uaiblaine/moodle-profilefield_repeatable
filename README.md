@@ -11,6 +11,11 @@ Requirements
 
 - Moodle 5.2 (branch `MOODLE_502_STABLE`; releases `v5.2-rN`), PHP 8.3 or later. Other Moodle
   versions have their own branches.
+- Required: [moodle-local_repeatable](https://github.com/uaiblaine/moodle-local_repeatable)
+  (`local_repeatable`, version 2026042001 or later), the repeatable-sets engine: the column schema,
+  payload reading, validation, Report Builder SQL and the companion bridges live there, and this
+  plugin adapts them to user profile fields. Install it at `local/repeatable` before (or with)
+  this plugin.
 - Optional: [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries) for reference resolution.
 - Optional, Moodle 5.1 or later: [moodle-customfield_pattern](https://github.com/uaiblaine/moodle-customfield_pattern)
   (a version with `\customfield_pattern\api`) for pattern columns: masks and validation such as
@@ -48,6 +53,9 @@ Install the plugin like any other plugin to folder
 /user/profile/field/repeatable
 
 See http://docs.moodle.org/en/Installing_plugins for details on installing Moodle plugins.
+
+**Required dependency**: place [moodle-local_repeatable](https://github.com/uaiblaine/moodle-local_repeatable)
+in `/local/repeatable` first; Moodle refuses to install or upgrade this plugin without it.
 
 **Optional dependency**: If you want to use reference resolution in repeatable fields, also install [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries).
 
@@ -220,9 +228,9 @@ level (domain cefr):      'B2' → 'Upper-Intermediate'
 ```
 
 The field calls the static class `\local_dictionaries\resolver` (`resolve()`, `resolve_bulk()`,
-`domain_exists()`) and `\local_dictionaries\api` (`list_domains()` for the column editor,
-`can_read()` and `lookup()` for the edit form); the edit form searches through the companion's
-`local_dictionaries/autocomplete_transport`.
+`domain_exists()`) and, through `local_repeatable`'s dictionary bridge, `\local_dictionaries\api`
+(`list_domains()` for the column editor, `can_read()` and `lookup()` for the edit form); the edit
+form searches through the companion's `local_dictionaries/autocomplete_transport`.
 
 ### Report Builder
 

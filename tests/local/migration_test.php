@@ -19,6 +19,7 @@ namespace profilefield_repeatable\local;
 use core_reportbuilder\local\filters\text;
 use core_reportbuilder\local\models\column;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
+use local_repeatable\local\schema;
 use profilefield_repeatable\reportbuilder\datasource\repeatable_sets;
 use profilefield_repeatable\task\rekey_payloads;
 
@@ -196,7 +197,7 @@ final class migration_test extends core_reportbuilder_testcase {
 
         // The define form locks the keys holding values through the legacy labels too.
         $stored = $DB->get_record('user_info_field', ['id' => $field->id]);
-        $usage = stored_values::keys_in_use((int)$field->id, field_schema::from_field($stored));
+        $usage = stored_values::usage((int)$field->id, field_schema::from_field($stored));
         $this->assertSame(['lingua', 'level', 'certificate_number'], $usage['keys']);
 
         // The task finishes the field.
