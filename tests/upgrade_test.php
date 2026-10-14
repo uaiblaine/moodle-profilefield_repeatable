@@ -22,7 +22,7 @@ global $CFG;
 require_once($CFG->dirroot . '/user/profile/field/repeatable/db/upgradelib.php');
 
 /**
- * Tests for the 2026042001 upgrade step, which removes the r1 PostgreSQL index layer.
+ * Tests for the r2 upgrade step (db/upgrade.php), which removes the r1 PostgreSQL index layer.
  *
  * @package    profilefield_repeatable
  * @covers     ::profilefield_repeatable_drop_index_layer

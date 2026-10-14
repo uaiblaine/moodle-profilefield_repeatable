@@ -28,6 +28,6 @@ $plugin->version   = 2026042005;
 $plugin->requires  = 2026042000;
 $plugin->component = 'profilefield_repeatable';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = 'v5.2-r1';
+$plugin->release   = 'v5.2-r2';
 $plugin->supported = [502, 502];
-$plugin->dependencies = ['local_repeatable' => 2026042003];
+$plugin->dependencies = ['local_repeatable' => 2026042004];

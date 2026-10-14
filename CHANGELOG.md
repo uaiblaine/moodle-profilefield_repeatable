@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - version 2026042005
+## [v5.2-r2] - 2026-10-14
+
+Moodle 5.2 branch (`MOODLE_502_STABLE` = `main`): version `2026042005`, release `v5.2-r2`,
+`MATURITY_STABLE`, `$plugin->supported = [502, 502]`, requires `local_repeatable` `2026042004`
+(`v5.2-r1`). The same changes ship as `v4.5-r2` (`MOODLE_405_STABLE`), `v5.1-r2`
+(`MOODLE_501_STABLE`) and `v5.3-r2` (`MOODLE_503_STABLE`), each requiring the engine's release
+for its own Moodle version. The field becomes the profile-field adapter of the repeatable-sets
+engine `local_repeatable`. The versions `20260420XX` named below are `main`'s development
+versions.
 
 ### Security
 - `edit_save_data()` now runs the checks of `edit_validate_field()` (raw caps, required columns, code
@@ -16,8 +24,9 @@ All notable changes to this project will be documented in this file.
   administrator. auth_db/auth_ldap attribute updates (`profile_save_custom_fields()`) never call the plugin.
 
 ### Upgrade notes
-- The field now requires `local_repeatable` (the repeatable-sets engine, `uaiblaine/moodle-local_repeatable`,
-  version 2026042003 or later since version 2026042004): place `local/repeatable` before upgrading.
+- The field now requires `local_repeatable` (the repeatable-sets engine, `uaiblaine/moodle-local_repeatable`),
+  its release for the same Moodle version (`v5.2-r1`, version 2026042004 or later, on this branch):
+  place `local/repeatable` before upgrading.
   Core checks the dependency against the version on disk, then upgrades the field before it installs
   the engine, because local plugins come last; that is safe, because the field's upgrade steps read
   no engine database state (the engine has none) and `db/upgradelib.php` calls no engine code.
@@ -27,22 +36,27 @@ All notable changes to this project will be documented in this file.
   `errorschemainvalid`, `errorsubline*`, `errortitlecount`, `errortoomanysets`, `errorvaluetoolong`).
   An administrator's customisation of a moved string (language customisation) must be redone under
   `local_repeatable`.
-- Version 2026042004 moves more lang strings to `local_repeatable` with the same keys and the same
-  text: the edit widget's, the column editor's, the profile display's and the Report Builder
+- More lang strings moved to `local_repeatable` with the same keys and the same text:
+  the edit widget's, the column editor's, the profile display's and the Report Builder
   entity's (`actioncolumn`, `addcolumn`, `addnewset`, `choosefirst`, `column*` except `columns` and
   `columns_help`, `domain*`, `entityrepeatableset`, `mode*`, `movedown`, `moveup`, `newcode`,
   `newcolumn`, `nomatchstrict`, `parent*`, `pattern*`, `remove*`, `repeatableset`, `role*`,
   `searchplaceholder`, `setcolumn`, `setnumber`, `summary*`, `synchronisedat`, `usecode`; 71 keys).
   Language customisations of these must be redone under `local_repeatable` too.
-- Version 2026042004: the CSS classes of the edit widget, the column editor and the profile display
+- The CSS classes of the edit widget, the column editor and the profile display
   are renamed from `profilefield-repeatable-*` to `local-repeatable-*` (the stylesheet now ships with
   `local_repeatable`; the `--pfr-*` custom properties keep their names). A theme that overrides the
   old classes must follow the rename. The element ids the field builds (`profilefield-repeatable-<id>`
   for the edit widget, `profilefield-repeatable-display-<id>` for the profile accordion) are unchanged.
-- Version 2026042004: the AMD modules are `local_repeatable/repeatable`, `local_repeatable/markup`,
+- The AMD modules are `local_repeatable/repeatable`, `local_repeatable/markup`,
   `local_repeatable/dictionary_transport`, `local_repeatable/columneditor` and
   `local_repeatable/displayaccordion`; the `profilefield_repeatable/*` modules no longer exist. Nothing
   stores a module name, and the upgrade's cache purge drops the old ones.
+- The upgrade runs one step (2026042001 on this branch, see "Changed"): on PostgreSQL it removes the
+  r1 index layer and turns the projection's `data` column back into text, and on every database it
+  deletes the queued `reconcile_indexes` ad hoc tasks. Stored values and saved reports are unchanged.
+- Going back to r1 is a version downgrade, which Moodle refuses: the way back is restoring a backup
+  taken before the upgrade.
 
 ### Removed
 - The PostgreSQL index layer (owner decision D3, `docs/engine-extraction-design.md` §8). Measured on

@@ -12,7 +12,7 @@ Requirements
 - Moodle 5.2 (branch `MOODLE_502_STABLE`; releases `v5.2-rN`), PHP 8.3 or later. Other Moodle
   versions have their own branches.
 - Required: [moodle-local_repeatable](https://github.com/uaiblaine/moodle-local_repeatable)
-  (`local_repeatable`, version 2026042003 or later), the repeatable-sets engine: the column schema,
+  (`local_repeatable` `v5.2-r1`, version 2026042004 or later), the repeatable-sets engine: the column schema,
   payload reading, validation, the edit widget, the column editor, the display renderer (templates,
   stylesheet and JavaScript), the projection writer, the Report Builder entity and SQL, and the
   companion bridges live there, and this plugin adapts them to user profile fields. Install it at `local/repeatable` before (or with)
@@ -131,7 +131,7 @@ The field decides the layout, names the accordion after the field and the user
 (`profilefield-repeatable-display-<fieldid>-<userid>-<shortname>`) and reads the sets' sync times
 from its projection rows; `local_repeatable` renders the sets (`\local_repeatable\output\sets_renderer`,
 its templates and stylesheet). The display's CSS classes are `local-repeatable-*` (they were
-`profilefield-repeatable-*` before version 2026042004): a theme that styles them must use the new
+`profilefield-repeatable-*` up to r1): a theme that styles them must use the new
 names.
 
 ### Editing
@@ -217,7 +217,7 @@ Each set is projected into `profilefield_repeatable_data` as one JSON text row f
 `(data)::jsonb ->> 'key'`; on MySQL/MariaDB as `JSON_UNQUOTE(JSON_EXTRACT(...))`. No index serves
 these expressions: Report Builder's "contains" is `ILIKE '%v%'` and "is equal to" compares
 `LOWER()` values, which neither an expression index on the raw value nor a GIN index can answer.
-Releases up to r1 created such indexes and a `jsonb` column on PostgreSQL; the 2026042001 upgrade
+Releases up to r1 created such indexes and a `jsonb` column on PostgreSQL; the r2 upgrade step
 drops them (only names of their exact shapes, `pfrd_f<fieldid>_<16 hex>` and
 `pfrd_<8 hex>_gin_ix`), turns the column back into text and deletes their queued ad hoc tasks.
 
