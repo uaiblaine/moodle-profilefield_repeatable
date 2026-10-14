@@ -16,8 +16,9 @@
 
 namespace profilefield_repeatable\local;
 
-use profilefield_repeatable\helper;
-use profilefield_repeatable\task\reconcile_indexes;
+use local_repeatable\local\payload;
+use local_repeatable\local\projection\projector;
+use local_repeatable\local\schema;
 
 /**
  * Re-keys the stored payloads of a field converted to the version 2 schema.
@@ -39,8 +40,7 @@ final class migration {
     /**
      * Re-key every payload of a field, rebuild its projection and drop its legacy labels.
      *
-     * Idempotent: a payload already keyed by key normalises to itself and is not written. On
-     * PostgreSQL the index reconciliation is queued, because index names follow the keys.
+     * Idempotent: a payload already keyed by key normalises to itself and is not written.
      *
      * @param int $fieldid
      * @return int Number of payloads rewritten.
@@ -50,7 +50,7 @@ final class migration {
 
         $field = $DB->get_record('user_info_field', ['id' => $fieldid, 'datatype' => 'repeatable']);
         if (!$field) {
-            unset_config(schema::legacy_config_name($fieldid), 'profilefield_repeatable');
+            unset_config(field_schema::legacy_config_name($fieldid), 'profilefield_repeatable');
             return 0;
         }
         if (schema::decode((string)$field->param1) === null) {
@@ -58,14 +58,10 @@ final class migration {
             return 0;
         }
 
-        $schema = schema::from_field($field);
+        $schema = field_schema::from_field($field);
         $rewritten = self::rekey_payloads($fieldid, $schema);
-        projection::reproject_field($field);
-        unset_config(schema::legacy_config_name($fieldid), 'profilefield_repeatable');
-
-        if (helper::is_postgres($DB)) {
-            reconcile_indexes::schedule_for_field($fieldid);
-        }
+        projector::reproject_field(new source(), $fieldid, $schema);
+        unset_config(field_schema::legacy_config_name($fieldid), 'profilefield_repeatable');
 
         return $rewritten;
     }
@@ -103,7 +99,7 @@ final class migration {
             $transaction = $DB->start_delegated_transaction();
             foreach ($rows as $row) {
                 $lastid = (int)$row->id;
-                $json = helper::encode_payload(helper::normalise_payload($row->data, $schema));
+                $json = payload::encode(payload::normalise($row->data, $schema));
                 if ($json === (string)$row->data) {
                     continue;
                 }

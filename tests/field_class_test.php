@@ -16,6 +16,9 @@
 
 namespace profilefield_repeatable;
 
+use local_repeatable\local\bridge\dictionaries;
+use local_repeatable\local\payload;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -29,6 +32,8 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
+ * @covers     \local_repeatable\form\widget
+ * @covers     \local_repeatable\output\sets_renderer
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -76,24 +81,6 @@ final class field_class_test extends \advanced_testcase {
         ], $extradata));
 
         return new \profile_field_repeatable(0, 0, $fielddata);
-    }
-
-    /**
-     * Validate strict JSON object requirement.
-     */
-    public function test_edit_validate_field_invalid_json(): void {
-        $this->resetAfterTest();
-
-        $field = $this->create_field();
-        $inputname = $field->inputname;
-
-        $errors = $field->edit_validate_field((object) [
-            'id' => 0,
-            $inputname => '[]',
-        ]);
-
-        $this->assertArrayHasKey($inputname, $errors);
-        $this->assertSame(get_string('errorinvalidjson', 'profilefield_repeatable'), $errors[$inputname]);
     }
 
     /**
@@ -177,28 +164,6 @@ final class field_class_test extends \advanced_testcase {
             '{"@@ID#1":{"diretoria":"16154","escola":"45","turma":"3","disciplina":"654"}}',
             $processed
         );
-    }
-
-    /**
-     * Ensure normalisation removes empty sets after completing missing sub-items.
-     */
-    public function test_normalise_payload_discards_empty_sets_after_completion(): void {
-        $this->resetAfterTest();
-
-        $payload = helper::normalise_payload(
-            '{"@@ID#10":{"diretoria":"","escola":"","turma":"","disciplina":""},' .
-            '"@@ID#20":{"diretoria":"16154","escola":"45","turma":"3"}}',
-            local\schema::from_json($this->schema(['diretoria', 'escola', 'turma', 'disciplina']))
-        );
-
-        $this->assertSame([
-            '@@ID#1' => [
-                'diretoria' => '16154',
-                'escola' => '45',
-                'turma' => '3',
-                'disciplina' => '',
-            ],
-        ], $payload);
     }
 
     /**
@@ -323,9 +288,9 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display', $output);
-        $this->assertStringNotContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringContainsString(get_string('repeatableset', 'profilefield_repeatable', 1), $output);
+        $this->assertStringContainsString('local-repeatable-display', $output);
+        $this->assertStringNotContainsString('local-repeatable-display-accordion', $output);
+        $this->assertStringContainsString(get_string('repeatableset', 'local_repeatable', 1), $output);
     }
 
     /**
@@ -377,9 +342,9 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringContainsString('<details class="profilefield-repeatable-item" open>', $output);
-        $this->assertStringContainsString('profilefield-repeatable-summary', $output);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $output);
+        $this->assertStringContainsString('<details class="local-repeatable-item" open>', $output);
+        $this->assertStringContainsString('local-repeatable-summary', $output);
         $this->assertStringContainsString('101-A', $output);
         $this->assertStringContainsString(
             userdate($timemodified, get_string('strftimedatetimeshort', 'langconfig')),
@@ -449,7 +414,7 @@ final class field_class_test extends \advanced_testcase {
 
         // The plain list prints the label of each filled column; the accordion titles the set with the title
         // column's value, labels the other rows with their names and puts the field name in its aria-label.
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $accordion);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $accordion);
         $this->assertSame(1, substr_count($plain, 'Item R&amp;D'));
         $this->assertSame(1, substr_count($accordion, 'Item R&amp;D'));
         $this->assertStringNotContainsString('&amp;amp;', $plain);
@@ -480,8 +445,8 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringNotContainsString('profilefield-repeatable-sync', $output);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $output);
+        $this->assertStringNotContainsString('local-repeatable-sync', $output);
     }
 
     /**
@@ -505,7 +470,7 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString(get_string('repeatableset', 'profilefield_repeatable', 1), $output);
+        $this->assertStringContainsString(get_string('repeatableset', 'local_repeatable', 1), $output);
     }
 
     /**
@@ -703,87 +668,9 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $output);
         $this->assertStringContainsString('Sao Paulo', $output);
         $this->assertStringContainsString('EE Alpha', $output);
-    }
-
-    /**
-     * Build a JSON payload with the requested number of sets.
-     *
-     * @param int $count
-     * @return string
-     */
-    private function build_payload_with_sets(int $count): string {
-        $sets = [];
-        for ($i = 1; $i <= $count; $i++) {
-            $sets['@@ID#' . $i] = ['name' => 'N' . $i, 'role' => 'R' . $i];
-        }
-
-        return json_encode($sets);
-    }
-
-    /**
-     * Validation must reject payloads with more sets than the configured maximum.
-     */
-    public function test_edit_validate_field_rejects_too_many_sets(): void {
-        $this->resetAfterTest();
-
-        $field = $this->create_field();
-        $inputname = $field->inputname;
-
-        $errors = $field->edit_validate_field((object) [
-            'id' => 0,
-            $inputname => $this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 1),
-        ]);
-
-        $this->assertArrayHasKey($inputname, $errors);
-        $this->assertSame(
-            get_string('errortoomanysets', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_SETS),
-            $errors[$inputname]
-        );
-    }
-
-    /**
-     * Validation must reject sub-item values longer than the configured maximum.
-     */
-    public function test_edit_validate_field_rejects_oversized_value(): void {
-        $this->resetAfterTest();
-
-        $field = $this->create_field();
-        $inputname = $field->inputname;
-
-        $oversized = str_repeat('a', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 1);
-        $errors = $field->edit_validate_field((object) [
-            'id' => 0,
-            $inputname => json_encode(['@@ID#1' => ['name' => $oversized, 'role' => 'X']]),
-        ]);
-
-        $this->assertArrayHasKey($inputname, $errors);
-        $this->assertSame(
-            get_string('errorvaluetoolong', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_VALUE_LENGTH),
-            $errors[$inputname]
-        );
-    }
-
-    /**
-     * Normalisation must defensively cap set count and value length on non-form paths.
-     */
-    public function test_normalise_payload_enforces_caps(): void {
-        $this->resetAfterTest();
-        $subitems = local\schema::from_json($this->schema(['name', 'role']));
-
-        $payload = json_decode($this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 5), true);
-        $normalised = \profilefield_repeatable\helper::normalise_payload($payload, $subitems);
-        $this->assertCount(\profilefield_repeatable\helper::MAX_SETS, $normalised);
-
-        $oversized = str_repeat('b', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 50);
-        $normalised = \profilefield_repeatable\helper::normalise_payload(
-            ['@@ID#1' => ['name' => $oversized, 'role' => '']],
-            $subitems
-        );
-        $first = reset($normalised);
-        $this->assertSame(\profilefield_repeatable\helper::MAX_VALUE_LENGTH, \core_text::strlen($first['name']));
     }
 
     /**
@@ -939,14 +826,14 @@ final class field_class_test extends \advanced_testcase {
         $this->setAdminUser();
 
         $field = $this->create_field();
-        $oversized = str_repeat('x', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 1);
+        $oversized = str_repeat('x', payload::MAX_VALUE_LENGTH + 1);
         $form = $this->submit_edit_form($field, json_encode(['@@ID#1' => ['name' => $oversized, 'role' => '']]));
 
         $this->assertNull($form->get_data());
         $html = $form->render();
 
         $errorid = 'fgroup_id_error_' . $field->inputname;
-        $message = get_string('errorvaluetoolong', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_VALUE_LENGTH);
+        $message = get_string('errorvaluetoolong', 'local_repeatable', payload::MAX_VALUE_LENGTH);
         $this->assertMatchesRegularExpression(
             '~<div[^>]*id="' . preg_quote($errorid, '~') . '"[^>]*>\s*' . preg_quote($message, '~') . '\s*</div>~',
             $html
@@ -1007,7 +894,7 @@ final class field_class_test extends \advanced_testcase {
         $errors = $validate('{"@@ID#1":{"name":"Alice","role":"Lead"},"@@ID#2":{"name":"","role":""},'
             . '"@@ID#3":{"name":"Bob","role":"  "}}');
         $this->assertSame(
-            [$inputname => get_string('errorcolumnrequired', 'profilefield_repeatable', (object)['set' => 2, 'column' => 'Role'])],
+            [$inputname => get_string('errorcolumnrequired', 'local_repeatable', (object)['set' => 2, 'column' => 'Role'])],
             $errors,
             'The emptied set is dropped, so Bob is set 2'
         );
@@ -1024,7 +911,7 @@ final class field_class_test extends \advanced_testcase {
         $form = $this->submit_edit_form($field, '{"@@ID#1":{"name":"Alice","r_d":""}}');
 
         $this->assertNull($form->get_data());
-        $message = get_string('errorcolumnrequired', 'profilefield_repeatable', (object)['set' => 1, 'column' => 'R&amp;D']);
+        $message = get_string('errorcolumnrequired', 'local_repeatable', (object)['set' => 1, 'column' => 'R&amp;D']);
         $this->assertMatchesRegularExpression(
             '~id="' . preg_quote('fgroup_id_error_' . $field->inputname, '~') . '"[^>]*>\s*' . preg_quote($message, '~') . '~',
             $form->render()
@@ -1050,11 +937,11 @@ final class field_class_test extends \advanced_testcase {
             [
                 'key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'required' => true,
                 // The admin may search any domain, so the column is searched whenever the companion can.
-                'domain' => 'iso639', 'open' => false, 'autocomplete' => helper::companion_lookup_available(),
+                'domain' => 'iso639', 'open' => false, 'autocomplete' => dictionaries::lookup_available(),
             ],
             ['key' => 'notes', 'label' => 'Notes', 'mode' => 'free', 'required' => false],
         ], json_decode(html_entity_decode($matches[1]), true));
-        $this->assertSame(1, substr_count($html, 'class="profilefield-repeatable-required"'));
+        $this->assertSame(1, substr_count($html, 'class="local-repeatable-required"'));
     }
 
     /**
@@ -1074,7 +961,7 @@ final class field_class_test extends \advanced_testcase {
             ]),
         ]);
         $legacy = ['full_name' => 'Name (old)', 'required_x' => 'Req'];
-        set_config(local\schema::legacy_config_name((int)$field->field->id), json_encode($legacy), 'profilefield_repeatable');
+        set_config(local\field_schema::legacy_config_name((int)$field->field->id), json_encode($legacy), 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
 
         // Set 1 has the version 1 shape; set 2 was saved after the conversion, keyed by key.
@@ -1101,18 +988,18 @@ final class field_class_test extends \advanced_testcase {
         $this->assertStringNotContainsString('ignored', $output);
 
         // The raw caps see a value under its legacy label too.
-        $oversized = str_repeat('a', helper::MAX_VALUE_LENGTH + 1);
+        $oversized = str_repeat('a', payload::MAX_VALUE_LENGTH + 1);
         $errors = $field->edit_validate_field((object)[
             'id' => 0,
             $field->inputname => json_encode(['@@ID#1' => ['Req' => $oversized]]),
         ]);
         $this->assertSame(
-            get_string('errorvaluetoolong', 'profilefield_repeatable', helper::MAX_VALUE_LENGTH),
+            get_string('errorvaluetoolong', 'local_repeatable', payload::MAX_VALUE_LENGTH),
             $errors[$field->inputname]
         );
 
         // Without the legacy labels, the version 1 set is only "role".
-        unset_config(local\schema::legacy_config_name((int)$field->field->id), 'profilefield_repeatable');
+        unset_config(local\field_schema::legacy_config_name((int)$field->field->id), 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
         $field->data = '{"@@ID#1":{"Name (old)":"Alice","role":"Lead"}}';
         $loaded = new \stdClass();
@@ -1141,7 +1028,8 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field(['param1' => $this->schema([['key' => 'name', 'label' => 'Name'], 'role'])]);
-        set_config(local\schema::legacy_config_name((int)$field->field->id), '{"name":"Old name"}', 'profilefield_repeatable');
+        $config = local\field_schema::legacy_config_name((int)$field->field->id);
+        set_config($config, '{"name":"Old name"}', 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
         $field->data = '{"@@ID#1":{"name":null,"Old name":"Alice","role":null}}';
 

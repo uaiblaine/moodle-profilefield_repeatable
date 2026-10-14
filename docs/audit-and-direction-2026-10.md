@@ -267,6 +267,8 @@ mechanical once the schema is stable.
 - **Indexes earn their keep or go.** `EXPLAIN` the Report Builder filters. If the expression
   indexes are not used, drop the adhoc task, the GIN index and the REINDEX: the largest
   complexity-for-nothing in the plugin.
+  Measured 2026-10-14: they are not used, and stage A0 removes the layer (decision D3 in
+  `docs/engine-extraction-design.md`).
 - **One copy of the domain pattern**: a constant in the dictionaries API, read by the field plugin
   when present.
 - **Limits**: a cap on the number of columns; uniqueness disabled for this type
