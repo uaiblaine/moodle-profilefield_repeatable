@@ -167,7 +167,7 @@ class provider implements
      * @return array
      */
     protected static function export_sets(\stdClass $record): array {
-        $schema = \profilefield_repeatable\local\schema::from_field((object)[
+        $schema = \profilefield_repeatable\local\field_schema::from_field((object)[
             'id' => $record->fieldid,
             'param1' => $record->param1,
             'param2' => $record->param2,

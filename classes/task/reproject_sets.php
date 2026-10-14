@@ -17,7 +17,9 @@
 namespace profilefield_repeatable\task;
 
 use core\task\scheduled_task;
-use profilefield_repeatable\local\projection;
+use profilefield_repeatable\local\field_schema;
+use profilefield_repeatable\local\projection\projector;
+use profilefield_repeatable\local\source;
 
 /**
  * Rebuild the per-set projection of every user whose canonical payload changed behind the plugin.
@@ -56,7 +58,7 @@ class reproject_sets extends scheduled_task {
             'id, shortname, param1, param2, param3, param4'
         );
         foreach ($fields as $field) {
-            $count = projection::reproject_field($field);
+            $count = projector::reproject_field(new source(), (int)$field->id, field_schema::from_field($field));
             if ($count > 0) {
                 mtrace('profilefield_repeatable: rebuilt ' . $count . ' projection(s) of field ' . $field->shortname);
             }

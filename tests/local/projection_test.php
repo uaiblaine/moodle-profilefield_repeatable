@@ -16,6 +16,8 @@
 
 namespace profilefield_repeatable\local;
 
+use profilefield_repeatable\local\projection\projector;
+
 /**
  * Tests for the per-set projection comparison.
  *
@@ -23,7 +25,7 @@ namespace profilefield_repeatable\local;
  * cannot read PHPUnit attributes.
  *
  * @package    profilefield_repeatable
- * @covers     \profilefield_repeatable\local\projection
+ * @covers     \profilefield_repeatable\local\projection\projector
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -45,11 +47,11 @@ final class projection_test extends \advanced_testcase {
     public function test_is_current_ignores_key_order_and_spacing(): void {
         $payload = ['@@ID#1' => ['name' => 'Alice', 'role' => 'Manager'], '@@ID#2' => ['name' => 'Bob', 'role' => '']];
 
-        $this->assertTrue(projection::is_current($payload, [
+        $this->assertTrue(projector::is_current($payload, [
             $this->row(1, '{"role": "Manager", "name": "Alice"}'),
             $this->row(2, '{"name":"Bob","role":""}'),
         ]));
-        $this->assertTrue(projection::is_current([], []));
+        $this->assertTrue(projector::is_current([], []));
     }
 
     /**
@@ -59,14 +61,14 @@ final class projection_test extends \advanced_testcase {
         $payload = ['@@ID#1' => ['name' => 'Alice', 'role' => 'Manager'], '@@ID#2' => ['name' => 'Bob', 'role' => '']];
         $alice = $this->row(1, '{"name":"Alice","role":"Manager"}');
 
-        $this->assertFalse(projection::is_current($payload, [$alice]), 'Missing set');
-        $this->assertFalse(projection::is_current([], [$alice]), 'Rows left after the payload emptied');
-        $this->assertFalse(projection::is_current($payload, [$alice, $this->row(3, '{"name":"Bob","role":""}')]), 'Set gap');
-        $this->assertFalse(projection::is_current($payload, [$alice, $this->row(2, '{"name":"Bob","role":"x"}')]), 'Value');
-        $this->assertFalse(projection::is_current($payload, [$alice, $this->row(2, '{"name":"Bob"}')]), 'Missing key');
-        $this->assertFalse(projection::is_current($payload, [$alice, $this->row(2, 'not json')]), 'Corrupt row');
+        $this->assertFalse(projector::is_current($payload, [$alice]), 'Missing set');
+        $this->assertFalse(projector::is_current([], [$alice]), 'Rows left after the payload emptied');
+        $this->assertFalse(projector::is_current($payload, [$alice, $this->row(3, '{"name":"Bob","role":""}')]), 'Set gap');
+        $this->assertFalse(projector::is_current($payload, [$alice, $this->row(2, '{"name":"Bob","role":"x"}')]), 'Value');
+        $this->assertFalse(projector::is_current($payload, [$alice, $this->row(2, '{"name":"Bob"}')]), 'Missing key');
+        $this->assertFalse(projector::is_current($payload, [$alice, $this->row(2, 'not json')]), 'Corrupt row');
         // Numeric-looking strings must not compare equal by value.
-        $this->assertFalse(projection::is_current(
+        $this->assertFalse(projector::is_current(
             ['@@ID#1' => ['name' => '01', 'role' => '']],
             [$this->row(1, '{"name":"1","role":""}')]
         ), 'Numeric string');
@@ -113,13 +115,13 @@ final class projection_test extends \advanced_testcase {
         $this->resetAfterTest();
         $subitems = schema::from_columns([['key' => 'name', 'label' => 'Name'], ['key' => 'role', 'label' => 'Role']]);
         [$dataid, $userid, $fieldid] = $this->user_with_payload('{"@@ID#1":{"name":"Old","role":""}}');
-        $this->assertTrue(projection::reproject_record($dataid, $subitems));
+        $this->assertTrue(projector::reproject_record(new source(), $dataid, $subitems));
 
         // The newer save lands after the snapshot that found the rows stale.
         $DB->set_field('user_info_data', 'data', '{"@@ID#1":{"name":"New","role":"Boss"},"@@ID#2":{"name":"Two","role":""}}', [
             'id' => $dataid,
         ]);
-        $this->assertTrue(projection::reproject_record($dataid, $subitems));
+        $this->assertTrue(projector::reproject_record(new source(), $dataid, $subitems));
 
         $rows = $DB->get_records('profilefield_repeatable_data', ['dataid' => $dataid], 'set_id ASC');
         // Decoded: PostgreSQL JSONB does not keep the spacing of the JSON it was given.
@@ -141,12 +143,12 @@ final class projection_test extends \advanced_testcase {
         $subitems = schema::from_columns([['key' => 'name', 'label' => 'Name'], ['key' => 'role', 'label' => 'Role']]);
         [$dataid] = $this->user_with_payload('{"@@ID#1":{"name":"Same","role":""}}');
 
-        $this->assertTrue(projection::reproject_record($dataid, $subitems));
+        $this->assertTrue(projector::reproject_record(new source(), $dataid, $subitems));
         $DB->set_field('profilefield_repeatable_data', 'timemodified', 1, ['dataid' => $dataid]);
 
-        $this->assertFalse(projection::reproject_record($dataid, $subitems), 'Already current');
+        $this->assertFalse(projector::reproject_record(new source(), $dataid, $subitems), 'Already current');
         $this->assertEquals(1, $DB->get_field('profilefield_repeatable_data', 'timemodified', ['dataid' => $dataid]));
-        $this->assertFalse(projection::reproject_record($dataid + 1000, $subitems), 'Missing record');
+        $this->assertFalse(projector::reproject_record(new source(), $dataid + 1000, $subitems), 'Missing record');
     }
 
     /**
@@ -158,14 +160,14 @@ final class projection_test extends \advanced_testcase {
         $this->resetAfterTest();
         $subitems = schema::from_columns([['key' => 'name', 'label' => 'Name'], ['key' => 'role', 'label' => 'Role']]);
         [$dataid] = $this->user_with_payload('{"@@ID#1":{"name":"Same","role":""}}');
-        $this->assertTrue(projection::reproject_record($dataid, $subitems));
+        $this->assertTrue(projector::reproject_record(new source(), $dataid, $subitems));
         $before = $DB->get_records('profilefield_repeatable_data', ['dataid' => $dataid], 'id ASC');
         $this->assertCount(1, $before);
 
         // The record vanishes but its projection rows stay behind as orphans.
         $DB->delete_records('user_info_data', ['id' => $dataid]);
 
-        $this->assertFalse(projection::reproject_record($dataid, $subitems));
+        $this->assertFalse(projector::reproject_record(new source(), $dataid, $subitems));
         $this->assertEquals($before, $DB->get_records('profilefield_repeatable_data', ['dataid' => $dataid], 'id ASC'));
     }
 
@@ -189,12 +191,12 @@ final class projection_test extends \advanced_testcase {
             'dataformat' => 0,
         ]);
         $field = $DB->get_record('user_info_field', ['id' => $fieldid], '*', MUST_EXIST);
-        $this->assertSame(2, projection::reproject_field($field));
+        $this->assertSame(2, projector::reproject_field(new source(), $fieldid, field_schema::from_field($field)));
         $this->assertTrue($DB->record_exists('profilefield_repeatable_data', ['dataid' => $secondid]));
 
         // Control: every projection is current.
         $before = $DB->perf_get_reads();
-        $this->assertSame(0, projection::reproject_field($field));
+        $this->assertSame(0, projector::reproject_field(new source(), $fieldid, field_schema::from_field($field)));
         $baseline = $DB->perf_get_reads() - $before;
 
         // The first record vanishes and leaves its rows behind.
@@ -202,7 +204,7 @@ final class projection_test extends \advanced_testcase {
         $this->assertTrue($DB->record_exists('profilefield_repeatable_data', ['dataid' => $firstid]));
 
         $before = $DB->perf_get_reads();
-        $this->assertSame(0, projection::reproject_field($field));
+        $this->assertSame(0, projector::reproject_field(new source(), $fieldid, field_schema::from_field($field)));
         $this->assertSame($baseline, $DB->perf_get_reads() - $before, 'Orphan rows must not make later records stale.');
     }
 }

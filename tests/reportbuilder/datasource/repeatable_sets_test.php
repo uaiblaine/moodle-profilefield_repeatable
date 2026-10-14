@@ -19,6 +19,7 @@ namespace profilefield_repeatable\reportbuilder\datasource;
 use core_reportbuilder\local\filters\text;
 use core_reportbuilder\manager;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
+use profilefield_repeatable\local\projection\projector;
 use profilefield_repeatable\reportbuilder\local\entities\repeatable_set;
 
 defined('MOODLE_INTERNAL') || die();
@@ -419,7 +420,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->save_sets($fielddef, $user, json_encode(['@@ID#1' => ['diretoria' => $code, 'escola' => '1']]));
 
         $method = new \ReflectionMethod(repeatable_set::class, 'name_filter_options');
-        $schema = \profilefield_repeatable\local\schema::from_field($fielddef);
+        $schema = \profilefield_repeatable\local\field_schema::from_field($fielddef);
         $options = $method->invoke(null, (int)$fielddef->id, $schema, 'diretoria', 'diretorias');
 
         $this->assertSame([$code => s($code)], $options);
@@ -572,7 +573,8 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
             'data' => json_encode($payload),
             'dataformat' => 0,
         ]);
-        \profilefield_repeatable\local\projection::sync((int)$dataid, (int)$fielddef->id, (int)$user->id, $payload);
+        $source = new \profilefield_repeatable\local\source();
+        projector::sync($source, (int)$dataid, (int)$fielddef->id, (int)$user->id, $payload);
 
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
