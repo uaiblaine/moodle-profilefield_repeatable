@@ -25,6 +25,7 @@ use core_reportbuilder\local\report\column;
 use core_reportbuilder\local\report\filter;
 use lang_string;
 use profilefield_repeatable\helper;
+use profilefield_repeatable\local\field_schema;
 use profilefield_repeatable\local\pattern_columns;
 use profilefield_repeatable\local\schema;
 
@@ -82,7 +83,7 @@ class repeatable_set extends base {
      * @return base
      */
     public function initialise(): base {
-        $schema = schema::from_field($this->field);
+        $schema = field_schema::from_field($this->field);
         $available = $this->is_field_visible();
 
         foreach ($this->get_all_columns($schema) as $column) {

@@ -16,6 +16,8 @@
 
 namespace profilefield_repeatable\output;
 
+use profilefield_repeatable\local\projection\projector;
+
 /**
  * Display renderer for repeatable profile fields.
  *
@@ -327,7 +329,7 @@ class display_renderer {
      *
      * The sets always come from the user_info_data payload. A projection row only lends its
      * timemodified to the set it still mirrors: a row left stale by a direct write to
-     * user_info_data ({@see \profilefield_repeatable\local\projection}) is ignored.
+     * user_info_data ({@see \profilefield_repeatable\local\projection\projector}) is ignored.
      *
      * @return array
      */
@@ -340,7 +342,7 @@ class display_renderer {
 
         $timemodifiedbyset = [];
         foreach ($this->get_projection_records() as $record) {
-            $canonical = \profilefield_repeatable\local\projection::canonical_set(json_decode((string)$record->data, true));
+            $canonical = projector::canonical_set(json_decode((string)$record->data, true));
             if ($canonical !== null && !empty($record->timemodified)) {
                 $timemodifiedbyset[(int)$record->set_id] = [$canonical, (int)$record->timemodified];
             }
@@ -348,7 +350,7 @@ class display_renderer {
 
         foreach ($displaysets as &$displayset) {
             $stored = $timemodifiedbyset[$displayset['setnumber']] ?? null;
-            $canonical = \profilefield_repeatable\local\projection::canonical_set($displayset['values']);
+            $canonical = projector::canonical_set($displayset['values']);
             if ($stored !== null && $stored[0] === $canonical) {
                 $displayset['timemodified'] = $stored[1];
             }
@@ -555,7 +557,7 @@ class display_renderer {
      */
     private function get_schema(): \profilefield_repeatable\local\schema {
         if ($this->schema === null) {
-            $this->schema = \profilefield_repeatable\local\schema::from_field((object)(array)$this->field);
+            $this->schema = \profilefield_repeatable\local\field_schema::from_field((object)(array)$this->field);
         }
         return $this->schema;
     }

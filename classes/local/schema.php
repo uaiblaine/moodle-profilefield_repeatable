@@ -19,7 +19,7 @@ namespace profilefield_repeatable\local;
 use profilefield_repeatable\helper;
 
 /**
- * Column schema of a repeatable field (version 2), stored as JSON in {user_info_field}.param1.
+ * Column schema of a repeatable field (version 2), stored as JSON by the adapter that owns the field.
  *
  * Shape: {"version": 2, "columns": [{"key", "label", "mode", "domain"?, "parent"?, "pattern"?,
  * "title"?, "subline"?, "required"?}, ...]}. Payload sets are keyed by column key, so a
@@ -27,11 +27,10 @@ use profilefield_repeatable\helper;
  * A stored "indexed" flag (the r1 releases wrote one) is not one of {@see self::FLAGS}: reading
  * drops it, and the next save writes the schema without it.
  *
- * Fields still on the version 1 parameters (param1 lists the labels, param2 indexed ones that
- * nothing reads, param3 "label|domain" mappings, param4 the subline) are read through
- * {@see self::from_v1()}, whose payloads are keyed by label: {@see self::legacy_labels()} tells the payload readers which
- * label each key used to be stored under, until the payloads are re-keyed
- * ({@see \profilefield_repeatable\local\migration}).
+ * Engine side: nothing here reads a profile field. A field still on the version 1 parameters is
+ * read by the profile adapter ({@see field_schema::from_v1()}), whose payloads are keyed by label:
+ * {@see self::legacy_labels()} tells the payload readers which label each key used to be stored
+ * under, until the payloads are re-keyed ({@see \profilefield_repeatable\local\migration}).
  *
  * The constructor normalises types and never rejects: {@see self::validate()} is the one place
  * that decides whether a submitted schema may be saved.
@@ -76,9 +75,6 @@ final class schema {
 
     /** @var string Report Builder identifier of the set number, which no column may produce. */
     public const SETNUMBER_IDENTIFIER = 'setnumber';
-
-    /** @var string Prefix of the plugin config holding a field's key => version 1 label map. */
-    public const LEGACY_CONFIG_PREFIX = 'legacykeys_';
 
     /** @var string[] Boolean column flags, in output order. */
     private const FLAGS = ['title', 'subline', 'required'];
@@ -185,126 +181,6 @@ final class schema {
         $copy->columns = $kept;
         $copy->domainmap = null;
         return $copy;
-    }
-
-    /**
-     * Build the version 2 schema equivalent to the version 1 parameters.
-     *
-     * Keys come from the labels ({@see self::generate_key()}); mapped columns become strict
-     * dictionaries, the others free text; the first column is the title, as version 1 displayed
-     * it. Unknown, duplicate and surplus entries of param4 are dropped, as version 1 reads them.
-     * Every key remembers its label as a legacy label.
-     *
-     * A key never equals another column's label (or that label's "_name"/"_code" form): a
-     * version 1 set holds values under the labels, and a key matching another column's label
-     * would read that column's value ({@see helper::column_value()}).
-     *
-     * @param string $param1 Labels, one per line.
-     * @param string $param2 Indexed labels, one per line; ignored, because nothing is indexed.
-     * @param string $param3 "label|domain" mappings, one per line.
-     * @param string $param4 Subline labels, one per line.
-     * @return self
-     */
-    public static function from_v1(string $param1, string $param2 = '', string $param3 = '', string $param4 = ''): self {
-        $labels = helper::parse_subitems($param1);
-        $domains = helper::parse_subitem_domain_map($param3, $labels);
-        $subline = self::v1_label_set($param4, $labels, self::MAX_SUBLINE, $labels[0] ?? null);
-
-        $columns = [];
-        $taken = [];
-        $legacy = [];
-        foreach ($labels as $position => $label) {
-            $otherlabels = [];
-            foreach ($labels as $other) {
-                if ($other !== $label) {
-                    $otherlabels = array_merge($otherlabels, self::reserved_identifiers($other));
-                }
-            }
-            $key = self::generate_key($label, array_merge($taken, $otherlabels));
-            $taken = array_merge($taken, self::reserved_identifiers($key));
-            $column = ['key' => $key, 'label' => $label, 'mode' => self::MODE_FREE];
-            if (isset($domains[$label])) {
-                $column['mode'] = self::MODE_DICTIONARY;
-                $column['domain'] = $domains[$label];
-            }
-            $column['title'] = $position === 0;
-            $column['subline'] = isset($subline[$label]);
-            $columns[] = $column;
-            $legacy[$key] = $label;
-        }
-
-        return (new self($columns))->with_legacy_labels($legacy);
-    }
-
-    /**
-     * The canonical labels a version 1 list names, in list order, unique and capped.
-     *
-     * @param string $raw One label per line, matched case-insensitively.
-     * @param string[] $labels Canonical labels.
-     * @param int $limit
-     * @param string|null $exclude A canonical label left out (the title, for the subline).
-     * @return array Canonical label => true.
-     */
-    private static function v1_label_set(string $raw, array $labels, int $limit, ?string $exclude): array {
-        $canonical = [];
-        foreach ($labels as $label) {
-            $canonical[\core_text::strtolower($label)] = $label;
-        }
-
-        $set = [];
-        foreach (preg_split('/\R/u', $raw) ?: [] as $line) {
-            $label = $canonical[\core_text::strtolower(trim($line))] ?? null;
-            if ($label === null || $label === $exclude || isset($set[$label])) {
-                continue;
-            }
-            $set[$label] = true;
-            if (count($set) >= $limit) {
-                break;
-            }
-        }
-
-        return $set;
-    }
-
-    /**
-     * The schema of a {user_info_field} record, version 2 or version 1.
-     *
-     * A version 2 field whose payloads are not re-keyed yet carries its legacy labels in the
-     * plugin config ({@see self::legacy_config_name()}).
-     *
-     * @param \stdClass $field Record with param1..param4 and, for the legacy labels, id.
-     * @return self
-     */
-    public static function from_field(\stdClass $field): self {
-        $schema = self::from_json((string)($field->param1 ?? ''));
-        if ($schema === null) {
-            return self::from_v1(
-                (string)($field->param1 ?? ''),
-                (string)($field->param2 ?? ''),
-                (string)($field->param3 ?? ''),
-                (string)($field->param4 ?? '')
-            );
-        }
-
-        if (!empty($field->id)) {
-            $legacy = get_config('profilefield_repeatable', self::legacy_config_name((int)$field->id));
-            $legacy = is_string($legacy) ? json_decode($legacy, true) : null;
-            if (is_array($legacy)) {
-                $schema = $schema->with_legacy_labels($legacy);
-            }
-        }
-
-        return $schema;
-    }
-
-    /**
-     * Name of the plugin config holding a field's legacy labels while its payloads are re-keyed.
-     *
-     * @param int $fieldid
-     * @return string
-     */
-    public static function legacy_config_name(int $fieldid): string {
-        return self::LEGACY_CONFIG_PREFIX . $fieldid;
     }
 
     /**

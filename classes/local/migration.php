@@ -48,7 +48,7 @@ final class migration {
 
         $field = $DB->get_record('user_info_field', ['id' => $fieldid, 'datatype' => 'repeatable']);
         if (!$field) {
-            unset_config(schema::legacy_config_name($fieldid), 'profilefield_repeatable');
+            unset_config(field_schema::legacy_config_name($fieldid), 'profilefield_repeatable');
             return 0;
         }
         if (schema::decode((string)$field->param1) === null) {
@@ -56,10 +56,10 @@ final class migration {
             return 0;
         }
 
-        $schema = schema::from_field($field);
+        $schema = field_schema::from_field($field);
         $rewritten = self::rekey_payloads($fieldid, $schema);
-        projection::reproject_field($field);
-        unset_config(schema::legacy_config_name($fieldid), 'profilefield_repeatable');
+        projection\projector::reproject_field(new source(), $fieldid, $schema);
+        unset_config(field_schema::legacy_config_name($fieldid), 'profilefield_repeatable');
 
         return $rewritten;
     }

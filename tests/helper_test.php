@@ -21,6 +21,7 @@ namespace profilefield_repeatable;
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\helper
+ * @covers     \profilefield_repeatable\local\field_schema
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -128,7 +129,7 @@ final class helper_test extends \advanced_testcase {
         $subitems = ['Diretoria', 'Escola', 'Turma'];
         $raw = "Diretoria|diretorias\nEscola|escolas\nUnknown|whatever\nTurma|BAD DOMAIN";
 
-        $map = helper::parse_subitem_domain_map($raw, $subitems);
+        $map = \profilefield_repeatable\local\field_schema::parse_subitem_domain_map($raw, $subitems);
 
         $this->assertSame([
             'Diretoria' => 'diretorias',
@@ -143,7 +144,7 @@ final class helper_test extends \advanced_testcase {
     public function test_parse_subitem_domain_map_canonicalises_and_dedupes(): void {
         $raw = "DIRETORIA|Diretorias\ninvalidline\ndiretoria|duplicado";
 
-        $map = helper::parse_subitem_domain_map($raw, ['Diretoria']);
+        $map = \profilefield_repeatable\local\field_schema::parse_subitem_domain_map($raw, ['Diretoria']);
 
         $this->assertSame(['Diretoria' => 'diretorias'], $map);
     }

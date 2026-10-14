@@ -141,7 +141,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             'fieldid' => $fieldid,
         ]);
         set_config(
-            \profilefield_repeatable\local\schema::legacy_config_name($fieldid),
+            \profilefield_repeatable\local\field_schema::legacy_config_name($fieldid),
             json_encode(['name' => 'Old name']),
             'profilefield_repeatable'
         );

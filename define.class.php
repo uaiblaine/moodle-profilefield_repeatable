@@ -103,11 +103,11 @@ class profile_define_repeatable extends profile_define_base {
         if ($stored) {
             $usage = \profilefield_repeatable\local\stored_values::keys_in_use(
                 (int)$stored->id,
-                \profilefield_repeatable\local\schema::from_field($stored)
+                \profilefield_repeatable\local\field_schema::from_field($stored)
             );
             $isv1 = \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
             if ($isv1 && trim((string)$element->getValue()) === trim((string)$stored->param1)) {
-                $element->setValue(\profilefield_repeatable\local\schema::from_field($stored)->to_json());
+                $element->setValue(\profilefield_repeatable\local\field_schema::from_field($stored)->to_json());
             }
         }
 
@@ -179,7 +179,7 @@ class profile_define_repeatable extends profile_define_base {
             foreach (\profilefield_repeatable\local\stored_values::locked_labels($stored) as $key => $label) {
                 $lockedlabels[$key] = format_string($label, true, ['context' => $context, 'escape' => false]);
             }
-            $storedpatterns = \profilefield_repeatable\local\schema::from_field($stored)->pattern_objects();
+            $storedpatterns = \profilefield_repeatable\local\field_schema::from_field($stored)->pattern_objects();
         }
         $patternerrors = null;
         if ($this->pattern_available()) {
@@ -244,9 +244,9 @@ class profile_define_repeatable extends profile_define_base {
         $stored = $this->stored_field((int)($data->id ?? 0));
         $convert = $stored && \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
         if ($convert) {
-            $legacy = \profilefield_repeatable\local\schema::from_field($stored)->legacy_labels();
+            $legacy = \profilefield_repeatable\local\field_schema::from_field($stored)->legacy_labels();
             set_config(
-                \profilefield_repeatable\local\schema::legacy_config_name((int)$stored->id),
+                \profilefield_repeatable\local\field_schema::legacy_config_name((int)$stored->id),
                 json_encode((object)$legacy, JSON_UNESCAPED_UNICODE),
                 'profilefield_repeatable'
             );

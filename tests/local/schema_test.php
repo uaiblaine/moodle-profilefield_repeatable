@@ -25,6 +25,7 @@ namespace profilefield_repeatable\local;
  * @package    profilefield_repeatable
  * @category   test
  * @covers     \profilefield_repeatable\local\schema
+ * @covers     \profilefield_repeatable\local\field_schema
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -112,7 +113,7 @@ final class schema_test extends \advanced_testcase {
      * Version 1 parameters become the equivalent schema, remembering each label; the indexed list is ignored.
      */
     public function test_from_v1_converts_the_four_lists(): void {
-        $schema = schema::from_v1(
+        $schema = field_schema::from_v1(
             "Língua\nNível\nCertificate number\nnível\nÓrgão emissor\nCidade",
             "língua\nCidade\nnope\nNível\nCertificate number",
             "Língua|ISO639\nNível|cefr_levels\nCidade|Bad-Domain",
@@ -140,7 +141,7 @@ final class schema_test extends \advanced_testcase {
      * Labels that fold to the same key get unique keys; a label equal to its key leaves no legacy label.
      */
     public function test_from_v1_makes_keys_unique(): void {
-        $schema = schema::from_v1("name\nNamé\nname!\n2nd\nLang\nlang name");
+        $schema = field_schema::from_v1("name\nNamé\nname!\n2nd\nLang\nlang name");
 
         $this->assertSame(['name', 'name_2', 'name_3', 'column_2nd', 'lang', 'lang_name_2'], $schema->keys());
         $this->assertArrayNotHasKey('name', $schema->legacy_labels());
@@ -373,13 +374,13 @@ final class schema_test extends \advanced_testcase {
         $json = schema::from_columns([['key' => 'name', 'label' => 'Full name', 'title' => true]])->to_json();
 
         $field = (object)['id' => 7, 'param1' => $json];
-        $this->assertSame([], schema::from_field($field)->legacy_labels());
+        $this->assertSame([], field_schema::from_field($field)->legacy_labels());
 
-        set_config(schema::legacy_config_name(7), json_encode(['name' => 'Full name']), 'profilefield_repeatable');
-        $this->assertSame(['name' => 'Full name'], schema::from_field($field)->legacy_labels());
-        $this->assertSame([], schema::from_field((object)['id' => 8, 'param1' => $json])->legacy_labels());
+        set_config(field_schema::legacy_config_name(7), json_encode(['name' => 'Full name']), 'profilefield_repeatable');
+        $this->assertSame(['name' => 'Full name'], field_schema::from_field($field)->legacy_labels());
+        $this->assertSame([], field_schema::from_field((object)['id' => 8, 'param1' => $json])->legacy_labels());
 
-        $v1 = schema::from_field((object)['id' => 9, 'param1' => "Full name\nRole", 'param3' => 'Role|roles']);
+        $v1 = field_schema::from_field((object)['id' => 9, 'param1' => "Full name\nRole", 'param3' => 'Role|roles']);
         $this->assertSame(['full_name', 'role'], $v1->keys());
         $this->assertSame(['role' => 'roles'], $v1->domain_map());
         $this->assertSame(['full_name' => 'Full name', 'role' => 'Role'], $v1->legacy_labels());
@@ -389,7 +390,7 @@ final class schema_test extends \advanced_testcase {
      * A generated key never equals another column's version 1 label, so v1 sets read the right value.
      */
     public function test_from_v1_keys_never_equal_another_label(): void {
-        $schema = schema::from_v1("A B\na_b\nX\nx_name");
+        $schema = field_schema::from_v1("A B\na_b\nX\nx_name");
 
         $this->assertSame(['a_b_2', 'a_b', 'x_2', 'x_name'], $schema->keys());
         $payload = \profilefield_repeatable\helper::normalise_payload(

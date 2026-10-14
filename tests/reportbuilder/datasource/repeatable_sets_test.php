@@ -19,6 +19,7 @@ namespace profilefield_repeatable\reportbuilder\datasource;
 use core_reportbuilder\local\filters\text;
 use core_reportbuilder\manager;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
+use profilefield_repeatable\local\projection\projector;
 use profilefield_repeatable\reportbuilder\local\entities\repeatable_set;
 
 defined('MOODLE_INTERNAL') || die();
@@ -295,6 +296,62 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->assertSame('Diretoria Centro', array_values($filtered[0])[0]);
     }
     /**
+     * The column and filter unique identifiers saved reports persist do not change.
+     *
+     * Core stores a report's columns and filters by "<entity name>:<column name>"
+     * ({@see \core_reportbuilder\local\report\column::get_unique_identifier()}), so a renamed entity
+     * or column empties every saved report that used it. The literal lists were captured from the
+     * r1 code (v5.2-r1 plus the index-layer removal, 001b4d0) before the engine extraction moved the
+     * entity's code: a free, a dictionary, an any-code dictionary and, with customfield_pattern, a
+     * pattern column. Without the plugin the pattern column is left out of the fixture.
+     */
+    public function test_column_and_filter_identifiers_are_stable(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $pattern = \profilefield_repeatable\local\pattern_columns::available();
+        $columns = [
+            ['key' => 'name', 'label' => 'Name', 'title' => true],
+            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'langs'],
+            ['key' => 'level', 'label' => 'Level', 'mode' => 'dictionary_open', 'domain' => 'langs'],
+        ];
+        if ($pattern) {
+            $columns[] = ['key' => 'cpf', 'label' => 'CPF', 'mode' => 'pattern', 'pattern' => ['preset' => 'cpf']];
+        }
+        $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field(
+            $columns,
+            ['shortname' => 'langs', 'name' => 'Languages']
+        );
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
+        $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
+        manager::reset_caches();
+        $instance = manager::get_report_from_persistent($report);
+
+        $own = static fn(array $identifiers): array => array_values(array_filter(
+            $identifiers,
+            static fn(string $identifier): bool => str_starts_with($identifier, 'repeatable_langs:')
+        ));
+        $columnids = $own(array_keys($instance->get_columns()));
+        $filterids = $own(array_keys($instance->get_filters()));
+        sort($columnids);
+        sort($filterids);
+
+        $expected = [
+            'repeatable_langs:lang_code',
+            'repeatable_langs:lang_name',
+            'repeatable_langs:level_code',
+            'repeatable_langs:level_name',
+            'repeatable_langs:name',
+            'repeatable_langs:setnumber',
+        ];
+        if ($pattern) {
+            array_unshift($expected, 'repeatable_langs:cpf');
+        }
+        $this->assertSame($expected, $columnids, 'Column identifiers');
+        $this->assertSame($expected, $filterids, 'Filter identifiers');
+    }
+
+    /**
      * The source is hidden on databases its sub-item SQL has no form for.
      */
     public function test_is_available_only_on_supported_db_families(): void {
@@ -363,7 +420,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->save_sets($fielddef, $user, json_encode(['@@ID#1' => ['diretoria' => $code, 'escola' => '1']]));
 
         $method = new \ReflectionMethod(repeatable_set::class, 'name_filter_options');
-        $schema = \profilefield_repeatable\local\schema::from_field($fielddef);
+        $schema = \profilefield_repeatable\local\field_schema::from_field($fielddef);
         $options = $method->invoke(null, (int)$fielddef->id, $schema, 'diretoria', 'diretorias');
 
         $this->assertSame([$code => s($code)], $options);
@@ -516,7 +573,8 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
             'data' => json_encode($payload),
             'dataformat' => 0,
         ]);
-        \profilefield_repeatable\local\projection::sync((int)$dataid, (int)$fielddef->id, (int)$user->id, $payload);
+        $source = new \profilefield_repeatable\local\source();
+        projector::sync($source, (int)$dataid, (int)$fielddef->id, (int)$user->id, $payload);
 
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');

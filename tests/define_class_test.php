@@ -336,7 +336,7 @@ final class define_class_test extends \advanced_testcase {
 
         $this->assertSame(
             ['full_name' => 'Full name', 'role' => 'Role'],
-            json_decode(get_config('profilefield_repeatable', local\schema::legacy_config_name((int)$fielddata->id)), true)
+            json_decode(get_config('profilefield_repeatable', local\field_schema::legacy_config_name((int)$fielddata->id)), true)
         );
         $field = new \profile_field_repeatable((int)$fielddata->id, (int)$user->id);
         $loaded = new \stdClass();
@@ -349,6 +349,6 @@ final class define_class_test extends \advanced_testcase {
             '{"@@ID#1":{"full_name":"Ann","role":"lead"}}',
             $DB->get_field('user_info_data', 'data', ['id' => $dataid])
         );
-        $this->assertFalse(get_config('profilefield_repeatable', local\schema::legacy_config_name((int)$fielddata->id)));
+        $this->assertFalse(get_config('profilefield_repeatable', local\field_schema::legacy_config_name((int)$fielddata->id)));
     }
 }

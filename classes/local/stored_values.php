@@ -37,7 +37,7 @@ final class stored_values {
      * form locks these keys in the editor and rejects a schema that drops one.
      *
      * @param int $fieldid
-     * @param schema $schema The field's stored schema ({@see schema::from_field()}).
+     * @param schema $schema The field's stored schema ({@see field_schema::from_field()}).
      * @return array ['users' => int, 'keys' => string[] the keys in use, in schema order].
      */
     public static function keys_in_use(int $fieldid, schema $schema): array {
@@ -74,7 +74,7 @@ final class stored_values {
      * @return string[]
      */
     public static function locked_labels(\stdClass $field): array {
-        $schema = schema::from_field($field);
+        $schema = field_schema::from_field($field);
         $labels = [];
         foreach (self::keys_in_use((int)$field->id, $schema)['keys'] as $key) {
             $labels[$key] = $schema->label($key);

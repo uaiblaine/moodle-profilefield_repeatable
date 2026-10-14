@@ -135,90 +135,6 @@ class helper {
     }
 
     /**
-     * Parse version 1 sub-item labels (param1) into a unique canonical list.
-     *
-     * One label per line (any line ending), trimmed, blank lines skipped. Duplicates are compared
-     * case-insensitively and the first spelling wins. Only {@see local\schema::from_v1()} reads
-     * version 1 parameters.
-     *
-     * @param string $rawsubitems
-     * @return string[]
-     */
-    public static function parse_subitems(string $rawsubitems): array {
-        $lines = preg_split('/\R/u', $rawsubitems) ?: [];
-        $subitems = [];
-        $seen = [];
-
-        foreach ($lines as $line) {
-            $subitem = trim($line);
-            if ($subitem === '') {
-                continue;
-            }
-
-            $normalised = \core_text::strtolower($subitem);
-            if (isset($seen[$normalised])) {
-                continue;
-            }
-
-            $seen[$normalised] = true;
-            $subitems[] = $subitem;
-        }
-
-        return $subitems;
-    }
-
-    /**
-     * Parse version 1 subitem/domain mapping lines with format "subitem|domain" (param3).
-     *
-     * @param string $rawmappings Raw param3 contents.
-     * @param string[] $subitems Canonical configured sub-items.
-     * @return array<string, string> Map of canonical sub-item to domain shortname.
-     */
-    public static function parse_subitem_domain_map(string $rawmappings, array $subitems): array {
-        if (trim($rawmappings) === '' || empty($subitems)) {
-            return [];
-        }
-
-        $canonicalsubitems = [];
-        foreach ($subitems as $subitem) {
-            $canonicalsubitems[\core_text::strtolower($subitem)] = $subitem;
-        }
-
-        $mappings = [];
-        $lines = preg_split('/\R/u', $rawmappings) ?: [];
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '' || substr_count($line, '|') !== 1) {
-                continue;
-            }
-
-            [$rawsubitem, $rawdomain] = array_map('trim', explode('|', $line, 2));
-            if ($rawsubitem === '' || $rawdomain === '') {
-                continue;
-            }
-
-            $subitemkey = \core_text::strtolower($rawsubitem);
-            if (!isset($canonicalsubitems[$subitemkey])) {
-                continue;
-            }
-
-            $canonicalsubitem = $canonicalsubitems[$subitemkey];
-            if (isset($mappings[$canonicalsubitem])) {
-                continue;
-            }
-
-            $domain = \core_text::strtolower($rawdomain);
-            if (!preg_match(self::domain_pattern(), $domain)) {
-                continue;
-            }
-
-            $mappings[$canonicalsubitem] = $domain;
-        }
-
-        return $mappings;
-    }
-
-    /**
      * Build a cross-DB SQL expression extracting one column's text value from a set's JSON.
      *
      * PostgreSQL casts the text column to jsonb and reads the value with the ->> operator; MySQL/MariaDB use
@@ -286,7 +202,7 @@ class helper {
      * the same as its re-keyed form. Silently drops sets with no non-blank value, keeps only the
      * first MAX_SETS remaining sets and truncates values to MAX_VALUE_LENGTH: callers that must
      * reject excess check the raw payload first
-     * ({@see \profile_field_repeatable::validate_payload_limits()}).
+     * ({@see local\validator::raw_error()}).
      *
      * @param mixed $rawpayload JSON string, object or array; anything else yields [].
      * @param local\schema $schema

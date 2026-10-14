@@ -29,6 +29,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
+ * @covers     \profilefield_repeatable\local\validator
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -1074,7 +1075,7 @@ final class field_class_test extends \advanced_testcase {
             ]),
         ]);
         $legacy = ['full_name' => 'Name (old)', 'required_x' => 'Req'];
-        set_config(local\schema::legacy_config_name((int)$field->field->id), json_encode($legacy), 'profilefield_repeatable');
+        set_config(local\field_schema::legacy_config_name((int)$field->field->id), json_encode($legacy), 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
 
         // Set 1 has the version 1 shape; set 2 was saved after the conversion, keyed by key.
@@ -1112,7 +1113,7 @@ final class field_class_test extends \advanced_testcase {
         );
 
         // Without the legacy labels, the version 1 set is only "role".
-        unset_config(local\schema::legacy_config_name((int)$field->field->id), 'profilefield_repeatable');
+        unset_config(local\field_schema::legacy_config_name((int)$field->field->id), 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
         $field->data = '{"@@ID#1":{"Name (old)":"Alice","role":"Lead"}}';
         $loaded = new \stdClass();
@@ -1141,7 +1142,8 @@ final class field_class_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $field = $this->create_field(['param1' => $this->schema([['key' => 'name', 'label' => 'Name'], 'role'])]);
-        set_config(local\schema::legacy_config_name((int)$field->field->id), '{"name":"Old name"}', 'profilefield_repeatable');
+        $config = local\field_schema::legacy_config_name((int)$field->field->id);
+        set_config($config, '{"name":"Old name"}', 'profilefield_repeatable');
         $field = new \profile_field_repeatable(0, 0, $field->field);
         $field->data = '{"@@ID#1":{"name":null,"Old name":"Alice","role":null}}';
 
