@@ -1,0 +1,2 @@
+# submitted_error(): the validator is built with the SUBMITTED value as the stored payload, so every submitted code counts as already stored.
+s~\$validator = \$this->get_validator\(\);\n(\s+if \(is_string\(\$raw\)\))~\$validator = new \\local_repeatable\\local\\validator(\$this->get_schema(), is_string(\$raw) ? \$raw : '', fn(string \$domain): bool => \$this->can_read_domain(\$domain), \$this->companion_available(), \$this->pattern_available());\n$1~s;

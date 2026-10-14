@@ -158,8 +158,17 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   is re-checked on read: `from_json()` drops columns with a bad or colliding key.
 - `from_v1()` never gives a key equal to another column's label (or its `_name`/`_code`): v1
   payloads hold values under labels, and such a key would read the other column's value.
-- Per-column `required` is checked in `edit_validate_field()` only: web services, CSV upload and
-  auth sync save through `edit_save_data()` without it. A JSON null under a key counts as absent
+- Per-column `required` and the code checks run on the form (`edit_validate_field()`, which the CSV
+  upload also calls) and on web service requests (`core_user_create_users`, `core_user_update_users`,
+  also AJAX): both reach the one private `submitted_error()`, which `edit_save_data()` runs before any
+  write only when `save_checks_apply()` says the request is a web service or the AJAX call of a
+  logged-in user, refusing a failing value with `errorsaverejected` (the field's name, never a code,
+  label or domain). The documented residual: login-time account creation and updates
+  (`create_user_record()`, `update_user_record_by_id()`, auth_oauth2) and auth_db/auth_ldap account
+  creation call `profile_save_data()` without the form and store the external source's value (normalised)
+  unchecked, because refusing would lock the user out or abort the sync; the source is configured by an
+  administrator, a user cannot choose it. auth_db/auth_ldap attribute updates use core's
+  `profile_save_custom_fields()`, which never reaches this class. A JSON null under a key counts as absent
   (`payload::column_value()`), as COALESCE treats PostgreSQL's NULL.
 - Saving a v1 field in the definition form converts it: `legacykeys_<fieldid>` is written before
   `param1` changes and removed only by `migration::finish_field()`, run by the `rekey_payloads`
@@ -221,14 +230,16 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   `edit_after_data()` from the element value, so a failed validation keeps them, with the STORED
   codes from the validator).
 - Code checks live in `edit_validate_field()` → the engine's `local\validator` (one `api::lookup()`
-  per readable domain); like `required`, web services and sync skip them. A codes-only column accepts
+  per readable domain), shared by `edit_validate_field()` and `edit_save_data()` through
+  `submitted_error()`; login and auth sync skip them (see above). A codes-only column accepts
   the code already stored for that user and key (folded), read from `$this->data`, never the submission.
   `companion_available()` is the seam tests override to run without the companion.
 - **No oracle on restricted dictionaries**: `lookup()` and `resolve_bulk()` are ungated, so every
   path that turns a SUBMITTED code into an answer is decided on `can_read_domain()` (the editing
   user): unreadable domains get labels only for stored codes, one uniform error for any other code
   of a codes-only column, no lookup and no parent check (also when only the parent's domain is
-  unreadable), and no autocomplete.
+  unreadable), and no autocomplete. `tests/save_path_test.php` holds this for the paths that skip the
+  form (operator with `moodle/user:update` through `profile_save_data()` and the update web service).
 
 ### PostgreSQL
 

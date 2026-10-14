@@ -164,7 +164,20 @@ class profile_field_repeatable extends profile_field_base {
      * Replaces core's save so that user_info_data and the projection rows change in one delegated
      * transaction ({@see \local_repeatable\local\projection\projector::sync()}).
      *
+     * Web services (core_user_create_users, core_user_update_users) reach this method without
+     * {@see self::edit_validate_field()}: on such a request the form's checks run here too
+     * ({@see self::submitted_error()}, see {@see self::save_checks_apply()}), with the payload stored
+     * for the user and the current user's dictionary rights, so no user-driven path stores a code the
+     * editing user could not have submitted. A submission that fails them is refused with one message
+     * that names the field and nothing submitted. Login-time account creation and updates
+     * (create_user_record(), update_user_record_by_id(), auth_oauth2) and the auth_db and auth_ldap
+     * account creation reach this method too, with the value of the external source an administrator
+     * configured: it is normalised and stored without the checks, so a value from the provider can
+     * never lock a user out or abort a sync. The auth_db and auth_ldap attribute update step calls
+     * core's profile_save_custom_fields(), which does not reach this class at all.
+     *
      * @param stdClass $usernew
+     * @throws \moodle_exception When the submitted value fails the field's checks.
      */
     public function edit_save_data($usernew) {
         global $DB;
@@ -176,6 +189,15 @@ class profile_field_repeatable extends profile_field_base {
         if ($this->is_locked() && !has_capability('moodle/user:update', \core\context\system::instance())) {
             // Defensive guard: ignore tampered submissions for locked fields.
             return;
+        }
+
+        $submitted = [];
+        if ($this->save_checks_apply() && $this->submitted_error($usernew->{$this->inputname}, $submitted) !== null) {
+            throw new \moodle_exception('errorsaverejected', 'profilefield_repeatable', '', format_string(
+                (string)$this->field->name,
+                true,
+                ['context' => \core\context\system::instance()]
+            ));
         }
 
         $data = new stdClass();
@@ -221,10 +243,28 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
+     * Whether edit_save_data() runs the form's checks: on a web service request or an AJAX call of a logged-in user.
+     *
+     * Those paths (core_user_create_users, core_user_update_users, which is also an AJAX service) reach
+     * edit_save_data() without edit_validate_field(), and their caller is a user whose dictionary rights
+     * count. The other callers of profile_save_data() are non-interactive and never ran the form: first
+     * login and on-login updates of an external-auth user, auth_oauth2, and the auth_db and auth_ldap
+     * account creation. Their value comes from the identity provider an administrator configured, and
+     * login has no logged-in user (login/token.php is an AJAX script too), so refusing there would only
+     * lock the user out or abort the sync for every remaining user. The form validated the same inputs.
+     *
+     * @return bool
+     */
+    protected function save_checks_apply(): bool {
+        $request = (defined('WS_SERVER') && WS_SERVER) || (defined('AJAX_SCRIPT') && AJAX_SCRIPT);
+        return $request && isloggedin() && !isguestuser();
+    }
+
+    /**
      * Process incoming data before save: the canonical payload, pattern values normalised.
      *
      * Pattern values are stored as customfield_pattern stores them (fitted into the mask, masked
-     * or raw per the column's "Store as"), also when a web service or CSV upload skips the
+     * or raw per the column's "Store as"), also when a web service, login or sync skips the
      * validation; a value that does not fit is stored trimmed, as typed.
      *
      * @param string|null $data
@@ -248,27 +288,43 @@ class profile_field_repeatable extends profile_field_base {
             return parent::edit_validate_field($usernew);
         }
 
-        $validator = $this->get_validator();
-        $rawpayload = $usernew->{$this->inputname};
-        if (is_string($rawpayload)) {
-            $rawerror = $validator->raw_error($rawpayload);
-            if ($rawerror !== null) {
-                return [$this->inputname => $rawerror];
-            }
-        }
-
-        $payload = \local_repeatable\local\payload::normalise($rawpayload, $this->get_schema());
-        $error = $validator->error($payload, (bool)$this->is_required());
+        $payload = [];
+        $error = $this->submitted_error($usernew->{$this->inputname}, $payload);
         if ($error !== null) {
             return [$this->inputname => $error];
         }
 
         // The parent's uniqueness check compares this value with stored data: give it the canonical
         // JSON as it would be stored, or '' so that an empty optional value is not checked.
-        $payload = $validator->for_storage($payload);
+        $payload = $this->get_validator()->for_storage($payload);
         $usernew->{$this->inputname} = empty($payload) ? '' : \local_repeatable\local\payload::encode($payload);
 
         return parent::edit_validate_field($usernew);
+    }
+
+    /**
+     * The checks the form and the web service path run on a submitted value: the raw JSON caps, then the validator.
+     *
+     * Shared by {@see self::edit_validate_field()} and {@see self::edit_save_data()} so the form and
+     * the web service path that skips it cannot drift. The validator holds the
+     * payload stored for the user this object was built for ({@see self::get_validator()}), never the
+     * submission, and decides dictionary codes on {@see self::can_read_domain()} of the current user.
+     *
+     * @param mixed $raw The submitted value.
+     * @param array $payload Set to the normalised payload.
+     * @return string|null The error text, null when the value passes.
+     */
+    private function submitted_error($raw, array &$payload): ?string {
+        $validator = $this->get_validator();
+        if (is_string($raw)) {
+            $rawerror = $validator->raw_error($raw);
+            if ($rawerror !== null) {
+                return $rawerror;
+            }
+        }
+
+        $payload = \local_repeatable\local\payload::normalise($raw, $this->get_schema());
+        return $validator->error($payload, (bool)$this->is_required());
     }
 
     /**
