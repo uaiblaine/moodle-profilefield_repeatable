@@ -27,6 +27,7 @@ $string['columns_help'] =
     'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código), pattern (máscara e/ou expressão regular do customfield_pattern, Moodle 5.1 ou posterior; um objeto "pattern" com preset, mask, regex, regexerror e storeformat). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar. Uma coluna cuja chave tem valores armazenados não pode ser removida nem ter a chave alterada; renomeie o nome da coluna.';
 $string['datasourcerepeatablesets'] = 'Conjuntos de campo de perfil repetível';
 $string['entityrepeatablesetnamed'] = '{$a}';
+$string['errorsaverejected'] = 'Os conjuntos repetíveis do campo {$a} não foram salvos: eles não passam nas verificações do campo.';
 $string['pluginname'] = 'Conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:data'] = 'Dados do usuário do campo de perfil de conjunto repetível';
 $string['privacy:metadata:profilefield_repeatable:dataformat'] =

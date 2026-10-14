@@ -68,9 +68,20 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
      * @param \stdClass $fielddef The field record.
      * @param \stdClass $user The user.
      * @param string $json Full payload JSON.
+     * @param bool $unchecked Save as if the companion were absent, so codes the dictionary does not hold are text:
+     *                        the stored shape a sync or an older version leaves, which the report must still render.
      */
-    private function save_sets(\stdClass $fielddef, \stdClass $user, string $json): void {
-        $field = new \profile_field_repeatable(0, 0, $fielddef);
+    private function save_sets(\stdClass $fielddef, \stdClass $user, string $json, bool $unchecked = false): void {
+        $field = $unchecked ? new class (0, 0, $fielddef) extends \profile_field_repeatable {
+            /**
+             * Run as if the companion were absent: the save path checks no code.
+             *
+             * @return bool
+             */
+            protected function companion_available(): bool {
+                return false;
+            }
+        } : new \profile_field_repeatable(0, 0, $fielddef);
         $field->edit_save_data((object) [
             'id' => $user->id,
             $field->inputname => $json,
@@ -191,7 +202,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
 
         $fielddef = $this->create_repeatable_field([], 'diretorias');
         $user = $this->getDataGenerator()->create_user();
-        $this->save_sets($fielddef, $user, '{"@@ID#1":{"diretoria":"16","escola":"45"}}');
+        $this->save_sets($fielddef, $user, '{"@@ID#1":{"diretoria":"16","escola":"45"}}', true);
 
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
@@ -346,7 +357,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->save_sets($fielddef, $user, json_encode([
             '@@ID#1' => ['diretoria' => '<img src=x onerror=alert(1)>', 'escola' => '<script>alert(2)</script>'],
-        ]));
+        ]), true);
 
         $entity = $this->entity_name($fielddef);
         $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');

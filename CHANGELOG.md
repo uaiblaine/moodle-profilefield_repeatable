@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - version 2026042004
+## [Unreleased] - version 2026042005
+
+### Security
+- Every save path through `edit_save_data()` now runs the checks of `edit_validate_field()` (raw caps,
+  required columns, code checks against the stored payload and the current user's dictionary rights)
+  before any write. Web services (`core_user_create_users`, `core_user_update_users`) skipped them, so
+  a caller with `moodle/user:update` could store a code of a restricted dictionary they cannot read and
+  read its label back. A failing value is refused with `errorsaverejected`, which names only the field.
+  The auth_db/auth_ldap sync (`profile_save_custom_fields()`) still writes without calling the plugin: its
+  data comes from the configured external source.
 
 ### Upgrade notes
 - The field now requires `local_repeatable` (the repeatable-sets engine, `uaiblaine/moodle-local_repeatable`,

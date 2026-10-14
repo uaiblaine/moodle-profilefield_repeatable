@@ -60,10 +60,13 @@ branch per Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 
 - **The plugin writes `user_info_data` itself** in `edit_save_data()`, because the JSON there is
   the canonical value and the per-set rows are rebuilt from it.
-- **Web services, CSV upload and auth sync skip `edit_validate_field()`** (core behaviour), so
-  required columns, code checks and the cap errors apply to the form only; on every save path the
-  payload is still normalised (caps by silent truncation) and pattern values are
-  normalised.
+- **Every path through `edit_save_data()` runs the form's checks** (raw caps, required columns,
+  code checks with the stored payload and the current user's dictionary rights) before any write, through
+  the one private method `edit_validate_field()` also uses; a failing value throws `errorsaverejected`
+  naming only the field. Web services and the CSV upload skip `edit_validate_field()` (core behaviour)
+  but not this. The residual is auth_db/auth_ldap sync: core's `profile_save_custom_fields()` writes
+  `user_info_data` without calling the plugin; its data comes from the configured external source, not
+  from a user. The payload is still normalised and pattern values are stored normalised.
 - **The optional plugins are soft dependencies.** Every use is guarded by `class_exists()` and
   goes through their public APIs. Stored codes are resolved to labels without a visibility check,
   as the dictionary plugin's contract allows; submitted codes are not.
