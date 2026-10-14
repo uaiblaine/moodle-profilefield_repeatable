@@ -295,6 +295,62 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->assertSame('Diretoria Centro', array_values($filtered[0])[0]);
     }
     /**
+     * The column and filter unique identifiers saved reports persist do not change.
+     *
+     * Core stores a report's columns and filters by "<entity name>:<column name>"
+     * ({@see \core_reportbuilder\local\report\column::get_unique_identifier()}), so a renamed entity
+     * or column empties every saved report that used it. The literal lists were captured from the
+     * r1 code (v5.2-r1 plus the index-layer removal, 001b4d0) before the engine extraction moved the
+     * entity's code: a free, a dictionary, an any-code dictionary and, with customfield_pattern, a
+     * pattern column. Without the plugin the pattern column is left out of the fixture.
+     */
+    public function test_column_and_filter_identifiers_are_stable(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $pattern = \profilefield_repeatable\local\pattern_columns::available();
+        $columns = [
+            ['key' => 'name', 'label' => 'Name', 'title' => true],
+            ['key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'domain' => 'langs'],
+            ['key' => 'level', 'label' => 'Level', 'mode' => 'dictionary_open', 'domain' => 'langs'],
+        ];
+        if ($pattern) {
+            $columns[] = ['key' => 'cpf', 'label' => 'CPF', 'mode' => 'pattern', 'pattern' => ['preset' => 'cpf']];
+        }
+        $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field(
+            $columns,
+            ['shortname' => 'langs', 'name' => 'Languages']
+        );
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_reportbuilder');
+        $report = $generator->create_report(['name' => 'Sets', 'source' => repeatable_sets::class, 'default' => 0]);
+        manager::reset_caches();
+        $instance = manager::get_report_from_persistent($report);
+
+        $own = static fn(array $identifiers): array => array_values(array_filter(
+            $identifiers,
+            static fn(string $identifier): bool => str_starts_with($identifier, 'repeatable_langs:')
+        ));
+        $columnids = $own(array_keys($instance->get_columns()));
+        $filterids = $own(array_keys($instance->get_filters()));
+        sort($columnids);
+        sort($filterids);
+
+        $expected = [
+            'repeatable_langs:lang_code',
+            'repeatable_langs:lang_name',
+            'repeatable_langs:level_code',
+            'repeatable_langs:level_name',
+            'repeatable_langs:name',
+            'repeatable_langs:setnumber',
+        ];
+        if ($pattern) {
+            array_unshift($expected, 'repeatable_langs:cpf');
+        }
+        $this->assertSame($expected, $columnids, 'Column identifiers');
+        $this->assertSame($expected, $filterids, 'Filter identifiers');
+    }
+
+    /**
      * The source is hidden on databases its sub-item SQL has no form for.
      */
     public function test_is_available_only_on_supported_db_families(): void {
