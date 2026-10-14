@@ -22,15 +22,27 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/upgradelib.php');
+
 /**
  * Upgrade the plugin.
  *
  * Upgrade steps are numbered in the version namespace of the branch they live on, never in
- * another branch's, and none exists yet for this one.
+ * another branch's.
  *
  * @param int $oldversion The version being upgraded from.
  * @return bool Always true.
  */
 function xmldb_profilefield_repeatable_upgrade(int $oldversion): bool {
+    global $DB;
+
+    if ($oldversion < 2024100701) {
+        // The PostgreSQL expression and GIN indexes served no Report Builder filter: remove them.
+        profilefield_repeatable_drop_index_layer($DB);
+        upgrade_plugin_savepoint(true, 2024100701, 'profilefield', 'repeatable');
+    }
+
     return true;
 }

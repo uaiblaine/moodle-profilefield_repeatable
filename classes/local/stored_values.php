@@ -16,13 +16,15 @@
 
 namespace profilefield_repeatable\local;
 
-use profilefield_repeatable\helper;
+use local_repeatable\local\schema;
+use local_repeatable\local\stored_values as engine_stored_values;
 
 /**
  * What a field's stored payloads hold, read from the canonical {user_info_data} rows.
  *
- * Never from the projection: core's profile_save_custom_fields() writes payloads without
- * rebuilding it, so a projection can miss values that exist.
+ * Profile adapter of {@see engine_stored_values}: it reads the payloads and the engine decides
+ * which keys hold values. Never from the projection: core's profile_save_custom_fields() writes
+ * payloads without rebuilding it, so a projection can miss values that exist.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine
@@ -32,39 +34,36 @@ final class stored_values {
     /**
      * Which column keys hold a non-blank value in some set of one field, and how many users have sets.
      *
-     * One recordset pass over the field's payloads, each read as the field reads it
-     * ({@see helper::normalise_payload()}: under the key or its legacy label). The definition
-     * form locks these keys in the editor and rejects a schema that drops one.
+     * One recordset pass over the field's payloads, handed to
+     * {@see engine_stored_values::keys_in_use()}, which reads each as the field reads it (under the
+     * key or its legacy label). The definition form locks these keys in the editor and rejects a
+     * schema that drops one.
      *
      * @param int $fieldid
-     * @param schema $schema The field's stored schema ({@see schema::from_field()}).
+     * @param schema $schema The field's stored schema ({@see field_schema::from_field()}).
      * @return array ['users' => int, 'keys' => string[] the keys in use, in schema order].
      */
-    public static function keys_in_use(int $fieldid, schema $schema): array {
+    public static function usage(int $fieldid, schema $schema): array {
         global $DB;
 
-        $inuse = [];
-        $users = 0;
         $rs = $DB->get_recordset('user_info_data', ['fieldid' => $fieldid], 'id ASC', 'id, data');
-        foreach ($rs as $row) {
-            $payload = helper::normalise_payload($row->data, $schema);
-            if (!empty($payload)) {
-                $users++;
-            }
-            foreach ($payload as $set) {
-                foreach ($set as $key => $value) {
-                    if (trim($value) !== '') {
-                        $inuse[$key] = true;
-                    }
-                }
-            }
+        try {
+            return engine_stored_values::keys_in_use(self::payloads($rs), $schema);
+        } finally {
+            $rs->close();
         }
-        $rs->close();
+    }
 
-        return [
-            'users' => $users,
-            'keys' => array_values(array_filter($schema->keys(), static fn(string $key): bool => isset($inuse[$key]))),
-        ];
+    /**
+     * The raw payload of each record of a recordset, without loading them all.
+     *
+     * @param \moodle_recordset $rs Records with a `data` property.
+     * @return \Generator The payloads, as stored.
+     */
+    private static function payloads(\moodle_recordset $rs): \Generator {
+        foreach ($rs as $row) {
+            yield $row->data;
+        }
     }
 
     /**
@@ -74,9 +73,9 @@ final class stored_values {
      * @return string[]
      */
     public static function locked_labels(\stdClass $field): array {
-        $schema = schema::from_field($field);
+        $schema = field_schema::from_field($field);
         $labels = [];
-        foreach (self::keys_in_use((int)$field->id, $schema)['keys'] as $key) {
+        foreach (self::usage((int)$field->id, $schema)['keys'] as $key) {
             $labels[$key] = $schema->label($key);
         }
         return $labels;

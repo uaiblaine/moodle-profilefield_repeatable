@@ -47,7 +47,7 @@ class repeatable_sets extends datasource {
     /**
      * Only offer this datasource when at least one repeatable profile field exists.
      *
-     * Only on PostgreSQL and MySQL/MariaDB: {@see \profilefield_repeatable\helper::sql_subitem_value()}
+     * Only on PostgreSQL and MySQL/MariaDB: {@see \local_repeatable\local\sql::subitem_value()}
      * has no other form, and its JSON_EXTRACT fallback does not exist on SQL Server (nor on
      * Oracle, which Moodle 4.5 still installs on), so every sub-item column would fail there.
      *

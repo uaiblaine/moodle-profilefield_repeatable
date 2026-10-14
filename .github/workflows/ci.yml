@@ -32,6 +32,8 @@ jobs:
   #
   # The companion local_dictionaries comes from its branch for the same Moodle version, so a
   # contract change in either repo turns the other's CI red.
+  # local_repeatable is a hard dependency (version.php): the engine the field adapts, from its
+  # branch for the same Moodle version.
   ci-405:
     name: Moodle 4.05
     uses: moodle-an-hochschulen/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
@@ -39,3 +41,4 @@ jobs:
       moodle-core-branch: MOODLE_405_STABLE
       plugin-dependencies: |
         uaiblaine/moodle-local_dictionaries,MOODLE_405_STABLE
+        uaiblaine/moodle-local_repeatable,MOODLE_405_STABLE

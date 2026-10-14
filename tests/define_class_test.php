@@ -28,11 +28,12 @@ require_once($CFG->libdir . '/formslib.php');
 /**
  * Tests for profile_define_repeatable.
  *
- * The schema rules themselves are tested in {@see \profilefield_repeatable\local\schema_test}; this
+ * The schema rules themselves are tested in local_repeatable's local\schema_test; this
  * covers how the definition form reads, reports and saves them.
  *
  * @package    profilefield_repeatable
  * @covers     \profile_define_repeatable
+ * @covers     \local_repeatable\form\column_editor
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -62,9 +63,9 @@ final class define_class_test extends \advanced_testcase {
 
         $this->assertSame([
             'param1' => implode('<br>', [
-                get_string('errorkeyinvalid', 'profilefield_repeatable', 'Bad'),
-                get_string('errormodeinvalid', 'profilefield_repeatable', 'Role'),
-                get_string('errortitlecount', 'profilefield_repeatable'),
+                get_string('errorkeyinvalid', 'local_repeatable', 'Bad'),
+                get_string('errormodeinvalid', 'local_repeatable', 'Role'),
+                get_string('errortitlecount', 'local_repeatable'),
             ]),
         ], $errors);
     }
@@ -75,7 +76,7 @@ final class define_class_test extends \advanced_testcase {
     public function test_define_validate_specific_rejects_text_that_is_not_a_schema(): void {
         $this->resetAfterTest();
         $define = new \profile_define_repeatable();
-        $expected = ['param1' => get_string('errorschemainvalid', 'profilefield_repeatable')];
+        $expected = ['param1' => get_string('errorschemainvalid', 'local_repeatable')];
 
         $this->assertSame($expected, $define->define_validate_specific((object)['param1' => "name\nrole"], []));
         $this->assertSame($expected, $define->define_validate_specific(['param1' => ''], []));
@@ -89,7 +90,7 @@ final class define_class_test extends \advanced_testcase {
         $define = new \profile_define_repeatable();
 
         $this->assertSame([], $define->define_validate_specific((object)[
-            'param1' => $this->generator()->schema_json(['Name', ['label' => 'Role', 'required' => true, 'indexed' => true]]),
+            'param1' => $this->generator()->schema_json(['Name', ['label' => 'Role', 'required' => true]]),
         ], []));
     }
 
@@ -110,7 +111,7 @@ final class define_class_test extends \advanced_testcase {
 
         $this->assertSame([], $define->define_validate_specific((object)['param1' => $schema('diretorias')], []));
         $this->assertSame(
-            ['param1' => get_string('errordomainmissing', 'profilefield_repeatable', 'escolas')],
+            ['param1' => get_string('errordomainmissing', 'local_repeatable', 'escolas')],
             $define->define_validate_specific((object)['param1' => $schema('escolas')], [])
         );
     }
@@ -185,10 +186,10 @@ final class define_class_test extends \advanced_testcase {
         $this->assertSame('["name","role"]', $element->getAttribute('data-lockedkeys'));
         $this->assertEquals(2, $element->getAttribute('data-users'));
         $this->assertStringContainsString("\n", $element->getValue(), 'Pretty-printed for editing without JavaScript');
-        $this->assertSame(['renamed'], local\schema::from_json($element->getValue())->keys());
+        $this->assertSame(['renamed'], \local_repeatable\local\schema::from_json($element->getValue())->keys());
 
         $amdjscode = (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires);
-        $this->assertStringContainsString('profilefield_repeatable/columneditor', implode("\n", $amdjscode));
+        $this->assertStringContainsString('local_repeatable/columneditor', implode("\n", $amdjscode));
     }
 
     /**
@@ -264,7 +265,7 @@ final class define_class_test extends \advanced_testcase {
             'id' => $id,
             'param1' => $this->generator()->schema_json($columns),
         ], []);
-        $locked = ['param1' => get_string('errorkeylocked', 'profilefield_repeatable', 'Name')];
+        $locked = ['param1' => get_string('errorkeylocked', 'local_repeatable', 'Name')];
 
         $this->assertSame($locked, $validate(['Role', 'Notes'], (int)$fielddata->id), 'Removed');
         $this->assertSame($locked, $validate([['key' => 'full_name', 'label' => 'Name'], 'Role'], (int)$fielddata->id), 'Re-keyed');
@@ -320,7 +321,7 @@ final class define_class_test extends \advanced_testcase {
         ]);
 
         $element = $this->after_data((int)$fielddata->id, $fielddata->param1)->getElement('param1');
-        $schema = local\schema::from_json($element->getValue());
+        $schema = \local_repeatable\local\schema::from_json($element->getValue());
         $this->assertSame(['full_name', 'role'], $schema->keys());
         $this->assertSame(['role' => 'roles'], $schema->domain_map());
         $this->assertSame(['role'], $schema->subline_keys());
@@ -336,7 +337,7 @@ final class define_class_test extends \advanced_testcase {
 
         $this->assertSame(
             ['full_name' => 'Full name', 'role' => 'Role'],
-            json_decode(get_config('profilefield_repeatable', local\schema::legacy_config_name((int)$fielddata->id)), true)
+            json_decode(get_config('profilefield_repeatable', local\field_schema::legacy_config_name((int)$fielddata->id)), true)
         );
         $field = new \profile_field_repeatable((int)$fielddata->id, (int)$user->id);
         $loaded = new \stdClass();
@@ -349,6 +350,6 @@ final class define_class_test extends \advanced_testcase {
             '{"@@ID#1":{"full_name":"Ann","role":"lead"}}',
             $DB->get_field('user_info_data', 'data', ['id' => $dataid])
         );
-        $this->assertFalse(get_config('profilefield_repeatable', local\schema::legacy_config_name((int)$fielddata->id)));
+        $this->assertFalse(get_config('profilefield_repeatable', local\field_schema::legacy_config_name((int)$fielddata->id)));
     }
 }
