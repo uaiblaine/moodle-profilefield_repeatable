@@ -31,7 +31,7 @@ import {getStrings} from 'core/str';
 import Notification from 'core/notification';
 
 /** Limits, in step with \profilefield_repeatable\local\schema. */
-const LIMITS = {columns: 20, subline: 3, indexed: 3, keylength: 40};
+const LIMITS = {columns: 20, subline: 3, keylength: 40};
 
 /** Modes; "pattern" is offered only when the server says customfield_pattern is installed. */
 const MODES = [
@@ -53,9 +53,8 @@ const STRINGKEYS = [
     'modepattern', 'modepatternhelp', 'modepatternunavailable', 'modepatternunavailablehelp', 'movedown', 'moveup',
     'newcolumn', 'parentmismatch', 'parentnone', 'patternmask', 'patternpreset', 'patternregex', 'patternregexerror',
     'patternregexerrorhint', 'patternregexhint', 'patternregexplaceholder', 'patternstoreformat', 'patternstoremasked',
-    'patternstoreraw', 'patterntokens', 'removecolumn', 'removecolumnlocked', 'roleindexed', 'roleindexedlabel',
-    'rolerequired', 'rolerequiredlabel', 'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel',
-    'summaryindexed', 'summarysubline', 'summarytitle',
+    'patternstoreraw', 'patterntokens', 'removecolumn', 'removecolumnlocked', 'rolerequired', 'rolerequiredlabel',
+    'rolesubline', 'rolesublinelabel', 'roletitle', 'roletitlelabel', 'summarysubline', 'summarytitle',
 ];
 
 /**
@@ -154,7 +153,7 @@ const toDocument = (columns) => ({
         if (column.mode === 'pattern' && column.pattern) {
             out.pattern = column.pattern;
         }
-        ['title', 'subline', 'required', 'indexed'].forEach((flag) => {
+        ['title', 'subline', 'required'].forEach((flag) => {
             if (column[flag]) {
                 out[flag] = true;
             }
@@ -189,7 +188,6 @@ const parseColumns = (json) => {
             title: !!column.title,
             subline: !!column.subline,
             required: !!column.required,
-            indexed: !!column.indexed,
             stored: true,
         }));
     } catch (_e) {
@@ -339,21 +337,18 @@ class Editor {
     }
 
     /**
-     * The chips summarising title, subline and index use.
+     * The chips summarising title and subline use.
      *
      * @returns {HTMLElement}
      */
     renderSummary() {
         const title = this.columns.find((column) => column.title);
         const subline = this.columns.filter((column) => column.subline).length;
-        const indexed = this.columns.filter((column) => column.indexed).length;
         return make('div', {className: 'profilefield-repeatable-ce-summary'}, [
             make('span', {className: 'profilefield-repeatable-ce-chip', dataset: {region: 'titlechip'}},
                 [this.str('summarytitle', title ? title.label : '-')]),
             make('span', {className: 'profilefield-repeatable-ce-chip' + (subline >= LIMITS.subline ? ' is-full' : '')},
                 [this.str('summarysubline', {count: subline, max: LIMITS.subline})]),
-            make('span', {className: 'profilefield-repeatable-ce-chip' + (indexed >= LIMITS.indexed ? ' is-full' : '')},
-                [this.str('summaryindexed', {count: indexed, max: LIMITS.indexed})]),
         ]);
     }
 
@@ -376,9 +371,6 @@ class Editor {
         }
         if (column.required) {
             chips.push(this.str('rolerequired'));
-        }
-        if (column.indexed) {
-            chips.push(this.str('roleindexed'));
         }
         if (!column.stored) {
             chips.push(this.str('columnnew'));
@@ -702,7 +694,7 @@ class Editor {
     }
 
     /**
-     * Title, subline, required and index settings, with the limits applied.
+     * Title, subline and required settings, with the subline limit applied.
      *
      * @param {Object} column
      * @param {Number} index
@@ -711,7 +703,6 @@ class Editor {
      */
     renderRoles(column, index, id) {
         const subline = this.columns.filter((candidate) => candidate.subline).length;
-        const indexed = this.columns.filter((candidate) => candidate.indexed).length;
         const check = (name, type, label, checked, disabled) => make('div', {className: 'form-check'}, [
             make('input', {
                 type, className: 'form-check-input', id: id(name), name: type === 'radio' ? `${this.uid}-title` : id(name),
@@ -727,8 +718,6 @@ class Editor {
                 check('subline', 'checkbox', this.str('rolesublinelabel'), column.subline,
                     column.title || (!column.subline && subline >= LIMITS.subline)),
                 check('required', 'checkbox', this.str('rolerequiredlabel'), column.required, false),
-                check('indexed', 'checkbox', this.str('roleindexedlabel'), column.indexed,
-                    !column.indexed && indexed >= LIMITS.indexed),
             ]),
         ]);
     }
@@ -752,7 +741,7 @@ class Editor {
             this.columns.push({
                 key: generateKey(label, takenBy(this.columns, -1)), label, mode: 'free', domain: '', parent: '',
                 pattern: null, title: !this.columns.some((column) => column.title), subline: false, required: false,
-                indexed: false, stored: false, keyedited: false,
+                stored: false, keyedited: false,
             });
             this.open = this.columns.length - 1;
             this.render(`#${CSS.escape(`${this.uid}-column-${this.open}-label`)}`);

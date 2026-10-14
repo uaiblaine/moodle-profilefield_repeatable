@@ -3,7 +3,7 @@ moodle-profilefield_repeatable
 
 [![Moodle Plugin CI](https://github.com/uaiblaine/moodle-profilefield_repeatable/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/uaiblaine/moodle-profilefield_repeatable/actions/workflows/ci.yml?query=branch%3Amain)
 
-A Moodle user profile field plugin that stores repeatable field data as sets of sub-items with efficient PostgreSQL JSONB indexing and optional reference resolution via the local_dictionaries plugin.
+A Moodle user profile field plugin that stores repeatable field data as sets of sub-items, reportable in Report Builder, with optional reference resolution via the local_dictionaries plugin.
 
 
 Requirements
@@ -35,7 +35,7 @@ Motivation for this plugin
 Standard Moodle profile fields support only simple text values. This plugin provides:
 
 1. **Repeatable sets** — Store multiple related data values as structured records (e.g., language proficiencies, certifications, work experience)
-2. **Efficient indexing** — PostgreSQL expression indexes on selected columns for fast queries
+2. **Reporting** — One Report Builder row per set, with a column and filter per set column
 3. **Reference resolution** — Optional mapping to external domains (via local_dictionaries) for rich display values
 4. **Backward compatibility** — Falls back to JSON storage in user_info_data when storage table unavailable
 5. **Privacy compliance** — Full GDPR export/delete support
@@ -76,7 +76,7 @@ After installing, navigate to **Site Administration > Plugins > Moodle plugins >
      dictionary. See "Dictionary columns" under Editing.
    - **Role in the set**: exactly one column is the **title** of the set (the accordion header);
      up to 3 others are shown in the **subline**; **required** columns must be filled in every set
-     that has any value; up to 3 columns are **indexed** on PostgreSQL.
+     that has any value.
 
    Columns are reordered with the arrows, added with "Add column" (20 at most) and removed with
    "Remove column". A column whose key holds stored values cannot be removed, and its key cannot
@@ -91,7 +91,7 @@ Without JavaScript the columns are edited as the JSON schema the editor writes t
 
 ```json
 {"version": 2, "columns": [
-  {"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true, "indexed": true},
+  {"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true},
   {"key": "level", "label": "Level", "mode": "dictionary_open", "domain": "cefr", "subline": true, "required": true},
   {"key": "certificate_number", "label": "Certificate number", "mode": "free"},
   {"key": "cpf", "label": "CPF", "mode": "pattern", "pattern": {"preset": "cpf", "mask": "", "regex": "", "regexerror": "", "storeformat": "raw"}}
@@ -187,25 +187,16 @@ once the plugin is back.
 Advanced Features
 -----------------
 
-### PostgreSQL Expression Indexes
+### Report Builder storage
 
-On PostgreSQL, the plugin automatically creates expression indexes on the indexed columns (up to 3 per field):
-
-```sql
-CREATE INDEX CONCURRENTLY pfrd_f{fieldid}_{key_hash}
-ON mdl_profilefield_repeatable_data (fieldid, ((data ->> '{key}')))
-WHERE fieldid = {fieldid}
-  AND jsonb_exists(data, '{key}')
-```
-
-The plugin also ensures a base JSONB GIN index for generic JSONB lookups:
-
-```sql
-CREATE INDEX pfrd_{tablehash}_gin_ix
-ON mdl_profilefield_repeatable_data USING GIN (data jsonb_path_ops)
-```
-
-Indexes are managed automatically via an adhoc task when field configuration changes.
+Each set is projected into `profilefield_repeatable_data` as one JSON text row for the
+"Repeatable profile field sets" source. On PostgreSQL the filters read it as
+`(data)::jsonb ->> 'key'`; on MySQL/MariaDB as `JSON_UNQUOTE(JSON_EXTRACT(...))`. No index serves
+these expressions: Report Builder's "contains" is `ILIKE '%v%'` and "is equal to" compares
+`LOWER()` values, which neither an expression index on the raw value nor a GIN index can answer.
+Releases up to r1 created such indexes and a `jsonb` column on PostgreSQL; the 2026042001 upgrade
+drops them (only names of their exact shapes, `pfrd_f<fieldid>_<16 hex>` and
+`pfrd_<8 hex>_gin_ix`), turns the column back into text and deletes their queued ad hoc tasks.
 
 ### PostgreSQL Version Matrix
 
@@ -255,8 +246,8 @@ vendor/bin/phpunit public/user/profile/field/repeatable/tests/
 ```
 
 Covered areas: column schema and its validation, field definition, the conversion of 2.x fields,
-storage upsert/read, display rendering, Report Builder, privacy export/delete, and deletion-
-cleanup observers.
+storage upsert/read, display rendering, Report Builder, privacy export/delete, deletion-cleanup
+observers, and the upgrade step that removes the r1 PostgreSQL index layer.
 
 
 Troubleshooting
@@ -265,17 +256,10 @@ Troubleshooting
 #### Data appears empty after upgrade
 Ensure the `profilefield_repeatable_data` table was created. Check upgrade logs in Site Administration > Logs.
 
-#### Indexes not created on PostgreSQL
-Index reconciliation runs as an **ad hoc task** queued whenever the field configuration is saved
-(it is not listed under Scheduled tasks). Check Site Administration > Server > Tasks > Ad hoc tasks
-(and the task logs) for recent runs, ensure the field has columns marked "Index for reports",
-and verify PostgreSQL 13+ connectivity. Running cron processes the queue.
-
 #### MySQL/MariaDB behavior
 On MySQL/MariaDB the storage table (`profilefield_repeatable_data`) is populated exactly as on
-PostgreSQL, with a `user_info_data` JSON fallback kept in sync. Only the PostgreSQL-specific
-parts are skipped: the JSONB column conversion, the base GIN index, and the per-sub-item
-expression indexes.
+PostgreSQL, from the canonical value in `user_info_data`. Only the SQL that reads a column of a
+set differs (see "Report Builder storage").
 
 #### Reference resolution not working
 1. Verify `moodle-local_dictionaries` is installed and the domain exists there

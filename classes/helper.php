@@ -221,8 +221,7 @@ class helper {
     /**
      * Build a cross-DB SQL expression extracting one column's text value from a set's JSON.
      *
-     * PostgreSQL reads the JSONB value with the ->> operator (casting defensively so a
-     * not-yet-migrated text column still works); MySQL/MariaDB use
+     * PostgreSQL casts the text column to jsonb and reads the value with the ->> operator; MySQL/MariaDB use
      * JSON_UNQUOTE(JSON_EXTRACT(...)) with a quoted JSON path. The key is bound as a parameter
      * on both drivers.
      *
@@ -402,83 +401,10 @@ class helper {
     }
 
     /**
-     * Ensure PostgreSQL JSONB type and base GIN index exist for storage table.
-     *
-     * @param \moodle_database $db
-     */
-    public static function ensure_postgres_jsonb_support(\moodle_database $db): void {
-        if (!static::is_postgres($db)) {
-            return;
-        }
-
-        $dbman = $db->get_manager();
-        $table = new \xmldb_table('profilefield_repeatable_data');
-        if (!$dbman->table_exists($table)) {
-            return;
-        }
-
-        $rawtablename = $db->get_prefix() . 'profilefield_repeatable_data';
-        $tablename = static::quote_identifier($rawtablename);
-        $columnname = static::quote_identifier('data');
-
-        $columntype = $db->get_field_sql(
-            "SELECT data_type
-               FROM information_schema.columns
-              WHERE table_schema = current_schema()
-                AND table_name = :tablename
-                AND column_name = :columnname",
-            [
-                'tablename' => $rawtablename,
-                'columnname' => 'data',
-            ]
-        );
-
-        if ($columntype !== 'jsonb') {
-            $db->execute(
-                "ALTER TABLE $tablename
-                    ALTER COLUMN $columnname TYPE jsonb
-                    USING COALESCE(NULLIF($columnname, ''), '{}')::jsonb"
-            );
-        }
-
-        $indexname = 'pfrd_' . substr(sha1($rawtablename), 0, 8) . '_gin_ix';
-        if (!static::postgres_index_exists($db, $rawtablename, $indexname)) {
-            $quotedindex = static::quote_identifier($indexname);
-            $db->execute(
-                "CREATE INDEX $quotedindex
-                   ON $tablename
-                USING gin ($columnname jsonb_path_ops)"
-            );
-        }
-    }
-
-    /**
-     * Check if a PostgreSQL index exists.
-     *
-     * @param \moodle_database $db
-     * @param string $tablename
-     * @param string $indexname
-     * @return bool
-     */
-    public static function postgres_index_exists(\moodle_database $db, string $tablename, string $indexname): bool {
-        if (!static::is_postgres($db)) {
-            return false;
-        }
-
-        $sql = "SELECT 1
-                  FROM pg_indexes
-                 WHERE schemaname = ANY(current_schemas(false))
-                   AND tablename = :tablename
-                   AND indexname = :indexname";
-
-        return $db->record_exists_sql($sql, [
-            'tablename' => $tablename,
-            'indexname' => $indexname,
-        ]);
-    }
-
-    /**
      * Quote a SQL identifier for PostgreSQL.
+     *
+     * For DDL, which takes no bound parameters: the upgrade step that removes the r1 index layer
+     * ({@see profilefield_repeatable_drop_index_layer()}) is its one caller. DML stays on placeholders.
      *
      * @param string $identifier
      * @return string

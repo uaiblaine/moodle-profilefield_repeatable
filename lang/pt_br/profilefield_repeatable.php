@@ -45,7 +45,7 @@ $string['columnparenthint'] =
 $string['columnrole'] = 'Papel no conjunto';
 $string['columns'] = 'Colunas';
 $string['columns_help'] =
-    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código), pattern (máscara e/ou expressão regular do customfield_pattern, Moodle 5.1 ou posterior; um objeto "pattern" com preset, mask, regex, regexerror e storeformat). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar e até 3 são indexadas. Uma coluna cuja chave tem valores armazenados não pode ser removida nem ter a chave alterada; renomeie o nome da coluna.';
+    'As colunas de cada conjunto, como um esquema JSON: {"version": 2, "columns": [{"key": "language", "label": "Idioma", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. Com JavaScript, o editor de colunas o escreve. Modos: free (texto livre), dictionary (apenas códigos de um domínio do local_dictionaries), dictionary_open (qualquer código), pattern (máscara e/ou expressão regular do customfield_pattern, Moodle 5.1 ou posterior; um objeto "pattern" com preset, mask, regex, regexerror e storeformat). Exatamente uma coluna é o título; até 3 aparecem na linha auxiliar. Uma coluna cuja chave tem valores armazenados não pode ser removida nem ter a chave alterada; renomeie o nome da coluna.';
 $string['columnsindata'] =
     '{$a} usuários têm dados neste campo. Colunas com valores armazenados não podem ser removidas e suas chaves estão bloqueadas: renomear essa coluna muda apenas o nome.';
 $string['columnsubitem'] = '{$a}';
@@ -67,7 +67,6 @@ $string['errorcolumnslimit'] = 'Um campo pode ter no máximo {$a} colunas.';
 $string['errorcolumnsrequired'] = 'Adicione pelo menos uma coluna.';
 $string['errordomaininvalid'] = 'Coluna "{$a}": escolha um dicionário (letras minúsculas, dígitos e sublinhado).';
 $string['errordomainmissing'] = 'Dicionário não encontrado no local_dictionaries: {$a}.';
-$string['errorindexedlimit'] = 'No máximo {$a} colunas podem ser indexadas.';
 $string['errorinvalidjson'] = 'Payload repetível inválido; esperado um objeto JSON.';
 $string['errorkeyconflict'] = 'Duas colunas geram a coluna de relatório "{$a}": mude uma das chaves.';
 $string['errorkeyduplicate'] = 'Chave usada por duas colunas: {$a}.';
@@ -141,8 +140,6 @@ $string['removecolumn'] = 'Remover coluna';
 $string['removecolumnlocked'] = 'Há usuários com valores nesta coluna, por isso ela não pode ser removida.';
 $string['removeset'] = 'Remover conjunto';
 $string['repeatableset'] = 'Conjunto {$a}';
-$string['roleindexed'] = 'Indexada';
-$string['roleindexedlabel'] = 'Indexar para relatórios (PostgreSQL)';
 $string['rolerequired'] = 'Obrigatória';
 $string['rolerequiredlabel'] = 'Obrigatória em todo conjunto';
 $string['rolesubline'] = 'Linha auxiliar';
@@ -152,11 +149,9 @@ $string['roletitlelabel'] = 'Título do conjunto';
 $string['searchplaceholder'] = 'Digite um nome ou um código';
 $string['setcolumn'] = 'CONJUNTO';
 $string['setnumber'] = 'Número do conjunto';
-$string['summaryindexed'] = 'Indexadas {$a->count}/{$a->max}';
 $string['summarysubline'] = 'Linha auxiliar {$a->count}/{$a->max}';
 $string['summarytitle'] = 'Título: {$a}';
 $string['synchronisedat'] = 'Sincronizado em: {$a}';
-$string['taskreconcileindexes'] = 'Reconciliar índices JSON do campo de perfil repetível';
 $string['taskrekeypayloads'] = 'Rechavear os valores do campo de perfil repetível pela chave da coluna';
 $string['taskreprojectsets'] = 'Reconstruir os conjuntos do campo de perfil repetível para relatórios';
 $string['usecode'] = 'Usar o código "{$a}"';

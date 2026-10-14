@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - version 2026042001
+
+### Removed
+- The PostgreSQL index layer (owner decision D3, `docs/engine-extraction-design.md` §8). Measured on
+  PostgreSQL 18.6 with 50,000 users and 125,000 projection rows, no Report Builder filter or listing
+  used the per-column partial expression indexes or the GIN index: "contains" is `ILIKE '%v%'`,
+  "is equal to" compares `LOWER()` values while the index held the bare `data->>'key'`, the indexes
+  were partial on `jsonb_exists(data, key)`, which Report Builder never emits, and the GIN
+  `jsonb_path_ops` index serves only `@>`, which nothing in the plugin emits. Gone with it: the
+  `reconcile_indexes` ad hoc task, the install hook that converted the projection's `data` column to
+  `jsonb` and created the GIN index (`db/install.php`, `db/lib.php`), the redundant
+  `db/uninstall.php` (core drops the table and the plugin's ad hoc tasks), the "Index for reports"
+  column role with its limit of 3 and its lang strings, and the mutation gates I1-I7 and SC11. The
+  readers keep `(data)::jsonb ->> 'key'`, which reads the text column.
+- A stored schema's `indexed` flag is dropped when read and omitted on the next save; version 1
+  fields' indexed list (`param2`) is ignored.
+
+### Changed
+- Upgrade step 2026042001 (`db/upgradelib.php`, `profilefield_repeatable_drop_index_layer()`): on
+  PostgreSQL it drops the indexes of the projection table whose names have the layer's exact shapes
+  (`pfrd_f<fieldid>_<16 hex>`, `pfrd_<8 hex>_gin_ix`; never a bare prefix) and turns the `data` column
+  back into `text`, as `install.xml` declares it; on every database it deletes the queued
+  `reconcile_indexes` ad hoc tasks, whose class no longer exists. No DDL on MySQL/MariaDB. Tested by
+  `tests/upgrade_test.php`, held by gates U1-U8; SC16 holds the dropped `indexed` flag.
+
 ## [v5.2-r1] - 2026-10-13
 
 Moodle 5.2 branch (`MOODLE_502_STABLE`): version `2026042000`, release `v5.2-r1`,

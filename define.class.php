@@ -232,7 +232,7 @@ class profile_define_repeatable extends profile_define_base {
     }
 
     /**
-     * Save repeatable field configuration and, on PostgreSQL, enqueue index reconciliation.
+     * Save repeatable field configuration.
      *
      * Saving a field still on the version 1 parameters converts it: its key => label map is
      * written before param1 changes, so the label-keyed payloads keep reading, and
@@ -241,8 +241,6 @@ class profile_define_repeatable extends profile_define_base {
      * @param array|stdClass $data
      */
     public function define_save($data) {
-        global $DB;
-
         $stored = $this->stored_field((int)($data->id ?? 0));
         $convert = $stored && \profilefield_repeatable\local\schema::decode((string)$stored->param1) === null;
         if ($convert) {
@@ -258,23 +256,5 @@ class profile_define_repeatable extends profile_define_base {
         if ($convert) {
             \profilefield_repeatable\task\rekey_payloads::queue_for_field((int)$stored->id);
         }
-        if ($DB->get_dbfamily() !== 'postgres' || empty($data->id)) {
-            return;
-        }
-
-        \profilefield_repeatable\task\reconcile_indexes::schedule_for_field((int)$data->id);
-    }
-
-    /**
-     * Clean up PostgreSQL indexes after a repeatable field is deleted.
-     *
-     * Core never calls this: on a normal deletion the observer queues
-     * {@see \profilefield_repeatable\task\reconcile_indexes}, which drops them. Call it for
-     * immediate removal from a custom deletion workflow, outside any transaction.
-     *
-     * @param int $fieldid
-     */
-    public static function define_after_delete(int $fieldid): void {
-        \profilefield_repeatable\task\reconcile_indexes::drop_all_for_field($fieldid);
     }
 }

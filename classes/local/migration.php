@@ -17,7 +17,6 @@
 namespace profilefield_repeatable\local;
 
 use profilefield_repeatable\helper;
-use profilefield_repeatable\task\reconcile_indexes;
 
 /**
  * Re-keys the stored payloads of a field converted to the version 2 schema.
@@ -39,8 +38,7 @@ final class migration {
     /**
      * Re-key every payload of a field, rebuild its projection and drop its legacy labels.
      *
-     * Idempotent: a payload already keyed by key normalises to itself and is not written. On
-     * PostgreSQL the index reconciliation is queued, because index names follow the keys.
+     * Idempotent: a payload already keyed by key normalises to itself and is not written.
      *
      * @param int $fieldid
      * @return int Number of payloads rewritten.
@@ -62,10 +60,6 @@ final class migration {
         $rewritten = self::rekey_payloads($fieldid, $schema);
         projection::reproject_field($field);
         unset_config(schema::legacy_config_name($fieldid), 'profilefield_repeatable');
-
-        if (helper::is_postgres($DB)) {
-            reconcile_indexes::schedule_for_field($fieldid);
-        }
 
         return $rewritten;
     }

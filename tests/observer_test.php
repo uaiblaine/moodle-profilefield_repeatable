@@ -122,50 +122,6 @@ final class observer_test extends \advanced_testcase {
     }
 
     /**
-     * Field deletion must queue index reconciliation on PostgreSQL for index cleanup.
-     */
-    public function test_user_info_field_deleted_queues_reconcile_on_postgres(): void {
-        global $DB;
-
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        $fieldid = $this->create_repeatable_field('repeatable_obs_queue');
-        $user = $this->getDataGenerator()->create_user();
-        $this->save_field_data($fieldid, (int)$user->id);
-
-        $before = $this->count_reconcile_tasks_for_field($fieldid);
-
-        profile_delete_field($fieldid);
-
-        $after = $this->count_reconcile_tasks_for_field($fieldid);
-
-        if ($DB->get_dbfamily() === 'postgres') {
-            $this->assertGreaterThan($before, $after, 'Expected a reconcile_indexes task queued for the deleted field.');
-        } else {
-            $this->assertSame($before, $after);
-        }
-    }
-
-    /**
-     * Count queued reconcile_indexes adhoc tasks targeting one field.
-     *
-     * @param int $fieldid
-     * @return int
-     */
-    private function count_reconcile_tasks_for_field(int $fieldid): int {
-        $count = 0;
-        foreach (\core\task\manager::get_adhoc_tasks(task\reconcile_indexes::class) as $task) {
-            $customdata = $task->get_custom_data();
-            if ((int)($customdata->fieldid ?? 0) === $fieldid) {
-                $count++;
-            }
-        }
-
-        return $count;
-    }
-
-    /**
      * Deleting a non-repeatable field must not touch repeatable storage rows.
      */
     public function test_other_datatype_field_deleted_keeps_storage_rows(): void {

@@ -640,7 +640,10 @@ code the field's r1 review already covered (§8 D5).
 - **D2**: Report Builder in `customfield_repeatable` r1 covers **course, cohort and group/grouping**
   (three datasources, about 600 lines more in stage D than the course-only estimate). Content bank,
   and the 5.1+ report and shared areas, stay follow-ups.
-- **D3**: measured in stage A before any code moves (S7), then decided on the `EXPLAIN` result.
+- **D3**: measured 2026-10-14 (PostgreSQL 18.6, 50,000 users, 125,000 projection rows): no Report
+  Builder filter or listing uses the expression indexes or the GIN index (`ILIKE '%v%'`,
+  `LOWER(expr) = LOWER(v)` against an index on the bare expression, partial predicates Report
+  Builder never emits, and no `@>` anywhere). The layer is removed in stage A0, before any code moves.
 - **D4**: the recommended compact escaped list.
 - **D5**: MDL Shield skipped on pure-move PRs whose move-identity check is clean; reviewed on stage
   A, stage D and any move that changes behaviour.

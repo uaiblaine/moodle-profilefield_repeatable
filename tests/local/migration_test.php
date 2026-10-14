@@ -20,7 +20,6 @@ use core_reportbuilder\local\filters\text;
 use core_reportbuilder\local\models\column;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
 use profilefield_repeatable\reportbuilder\datasource\repeatable_sets;
-use profilefield_repeatable\task\reconcile_indexes;
 use profilefield_repeatable\task\rekey_payloads;
 
 defined('MOODLE_INTERNAL') || die();
@@ -211,11 +210,6 @@ final class migration_test extends core_reportbuilder_testcase {
         $this->assertEquals(['lingua' => 'pt', 'level' => 'C2', 'certificate_number' => 'CEL-1'], $this->projected($alicedata)[1]);
         $this->assertFalse(get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)));
         $this->assertSame(0, migration::finish_field((int)$field->id), 'Idempotent');
-
-        // On PostgreSQL the indexes follow the keys.
-        if ($DB->get_dbfamily() === 'postgres') {
-            $this->assertNotEmpty(\core\task\manager::get_adhoc_tasks(reconcile_indexes::class));
-        }
     }
 
     /**
