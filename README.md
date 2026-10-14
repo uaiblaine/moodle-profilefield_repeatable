@@ -12,9 +12,10 @@ Requirements
 - Moodle 5.2 (branch `MOODLE_502_STABLE`; releases `v5.2-rN`), PHP 8.3 or later. Other Moodle
   versions have their own branches.
 - Required: [moodle-local_repeatable](https://github.com/uaiblaine/moodle-local_repeatable)
-  (`local_repeatable`, version 2026042001 or later), the repeatable-sets engine: the column schema,
-  payload reading, validation, Report Builder SQL and the companion bridges live there, and this
-  plugin adapts them to user profile fields. Install it at `local/repeatable` before (or with)
+  (`local_repeatable`, version 2026042003 or later), the repeatable-sets engine: the column schema,
+  payload reading, validation, the edit widget, the column editor, the display renderer (templates,
+  stylesheet and JavaScript), the projection writer, the Report Builder entity and SQL, and the
+  companion bridges live there, and this plugin adapts them to user profile fields. Install it at `local/repeatable` before (or with)
   this plugin.
 - Optional: [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries) for reference resolution.
 - Optional, Moodle 5.1 or later: [moodle-customfield_pattern](https://github.com/uaiblaine/moodle-customfield_pattern)
@@ -126,6 +127,13 @@ Until the task runs, values stored under the old labels still show everywhere. R
 - **Profile pages** (`/user/profile.php`, `/user/view.php`) — Accordion display with collapsible sets
 - **Other contexts** — Plain list table format
 
+The field decides the layout, names the accordion after the field and the user
+(`profilefield-repeatable-display-<fieldid>-<userid>-<shortname>`) and reads the sets' sync times
+from its projection rows; `local_repeatable` renders the sets (`\local_repeatable\output\sets_renderer`,
+its templates and stylesheet). The display's CSS classes are `local-repeatable-*` (they were
+`profilefield-repeatable-*` before version 2026042004): a theme that styles them must use the new
+names.
+
 ### Editing
 
 Users can:
@@ -134,6 +142,13 @@ Users can:
 - Remove sets via action column
 
 Empty sets are removed automatically on save. At least one empty set remains in the form.
+
+The widget and the column editor are `local_repeatable`'s (`\local_repeatable\form\widget`,
+`\local_repeatable\form\column_editor` and the AMD modules `local_repeatable/repeatable` and
+`local_repeatable/columneditor`). The field places the widget in the profile form (its wrapper id
+stays `profilefield-repeatable-<fieldid>-<userid>-<shortname>`), hands it the stored payload and
+which dictionaries the editing user may read, and reads the locked keys of the definition form
+from the stored field.
 
 #### Dictionary columns
 
@@ -239,6 +254,10 @@ offers "Set number" and, per column, the value (free and pattern columns; patter
 masked) or the name and the code (dictionary columns). Their identifiers follow the column key (`repeatable_<shortname>:<key>`,
 `<key>_name`, `<key>_code`), so renaming a column keeps saved reports working.
 
+The columns and filters are built by `local_repeatable`'s entity
+(`\local_repeatable\reportbuilder\local\entities\sets`); the field's `repeatable_set` entity reads
+the field's schema and makes every column and filter available only when the field is visible to
+`\core\user::SUPPORT_USER`, as core decides for its own profile field columns.
 
 API
 ---
@@ -253,9 +272,12 @@ split layout shown; drop `public/` on older layouts):
 vendor/bin/phpunit public/user/profile/field/repeatable/tests/
 ```
 
-Covered areas: column schema and its validation, field definition, the conversion of 2.x fields,
-storage upsert/read, display rendering, Report Builder, privacy export/delete, deletion-cleanup
-observers, and the upgrade step that removes the r1 PostgreSQL index layer.
+Covered areas: the profile adapter end to end (edit form, validation, save, display through the
+field, field definition and key locking), the conversion of 2.x fields, the Report Builder
+datasource (including the saved-report identifiers and the field's visibility rules), privacy
+export/delete, the deletion-cleanup and reprojection observers, the repair task, and the upgrade
+step that removes the r1 PostgreSQL index layer. The engine's own unit tests (schema, payload,
+widget, column editor, renderer, projection writer, entity) live in `local_repeatable`.
 
 
 Troubleshooting

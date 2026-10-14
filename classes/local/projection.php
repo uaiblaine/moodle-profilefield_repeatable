@@ -17,7 +17,7 @@
 namespace profilefield_repeatable\local;
 
 use local_repeatable\local\payload;
-use profilefield_repeatable\local\projection\projector;
+use local_repeatable\local\projection\projector;
 
 /**
  * Reprojection of one user's repeatable profile fields.

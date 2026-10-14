@@ -19,7 +19,7 @@ namespace profilefield_repeatable\reportbuilder\datasource;
 use core_reportbuilder\local\filters\text;
 use core_reportbuilder\manager;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
-use profilefield_repeatable\local\projection\projector;
+use local_repeatable\local\projection\projector;
 use profilefield_repeatable\reportbuilder\local\entities\repeatable_set;
 
 defined('MOODLE_INTERNAL') || die();
@@ -37,7 +37,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\reportbuilder\datasource\repeatable_sets
  * @covers     \profilefield_repeatable\reportbuilder\local\entities\repeatable_set
- * @covers     \profilefield_repeatable\reportbuilder\local\entities\sets
+ * @covers     \local_repeatable\reportbuilder\local\entities\sets
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -209,46 +209,6 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
     }
 
     /**
-     * A code costs one resolver lookup however many rows show it, and an unresolved code too.
-     */
-    public function test_resolved_name_lookups_are_memoised_including_misses(): void {
-        $this->resetAfterTest();
-
-        $probe = new class (new \stdClass()) extends repeatable_set {
-            /** @var string[] Domain and code of every lookup that reached the resolver. */
-            public static array $lookups = [];
-
-            #[\Override]
-            protected static function lookup_label(string $domain, string $code): ?string {
-                self::$lookups[] = $domain . '|' . $code;
-                return $code === '16' ? 'Diretoria Centro' : null;
-            }
-
-            /**
-             * Expose the protected resolver entry point.
-             *
-             * @param string $domain
-             * @param string|null $code
-             * @return string
-             */
-            public static function label(string $domain, ?string $code): string {
-                return static::resolve_label($domain, $code);
-            }
-        };
-        repeatable_set::reset_label_memo();
-
-        for ($row = 0; $row < 3; $row++) {
-            $this->assertSame('Diretoria Centro', $probe::label('diretorias', '16'));
-            $this->assertSame('99', $probe::label('diretorias', '99'));
-            $this->assertSame('99', $probe::label('escolas', ' 99 '));
-            $this->assertSame('', $probe::label('diretorias', ' '));
-        }
-
-        $this->assertSame(['diretorias|16', 'diretorias|99', 'escolas|99'], $probe::$lookups);
-        repeatable_set::reset_label_memo();
-    }
-
-    /**
      * Mapped sub-items resolve to labels in the column, and the name filter filters by code.
      */
     public function test_mapped_name_resolution_and_filter(): void {
@@ -406,25 +366,6 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
         $this->assertSame('&lt;img src=x onerror=alert(1)&gt;', $name, 'Resolved-name column');
         $this->assertSame('&lt;img src=x onerror=alert(1)&gt;', $code, 'Code column');
         $this->assertSame('&lt;script&gt;alert(2)&lt;/script&gt;', $value, 'Value column');
-    }
-
-    /**
-     * Name filter options keep the raw code as key and escape the label core prints unescaped.
-     */
-    public function test_name_filter_options_escape_labels(): void {
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        $fielddef = $this->create_repeatable_field([], 'diretorias');
-        $user = $this->getDataGenerator()->create_user();
-        $code = '<img src=x onerror=alert(1)>';
-        $this->save_sets($fielddef, $user, json_encode(['@@ID#1' => ['diretoria' => $code, 'escola' => '1']]));
-
-        $method = new \ReflectionMethod(repeatable_set::class, 'name_filter_options');
-        $schema = \profilefield_repeatable\local\field_schema::from_field($fielddef);
-        $options = $method->invoke(null, 'profilefield_repeatable_data', (int)$fielddef->id, $schema, 'diretoria', 'diretorias');
-
-        $this->assertSame([$code => s($code)], $options);
     }
 
     /**

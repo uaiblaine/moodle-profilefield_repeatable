@@ -28,7 +28,7 @@
  * The canonical value is one JSON object in user_info_data.data, keyed by column key
  * ({@see \local_repeatable\local\schema}), e.g. {"@@ID#1": {"language": "pt", "level": "B2"}};
  * the per-set rows in profilefield_repeatable_data are a projection for Report Builder
- * ({@see \profilefield_repeatable\local\projection\projector}).
+ * ({@see \local_repeatable\local\projection\projector}).
  *
  * @package    profilefield_repeatable
  */
@@ -50,7 +50,7 @@ class profile_field_repeatable extends profile_field_base {
      * is wrapped in a group carrying the field's input name: the group is a visible form row
      * placed under the widget, and a validation error keyed by the input name renders there.
      * The widget points at that error with aria-describedby. The widget itself is the engine's
-     * ({@see \profilefield_repeatable\form\widget}).
+     * ({@see \local_repeatable\form\widget}).
      *
      * @param moodleform $mform
      */
@@ -162,7 +162,7 @@ class profile_field_repeatable extends profile_field_base {
      * Saves data coming from form and synchronises JSON-per-set rows.
      *
      * Replaces core's save so that user_info_data and the projection rows change in one delegated
-     * transaction ({@see \profilefield_repeatable\local\projection\projector::sync()}).
+     * transaction ({@see \local_repeatable\local\projection\projector::sync()}).
      *
      * @param stdClass $usernew
      */
@@ -206,7 +206,7 @@ class profile_field_repeatable extends profile_field_base {
             $dataid = (int)$DB->insert_record('user_info_data', $data);
         }
 
-        \profilefield_repeatable\local\projection\projector::sync(
+        \local_repeatable\local\projection\projector::sync(
             new \profilefield_repeatable\local\source(),
             $dataid,
             (int)$data->fieldid,
@@ -353,10 +353,10 @@ class profile_field_repeatable extends profile_field_base {
     /**
      * The engine widget of this field, deciding with what the profile adapter knows.
      *
-     * @return \profilefield_repeatable\form\widget
+     * @return \local_repeatable\form\widget
      */
-    protected function get_widget(): \profilefield_repeatable\form\widget {
-        return new \profilefield_repeatable\form\widget(
+    protected function get_widget(): \local_repeatable\form\widget {
+        return new \local_repeatable\form\widget(
             $this->get_schema(),
             fn(string $domain): bool => $this->can_read_domain($domain),
             $this->companion_available(),

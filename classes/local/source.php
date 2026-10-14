@@ -16,6 +16,7 @@
 
 namespace profilefield_repeatable\local;
 
+use local_repeatable\local\projection\store;
 use local_repeatable\local\schema;
 
 /**
@@ -23,13 +24,13 @@ use local_repeatable\local\schema;
  *
  * Profile adapter: the canonical payload is {user_info_data}.data, the owner is the user, and the
  * projection is {profilefield_repeatable_data}, owned by userid. Implements the engine contract
- * {@see projection\source}.
+ * {@see \local_repeatable\local\projection\source}.
  *
  * @package    profilefield_repeatable
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-final class source implements projection\source {
+final class source implements \local_repeatable\local\projection\source {
     /** @var string The projection table of the profile field. */
     public const TABLE = 'profilefield_repeatable_data';
 
@@ -45,10 +46,10 @@ final class source implements projection\source {
     /**
      * The projection table, owned by userid.
      *
-     * @return projection\store
+     * @return store
      */
-    public function store(): projection\store {
-        return new projection\store(self::TABLE, 'userid');
+    public function store(): store {
+        return new store(self::TABLE, 'userid');
     }
 
     /**

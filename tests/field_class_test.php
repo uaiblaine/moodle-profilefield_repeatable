@@ -32,8 +32,8 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
- * @covers     \profilefield_repeatable\form\widget
- * @covers     \profilefield_repeatable\output\sets_renderer
+ * @covers     \local_repeatable\form\widget
+ * @covers     \local_repeatable\output\sets_renderer
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -288,9 +288,9 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display', $output);
-        $this->assertStringNotContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringContainsString(get_string('repeatableset', 'profilefield_repeatable', 1), $output);
+        $this->assertStringContainsString('local-repeatable-display', $output);
+        $this->assertStringNotContainsString('local-repeatable-display-accordion', $output);
+        $this->assertStringContainsString(get_string('repeatableset', 'local_repeatable', 1), $output);
     }
 
     /**
@@ -342,9 +342,9 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringContainsString('<details class="profilefield-repeatable-item" open>', $output);
-        $this->assertStringContainsString('profilefield-repeatable-summary', $output);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $output);
+        $this->assertStringContainsString('<details class="local-repeatable-item" open>', $output);
+        $this->assertStringContainsString('local-repeatable-summary', $output);
         $this->assertStringContainsString('101-A', $output);
         $this->assertStringContainsString(
             userdate($timemodified, get_string('strftimedatetimeshort', 'langconfig')),
@@ -414,7 +414,7 @@ final class field_class_test extends \advanced_testcase {
 
         // The plain list prints the label of each filled column; the accordion titles the set with the title
         // column's value, labels the other rows with their names and puts the field name in its aria-label.
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $accordion);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $accordion);
         $this->assertSame(1, substr_count($plain, 'Item R&amp;D'));
         $this->assertSame(1, substr_count($accordion, 'Item R&amp;D'));
         $this->assertStringNotContainsString('&amp;amp;', $plain);
@@ -445,8 +445,8 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
-        $this->assertStringNotContainsString('profilefield-repeatable-sync', $output);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $output);
+        $this->assertStringNotContainsString('local-repeatable-sync', $output);
     }
 
     /**
@@ -470,7 +470,7 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString(get_string('repeatableset', 'profilefield_repeatable', 1), $output);
+        $this->assertStringContainsString(get_string('repeatableset', 'local_repeatable', 1), $output);
     }
 
     /**
@@ -668,7 +668,7 @@ final class field_class_test extends \advanced_testcase {
             $SCRIPT = $originalscript;
         }
 
-        $this->assertStringContainsString('profilefield-repeatable-display-accordion', $output);
+        $this->assertStringContainsString('local-repeatable-display-accordion', $output);
         $this->assertStringContainsString('Sao Paulo', $output);
         $this->assertStringContainsString('EE Alpha', $output);
     }
@@ -941,7 +941,7 @@ final class field_class_test extends \advanced_testcase {
             ],
             ['key' => 'notes', 'label' => 'Notes', 'mode' => 'free', 'required' => false],
         ], json_decode(html_entity_decode($matches[1]), true));
-        $this->assertSame(1, substr_count($html, 'class="profilefield-repeatable-required"'));
+        $this->assertSame(1, substr_count($html, 'class="local-repeatable-required"'));
     }
 
     /**

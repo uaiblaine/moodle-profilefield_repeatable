@@ -18,7 +18,7 @@ namespace profilefield_repeatable\task;
 
 use core\task\scheduled_task;
 use profilefield_repeatable\local\field_schema;
-use profilefield_repeatable\local\projection\projector;
+use local_repeatable\local\projection\projector;
 use profilefield_repeatable\local\source;
 
 /**

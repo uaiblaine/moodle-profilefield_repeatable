@@ -12,9 +12,10 @@ that stores repeatable sets of sub-items per user. The canonical value is a JSON
 as a projection for Report Builder (a JSON text column on every database, no index on its
 values). Optional code→label resolution comes from the companion dictionary plugin
 (soft dependency, see below). **Hard dependency on `local_repeatable`** (the repeatable-sets engine,
-`~/dev/moodle-local_repeatable`): the column schema, payload reading, Report Builder SQL, validation,
-the companion bridges, stored-value counting and the privacy export live there; this plugin is its
-profile-field adapter (see "Engine and adapter"). **One branch per Moodle version**: `MOODLE_405_STABLE`,
+`~/dev/moodle-local_repeatable`): the column schema, payload reading, Report Builder SQL and entity,
+validation, the companion bridges, stored-value counting, the privacy export, the edit widget, the
+column editor, the display renderer (templates, CSS, AMD) and the projection writer live there; this
+plugin is its profile-field adapter (see "Engine and adapter"). **One branch per Moodle version**: `MOODLE_405_STABLE`,
 `MOODLE_501_STABLE`, `MOODLE_502_STABLE` (= `main`) and `MOODLE_503_STABLE`, MATURITY_STABLE,
 releases `v<major>.<minor>-r<N>`. Each branch's `version.php` sets `requires` and `supported` to
 its own Moodle version, and its `.github/workflows/ci.yml` has one moodle-an-hochschulen job for
@@ -56,7 +57,6 @@ definition, and none runs on the session model.
 mdl ci moodle-profilefield_repeatable --matrix --behat   # every CI leg locally: the pre-merge gate
 mdl phpunit m502 profilefield_repeatable                 # targeted tests
 mdl behat m502 @profilefield_repeatable                  # Behat smoke tests
-mdl grunt m502 user/profile/field/repeatable             # rebuild amd/build (commit with src)
 mdl purge m502                                           # after PHP changes that affect output
 # Mutation sweep: absolute spec path, and BOTH database families.
 mdl mutate moodle-profilefield_repeatable /Users/uaiblaine/dev/moodle-profilefield_repeatable/mutations/gates.conf --fast --db pgsql
@@ -83,40 +83,45 @@ field.class.php        profile_field_repeatable (adapter): profile hooks, save t
 define.class.php       profile_define_repeatable (adapter): stored field, locked keys, v1 conversion
 classes/local/field_schema.php     the {user_info_field} reader (adapter): from_field(), from_v1(), legacy config
 classes/local/stored_values.php    usage(): reads the field's user_info_data payloads for the engine; locked_labels()
-classes/local/source.php           profile implementation of local\projection\source (adapter)
-classes/local/projection/          engine-to-be (stage C): store, source (adapter contract), projector
-classes/local/projection.php       reproject_user() (adapter: joins user_info_data to user_info_field)
+classes/local/source.php           implements the engine's local\projection\source: {user_info_data}, owner userid
+classes/local/projection.php       reproject_user() (joins user_info_data to user_info_field; engine projector)
 classes/local/migration.php        re-keying of payloads of a field converted from v1 (run by the task)
-classes/form/                      engine-to-be: widget (edit table, labels, JS), column_editor (define textarea)
 classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
-classes/output/        sets_renderer (engine-to-be: accordion/plain), display_renderer (adapter: layout, rows)
-classes/reportbuilder/             datasource repeatable_sets; entity sets (engine-to-be) + repeatable_set (adapter)
-classes/privacy/       provider (adapter; the export of one payload is local_repeatable's set_exporter)
+classes/output/display_renderer.php  layout decision, accordion id, projection rows; the engine's sets_renderer renders
+classes/reportbuilder/             datasource repeatable_sets; entity repeatable_set (extends the engine's sets)
+classes/privacy/       provider (the export of one payload is local_repeatable's set_exporter)
 db/upgradelib.php      upgrade-step logic; self-contained (its own identifier quoting, no engine calls)
 classes/task/reproject_sets.php    scheduled, daily: repair stale projections
 classes/task/rekey_payloads.php    adhoc: re-keys a field the definition form converted from v1
-amd/src/               repeatable.js (edit widget), dictionary_transport.js (its autocomplete transport),
-                       markup.js (shared by both), columneditor.js (define form), displayaccordion.js
 ```
 
-Engine-side classes (stage A of `docs/engine-extraction-design.md`) never call profile-field APIs: the
-adapter passes the stored payload, the can-read callable and the seams' availability flags.
+No `amd/`, `templates/` or `styles.css`: the widget, column editor, renderer, their templates,
+stylesheet and AMD modules are `local_repeatable`'s (stage C). Engine classes never call
+profile-field APIs: this adapter passes the stored payload, the can-read callable and the seams'
+availability flags.
 
 ### Engine and adapter (local_repeatable)
 
-- From `local_repeatable` (stages B1-B2): `local\schema`, `local\payload` (caps, `normalise()`,
-  `column_value()`, `encode()`), `local\sql` (`is_postgres()`, `subitem_value()`, `column_value()`),
-  `local\validator`, `local\stored_values::keys_in_use()`, `local\bridge\dictionaries`,
-  `local\bridge\pattern` and `privacy\set_exporter`. Their rules, tests and mutation gates live there;
-  this repository tests the wiring (stored payload from `$this->data`, `can_read_domain()` of the
-  editing user, the `companion_available()`/`pattern_available()` seams, end-to-end form, save,
-  display, privacy and Report Builder).
+- From `local_repeatable`: `local\schema`, `local\payload` (caps, `normalise()`, `column_value()`,
+  `encode()`), `local\sql` (`is_postgres()`, `subitem_value()`, `column_value()`), `local\validator`,
+  `local\stored_values::keys_in_use()`, `local\bridge\dictionaries`, `local\bridge\pattern`,
+  `privacy\set_exporter` (stages B1-B2); `form\widget`, `form\column_editor`, `output\sets_renderer`
+  with the three templates, `styles.css` and the AMD modules `local_repeatable/{repeatable,markup,
+  dictionary_transport,columneditor,displayaccordion}` (C1-C2); `local\projection\{store,source,
+  projector}` and the abstract `reportbuilder\local\entities\sets` (C3). Their rules, unit tests and
+  mutation gates live there; this repository tests the wiring (stored payload from `$this->data`,
+  `can_read_domain()` of the editing user, the `companion_available()`/`pattern_available()` seams,
+  end-to-end form, save, display through the field, privacy, observers, tasks and Report Builder).
+- The ids the adapter builds stay `profilefield-repeatable-<fieldid>-<userid>-<shortname>` (edit
+  widget wrapper) and `profilefield-repeatable-display-...` (accordion): the engine's JS reads them by
+  exact value from its init config and no engine template, CSS or JS matches their prefix.
 - `version.php` declares `dependencies`; core checks it against the version on disk and installs local
   plugins last, so an upgrade step of this field may use engine classes (they autoload) but no engine
   DB state. `db/upgradelib.php` calls neither, on purpose: upgrade steps are frozen history.
-- Strings an engine class prints come from `local_repeatable` (the moved keys were deleted here).
-  `repeatableset` exists in both: the engine's for the privacy export, this plugin's for the widget
-  and the renderer, until stage C moves those.
+- Strings an engine class prints come from `local_repeatable` (the moved keys were deleted here,
+  `repeatableset` included). This plugin keeps only its own: `pluginname`, `columns` (+ `_help`, the
+  define form's textarea), `datasourcerepeatablesets`, `entityrepeatablesetnamed`,
+  `profilewidgettitle`, the two task names and the privacy metadata.
 
 ## Versions
 
@@ -146,8 +151,8 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   the constructor normalises and never rejects. A `pattern` column is checked by customfield_pattern
   (see below) and keeps its `pattern` object verbatim.
 - **Payloads and Report Builder identifiers are keyed by column key**, never by label. A key is
-  `[a-z][a-z0-9_]{0,39}`; `generate_key()` and `amd/src/columneditor.js` `generateKey()` must stay
-  in step. Keys holding values (`local\stored_values::usage()`, read from the stored field's
+  `[a-z][a-z0-9_]{0,39}` (the engine's `schema::generate_key()` and its column editor's JS
+  `generateKey()` stay in step there). Keys holding values (`local\stored_values::usage()`, read from the stored field's
   `user_info_data` payloads, never the projection, and counted by the engine) are locked in the editor AND enforced by
   `define_validate_specific()`: a schema that removes or re-keys one is rejected. A stored schema
   is re-checked on read: `from_json()` drops columns with a bad or colliding key.
@@ -168,7 +173,9 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   (COALESCE) read either shape until `migration::finish_field()` removes that config. Any new reader
   goes through these two.
 - The define form is a modal `dynamic_form`; the editor's data (locked keys, users, domains) rides
-  in data attributes of the textarea, because `js_call_amd()` warns past 1024 characters.
+  in data attributes of the textarea, because `js_call_amd()` warns past 1024 characters:
+  `define_after_data()` reads the usage of the STORED field and hands it to the engine's
+  `column_editor::attributes()`, then `init_js()` loads `local_repeatable/columneditor`.
   `bridge\dictionaries::domains()` (engine) reads `\local_dictionaries\api::list_domains()`; its `parentdomain`
   feeds the editor's parent-mismatch warning and `schema::validate()`'s `$parentdomains` rule.
 
@@ -178,7 +185,8 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   and `display_data()` all decode it, because core's `profile_save_custom_fields()` (auth_db and
   auth_ldap attribute sync) writes it without calling this plugin.
 - `profilefield_repeatable_data` is a projection for Report Builder only: `edit_save_data()` writes
-  the payload and `projection\projector::sync()` in one delegated transaction, as must any new writer.
+  the payload and the engine's `projector::sync()` (with this plugin's `local\source`) in one
+  delegated transaction, as must any new writer.
 - Drift is repaired by the `user_updated`/`user_created` observers and the daily
   `task\reproject_sets`. The observers are non-internal (`'internal' => false`): auth_ldap fires the
   event before `profile_save_custom_fields()` writes, inside one delegated transaction per user, and
@@ -186,13 +194,11 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   event still precedes the write, and auth_db sync of existing users fires none, so the daily task
   repairs those; restored users have no rows either. Tests that trigger these events call
   `preventResetByRollback()`, because PostgreSQL runs every PHPUnit test inside a transaction.
-- `reproject_record()` re-reads inside its transaction and decides staleness again: the snapshot
-  that selected the record may predate a user save, and writing from it would clobber that save.
-- `is_current()` compares sets as key-sorted JSON, because JSONB keeps neither key order nor spacing.
-- The renderer reads projection rows only for each set's last-sync time, matched by content, so a
-  stale row never lends its timestamp to another set.
-- `upsert_set_row()` has a PostgreSQL `ON CONFLICT` branch and a portable select-then-write branch:
-  a schema or semantic change lands in both, or one DB family drifts.
+- The writer's own rules are the engine's (`local_repeatable` `local\projection\projector`):
+  `reproject_record()` re-reads inside its transaction, `is_current()` compares key-sorted JSON, the
+  upsert has an `ON CONFLICT` and a portable branch, and the renderer dates a set only from a row
+  matching its content. `local\source` must keep answering what the record is NOW
+  (`canonical()` re-reads `{user_info_data}`), or the re-check reads a stale snapshot.
 - Caps `payload::MAX_SETS` (200) and `MAX_VALUE_LENGTH` (1024): `edit_validate_field()` checks the
   **raw** JSON (`validator::raw_error()`), because `payload::normalise()` truncates silently.
 - Core deletes `user_info_data` directly on user and field deletion, so the observers purge the
@@ -200,21 +206,20 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
 
 ### Edit form
 
-- The value travels in a hidden input that `repeatable.js` reads once on init and rewrites only on
-  form submit; the widget holds the state in between. The
-  hidden input sits inside a form group named after the field, because QuickForm prints no error
-  for a bare hidden element; the widget points at the error with `aria-describedby`.
-- Several repeatable fields can share one form: never assume a single instance in the JS.
-- Dictionary columns marked `autocomplete` (companion with `api::lookup()` AND `api::can_read()` for
-  the editing user, because the search service refuses the rest) are selects enhanced by
-  `core/form-autocomplete` with `dictionary_transport`; the rest stay text inputs. Core addresses
-  an enhanced select by id and keeps form handlers that look its elements up on submit, so a select
-  keeps one id for life and a removed set holding one is hidden (`data-removed`), never deleted.
-  `markup.js` exists so `repeatable.js` loads without the companion (the transport imports it).
-- The widget reads values on submit itself: core turns typed text into a tag asynchronously, after
-  the payload is built, so `controlValue()` reads an open column's typed text. Preloaded labels ride
-  on the hidden input's `data-labels` (resolver, read in `edit_after_data()` from the element value,
-  so a failed validation keeps them).
+- The widget (HTML, labels, JS) is the engine's `form\widget` and `local_repeatable/repeatable`; its
+  JS rules (state held between init and submit, one id per select for life, several instances per
+  form, `markup.js` loading without the companion) live there. The adapter (`get_widget()`,
+  `widget_ids()`) hands it the schema, `can_read_domain()` of the editing user and the two seams,
+  and owns the form integration below.
+- The value travels in a hidden input that sits inside a form group named after the field, because
+  QuickForm prints no error for a bare hidden element; the widget points at the error
+  (`fgroup_id_error_<inputname>`) with `aria-describedby`. Several repeatable fields can share one
+  form: the wrapper id carries the field id, the user id and the shortname.
+- Dictionary columns are `autocomplete` only with the companion's `api::lookup()` AND
+  `api::can_read()` for the editing user, because the search service refuses the rest; the rest stay
+  text inputs. Preloaded labels ride on the hidden input's `data-labels` (`widget::labels()`, read in
+  `edit_after_data()` from the element value, so a failed validation keeps them, with the STORED
+  codes from the validator).
 - Code checks live in `edit_validate_field()` → the engine's `local\validator` (one `api::lookup()`
   per readable domain); like `required`, web services and sync skip them. A codes-only column accepts
   the code already stored for that user and key (folded), read from `$this->data`, never the submission.
@@ -242,9 +247,11 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
 - Core shows a profile field as one column over the raw blob with no per-field hook, so the
   datasource joins one `repeatable_<shortname>` entity per field to the core `user` entity: one row
   per set. Column names follow the column key (see "Column schema"), so a label rename keeps saved
-  reports.
-- Every column value and filter option label goes through `s()`: core's autocomplete prints option
-  labels unescaped (stored XSS otherwise).
+  reports; `repeatable_sets_test::test_column_and_filter_identifiers_are_stable` pins them to a
+  literal list: never edit that list to make a change pass.
+- The columns, filters and their escaping (`s()` on every value and filter option label) are the
+  engine's `reportbuilder\local\entities\sets`; `repeatable_set` extends it with the field's schema,
+  the projection table and `is_available()`.
 - Every column and filter is `set_is_available(is_visible(system))` on a field instance built with
   `\core\user::SUPPORT_USER`, mirroring core's `user_profile_fields` helper: with user id 0 the
   visibility checks take the wrong branch.
@@ -255,19 +262,16 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
 ### Companion dictionary plugin (soft dependency)
 
 - Not in `dependencies`; every touchpoint guards with `class_exists()`, so the plugin installs,
-  validates and renders without the companion. Touchpoints, all through the companion's public API
-  and never its tables: `\local_dictionaries\resolver::resolve()`/`resolve_bulk()` (renderer,
-  entity, edit-form labels), `domain_exists()` (`column_editor`), and through the engine's
-  `bridge\dictionaries`: `api::list_domains()` (`domains()`), `api::can_read()` and `api::lookup()`
-  (edit form, probed by `lookup_available()`), `resolver::DOMAIN_PATTERN` (`domain_pattern()`, whose
-  fallback the engine pins), `fold_code()`; plus the AMD `local_dictionaries/autocomplete_transport`.
+  validates and renders without the companion. The field itself calls only `api::can_read()`
+  (`can_read_domain()`, behind the `companion_available()` seam); every other touchpoint is the
+  engine's (`bridge\dictionaries`, the renderer, the entity, the widget and column editor, the AMD
+  transport), all through the companion's public API and never its tables.
 - The companion is `local_dictionaries` (repo `uaiblaine/moodle-local_dictionaries`). Its domains have
   a `visibility`; the field resolves codes the viewer already sees, which the companion's contract
   leaves ungated, so display checks no visibility. Searching is gated by the companion's service:
   the edit form asks `api::can_read()` first and falls back to a text input.
 - Each branch's `ci.yml` installs the companion's matching `MOODLE_<NNN>_STABLE` branch
-  (`plugin-dependencies`): a contract change in either repo turns the other's CI red. The renderer
-  prefetches labels once per domain: keep it N+1-free.
+  (`plugin-dependencies`): a contract change in either repo turns the other's CI red.
 
 ### customfield_pattern (soft dependency, pattern columns)
 
@@ -283,20 +287,18 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
 - Present: `edit_validate_field()` → the engine's `local\validator` (the plugin's message is already safe
   HTML, passed into `errorpattern` unescaped); `edit_save_data_preprocess()` normalises (raw/masked),
   so web services and sync store the configured shape too; `edit_load_user_data()` formats, so a raw
-  value is edited masked; renderer, Report Builder value callback (`s()` after formatting) and privacy
-  export (plain text) format. `pattern_available()` on the field and the definition is the test seam.
-- The widget builds inputs in JS, so the plugin's `input_attributes()` ride in the columns JSON
-  (`inputattributes`; `repeatable.js` sets only the four names the API emits) and `api::js_init()`
-  loads the formatter, whose document-level listener covers inputs of sets added later. The editor gets availability and
-  presets (with their masks) from the textarea's `data-pattern` / `data-presets`.
+  value is edited masked; the engine's renderer, Report Builder value callback (`s()` after
+  formatting) and privacy export (plain text) format. `pattern_available()` on the field and the
+  definition is the test seam, handed to the engine's widget, column editor and validator.
 
 ### Display and styles
 
 - `show_field_content()` returns false: the field renders as its own profile category through
   `profilefield_repeatable_myprofile_navigation()` (`lib.php`), not inline.
-- No Bootstrap 5 utility at all, stricter than the fleet polyfill rule: the field renders inside
-  core pages where the plugin owns no ancestor to gate on, so own each declaration under a
-  `profilefield-repeatable-*` class (`tests/bootstrap_compat_test.php` enforces it).
+- `display_renderer` decides the layout (accordion on `/user/profile.php` and `/user/view.php`, plain
+  list elsewhere), names the accordion and reads this user's projection rows; the engine's
+  `output\sets_renderer` renders. The templates, the `local-repeatable-*` stylesheet and its
+  no-Bootstrap-5 rule (`bootstrap_compat_test`) are the engine's: this plugin ships no CSS.
 
 ## Testing notes
 
