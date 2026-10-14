@@ -9,7 +9,8 @@ A Moodle user profile field plugin that stores repeatable field data as sets of 
 Requirements
 ------------
 
-- Moodle 4.5 or later (tested up to Moodle 5.3).
+- Moodle 5.2 (branch `MOODLE_502_STABLE`; releases `v5.2-rN`), PHP 8.3 or later. Other Moodle
+  versions have their own branches.
 - Optional: [moodle-local_dictionaries](https://github.com/uaiblaine/moodle-local_dictionaries) for reference resolution.
 - Optional, Moodle 5.1 or later: [moodle-customfield_pattern](https://github.com/uaiblaine/moodle-customfield_pattern)
   (a version with `\customfield_pattern\api`) for pattern columns: masks and validation such as
@@ -17,8 +18,8 @@ Requirements
 
 Database baseline follows Moodle requirements:
 
-- PostgreSQL 13+ (Moodle 5.3 requires PostgreSQL 17)
-- MySQL 8.0+ / MariaDB (Moodle 5.3 requires MariaDB 11.4); supported fallback mode
+- PostgreSQL 16+
+- MySQL 8.4+ / MariaDB 10.11+; supported fallback mode
 
 Recommended for best performance: PostgreSQL.
 
@@ -100,16 +101,17 @@ Without JavaScript the columns are edited as the JSON schema the editor writes t
 A user's value is one JSON object of sets keyed by column key, e.g.
 `{"@@ID#1": {"language": "pt", "level": "C2", "certificate_number": "CEL-204871"}}`.
 
-### Upgrading from 2.x
+### Fields from 2.x
 
-Version 2.x configured a field with four lists (sub-items, indexed sub-items, `subitem|domain`
-mappings, subline sub-items) and stored values under the sub-item labels. The upgrade to 3.0
-converts every field once: keys are generated from the labels, mapped sub-items become strict
-dictionary columns and the others free text, the first sub-item becomes the title, and the
-stored values, the Report Builder projection and saved reports (columns, filters, conditions and
-users' filter values) move to the keys. A field with more than 500 stored values is finished by an
-ad hoc task ("Re-key repeatable profile field values by column key"); until it runs, values stored
-under the old labels still show everywhere.
+There is no upgrade step from 2.x or the pre-release 3.0 builds; the pre-release builds are
+numbered above every branch and must be uninstalled first. Version 2.x configured a field with
+four lists (sub-items, indexed sub-items, `subitem|domain` mappings, subline sub-items) and stored
+values under the sub-item labels. A field still holding those lists keeps working and opens in the
+definition form as its column schema (keys generated from the labels, mapped sub-items as strict
+dictionary columns, the first sub-item as the title); saving it converts it, and an ad hoc task
+("Re-key repeatable profile field values by column key") moves its stored values to the keys.
+Until the task runs, values stored under the old labels still show everywhere. Reports saved by
+2.x are not renamed.
 
 ### Display Modes
 
@@ -252,9 +254,9 @@ split layout shown; drop `public/` on older layouts):
 vendor/bin/phpunit public/user/profile/field/repeatable/tests/
 ```
 
-Covered areas: column schema and its validation, field definition, the 2.x upgrade, storage
-upsert/read, display rendering, Report Builder, privacy export/delete, and deletion-cleanup
-observers.
+Covered areas: column schema and its validation, field definition, the conversion of 2.x fields,
+storage upsert/read, display rendering, Report Builder, privacy export/delete, and deletion-
+cleanup observers.
 
 
 Troubleshooting

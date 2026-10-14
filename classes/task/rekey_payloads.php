@@ -21,7 +21,7 @@ use core\task\manager;
 use profilefield_repeatable\local\migration;
 
 /**
- * Finish the version 2 migration of a field too large to re-key inside the upgrade.
+ * Finish the version 2 conversion of a field saved from the version 1 parameters.
  *
  * Re-keys the payloads, rebuilds the projection and drops the field's legacy labels
  * ({@see migration::finish_field()}); idempotent, so a failed run is simply retried.

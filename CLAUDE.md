@@ -11,12 +11,14 @@ that stores repeatable sets of sub-items per user. The canonical value is a JSON
 `user_info_data.data`; the plugin's own table `profilefield_repeatable_data` holds one row per set
 as a projection for Report Builder (JSONB on PostgreSQL, with a GIN index and per-sub-item
 expression indexes). Optional code→label resolution comes from the companion dictionary plugin
-(soft dependency, see below). Supports Moodle **4.5 through 5.3**
-(`$plugin->requires = 2024100100`, `$plugin->supported = [405, 503]`), MATURITY_STABLE, one
-branch (`main`). CI is the moodle-an-hochschulen reusable workflow, one job per supported
-branch in `.github/workflows/ci.yml` — **update those jobs when `supported` changes**. Development
-happens on the m502 stack; the stacks that mount this repo at `user/profile/field/repeatable` follow
-`$plugin->supported` (`~/dev/moodle-dev/plugins.conf`, `auto`; `mdl mounts` regenerates them).
+(soft dependency, see below). **One branch per Moodle version**: `MOODLE_405_STABLE`,
+`MOODLE_501_STABLE`, `MOODLE_502_STABLE` (= `main`) and `MOODLE_503_STABLE`, MATURITY_STABLE,
+releases `v<major>.<minor>-r<N>`. Each branch's `version.php` sets `requires` and `supported` to
+its own Moodle version, and its `.github/workflows/ci.yml` has one moodle-an-hochschulen job for
+that core branch (full PHP x DB matrix) — **keep `version.php` and `ci.yml` per branch on a
+merge**. Development happens on `main` and the m502 stack; the stacks that mount this checkout at
+`user/profile/field/repeatable` follow `$plugin->supported` (`~/dev/moodle-dev/plugins.conf`,
+`auto`; `mdl mounts` regenerates them).
 
 ## Agent orchestration budget (fleet rule, repeated here on purpose)
 
@@ -78,7 +80,7 @@ field.class.php        profile_field_repeatable: edit form, validation, save, di
 define.class.php       profile_define_repeatable: admin definition (schema JSON + column editor)
 classes/helper.php     payload normalise/encode, caps, PG helpers, sql_column_value()
 classes/local/schema.php           column schema v2: parse, from_v1(), validate(), keys, accessors
-classes/local/migration.php        re-keying of payloads after the v2 upgrade (shared with the task)
+classes/local/migration.php        re-keying of payloads of a field converted from v1 (run by the task)
 classes/local/pattern_columns.php  the one door to customfield_pattern's api (pattern columns), soft dependency
 classes/local/projection.php       per-set rows: sync(), is_current(), reproject_*(), keys_in_use()
 classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
@@ -86,17 +88,18 @@ classes/output/display_renderer.php  accordion (profile pages) or plain list, bu
 classes/reportbuilder/             datasource repeatable_sets + entity repeatable_set
 classes/task/reconcile_indexes.php adhoc: PG expression indexes
 classes/task/reproject_sets.php    scheduled, daily: repair stale projections
-classes/task/rekey_payloads.php    adhoc: finishes the v2 migration of a field above 500 payloads
-db/upgradelib.php      the v2 upgrade step: convert fields, map saved report identifiers
+classes/task/rekey_payloads.php    adhoc: re-keys a field the definition form converted from v1
 amd/src/               repeatable.js (edit widget), dictionary_transport.js (its autocomplete transport),
                        markup.js (shared by both), columneditor.js (define form), displayaccordion.js
 ```
 
 ## Versions
 
-`$plugin->version` is date-based (`YYYYMMDDXX`) while `main` serves every supported Moodle version.
-On the split into one branch per Moodle version, each branch numbers itself in that version's
-namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-and-direction-2026-10.md` §3.
+Each branch numbers itself in its Moodle version's namespace (4.5 `20241007XX`, 5.1 `20251006XX`,
+5.2 `20260420XX`, 5.3 `20261005XX`; fleet rule, `~/dev/CLAUDE.md`), counter per branch. The r1
+releases dropped the pre-release upgrade step (its savepoint 2026101301 is above every branch's
+version); a new step is numbered in its own branch's namespace. `install.xml` keeps
+`VERSION="2024100700"` on every branch. The plan: `docs/audit-and-direction-2026-10.md` §3.
 
 ## Architecture gotchas
 
@@ -128,13 +131,12 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 - Per-column `required` is checked in `edit_validate_field()` only: web services, CSV upload and
   auth sync save through `edit_save_data()` without it. A JSON null under a key counts as absent
   (`helper::column_value()`), as COALESCE treats PostgreSQL's NULL.
-- The upgrade is resumable: `legacykeys_<fieldid>` is written for every converted field (`{}` when
-  no label differs from its key) and removed only by `migration::finish_field()`; a v2 field that
-  still has it is resumed. The rekey's compare-and-set is exact (`sql_equal()` case and accent
-  sensitive on pgsql/mysql, PHP comparison elsewhere).
+- Saving a v1 field in the definition form converts it: `legacykeys_<fieldid>` is written before
+  `param1` changes and removed only by `migration::finish_field()`, run by the `rekey_payloads`
+  task. The rekey's compare-and-set is exact (`sql_equal()` case and accent sensitive on
+  pgsql/mysql, PHP comparison elsewhere).
 - Report Builder identifiers: free `<key>`, dictionary `<key>_name` + `<key>_code`, plus
-  `setnumber`. The upgrade maps 2.x `subitemN`/`subitemnameN`/`subitemcodeN` (1-based position) in
-  `reportbuilder_column`, `reportbuilder_filter`, `conditiondata` and users' filter values.
+  `setnumber`.
 - **v1-tolerant reads**: a field still on the four lists is read through `schema::from_v1()`; a
   converted field whose payloads are not re-keyed yet has its key → 2.x label map in the plugin
   config `legacykeys_<fieldid>`. `helper::normalise_payload()` and `helper::sql_column_value()`
@@ -240,8 +242,9 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
   a `visibility`; the field resolves codes the viewer already sees, which the companion's contract
   leaves ungated, so display checks no visibility. Searching is gated by the companion's service:
   the edit form asks `api::can_read()` first and falls back to a text input.
-- `ci.yml` installs the companion's `main` (`plugin-dependencies`): a contract change in either repo
-  turns the other's CI red. The renderer prefetches labels once per domain: keep it N+1-free.
+- Each branch's `ci.yml` installs the companion's matching `MOODLE_<NNN>_STABLE` branch
+  (`plugin-dependencies`): a contract change in either repo turns the other's CI red. The renderer
+  prefetches labels once per domain: keep it N+1-free.
 
 ### customfield_pattern (soft dependency, pattern columns)
 
@@ -276,13 +279,13 @@ namespace (fleet rule, `~/dev/CLAUDE.md`). The split and r1 plan: `docs/audit-an
 
 - Fields come from the plugin's data generator (`schema_json()`, `create_field()`), which builds a
   v2 schema from labels or column arrays; form behaviour (the error group) goes through
-  `tests/fixtures/edit_form.php`, which calls the edit hooks in `user/edit.php`'s order. The
-  upgrade is tested by calling `xmldb_profilefield_repeatable_upgrade()` on v1 rows
-  (`tests/upgrade_test.php`).
+  `tests/fixtures/edit_form.php`, which calls the edit hooks in `user/edit.php`'s order.
+  Re-keying is tested on a v1 field converted as the definition form does
+  (`tests/local/migration_test.php`).
 - PG-only behaviour is asserted behind a dbfamily check or `markTestSkipped()`, and
   companion-dependent tests skip when its classes or tables are absent. Pattern tests that need
   customfield_pattern skip without it; those describing its absence either use the
-  `pattern_available()` seam (every leg) or skip when it IS installed (the 4.5/5.0 legs run them).
+  `pattern_available()` seam (every leg) or skip when it IS installed (the 4.5 branch runs them).
 - Behat: scope profile-form locators to the category fieldset (`in the "Testing" "fieldset"`),
   because a bare "Language" also matches "Preferred language".
 - `.mdlshield/config.yml` pins `versions: ["5.2"]`: read core-API findings knowing 4.5 is supported.

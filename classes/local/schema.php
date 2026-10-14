@@ -28,7 +28,7 @@ use profilefield_repeatable\helper;
  * Fields still on the version 1 parameters (param1 lists the labels, param2 the indexed ones,
  * param3 "label|domain" mappings, param4 the subline) are read through {@see self::from_v1()},
  * whose payloads are keyed by label: {@see self::legacy_labels()} tells the payload readers which
- * label each key used to be stored under, until the upgrade has re-keyed the payloads
+ * label each key used to be stored under, until the payloads are re-keyed
  * ({@see \profilefield_repeatable\local\migration}).
  *
  * The constructor normalises types and never rejects: {@see self::validate()} is the one place

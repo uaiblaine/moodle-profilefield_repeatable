@@ -6,8 +6,8 @@ with the same columns. A value is kept twice: as a JSON object in core's
 `user_info_data.data`, and as one row per set in the plugin's own table
 `profilefield_repeatable_data`. On PostgreSQL that table's `data` column is converted to
 JSONB and indexed with SQL the plugin runs itself. An optional soft dependency, the companion
-plugin `local_dictionaries`, turns stored codes into labels. The plugin supports
-Moodle 4.5 through 5.2 on one branch.
+plugin `local_dictionaries`, turns stored codes into labels. The plugin has one branch per
+Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 
 ## Who is trusted
 

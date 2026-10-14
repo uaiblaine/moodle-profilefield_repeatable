@@ -22,23 +22,15 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once(__DIR__ . '/lib.php');
-require_once(__DIR__ . '/upgradelib.php');
-
 /**
  * Upgrade the plugin.
  *
- * @param int $oldversion
- * @return bool
+ * Upgrade steps are numbered in the version namespace of the branch they live on, never in
+ * another branch's, and none exists yet for this one.
+ *
+ * @param int $oldversion The version being upgraded from.
+ * @return bool Always true.
  */
 function xmldb_profilefield_repeatable_upgrade(int $oldversion): bool {
-    if ($oldversion < 2026101301) {
-        // Column schema v2: one JSON schema in param1, payloads and report identifiers keyed by column key.
-        profilefield_repeatable_upgrade_to_schema_v2();
-        upgrade_plugin_savepoint(true, 2026101301, 'profilefield', 'repeatable');
-    }
-
     return true;
 }
