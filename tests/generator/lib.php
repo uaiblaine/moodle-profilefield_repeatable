@@ -23,7 +23,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\schema;
 
 /**
  * Builds column schemas and repeatable fields.

@@ -2,6 +2,134 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v5.1-r2] - 2026-10-14
+
+Moodle 5.1 branch (`MOODLE_501_STABLE`): version `2025100601`, release `v5.1-r2`, `MATURITY_STABLE`,
+`$plugin->supported = [501, 501]`, requires `local_repeatable` `2025100600` (`v5.1-r1`). The same
+changes ship as `v4.5-r2` (`MOODLE_405_STABLE`), `v5.2-r2` (`MOODLE_502_STABLE`, also `main`) and
+`v5.3-r2` (`MOODLE_503_STABLE`), each requiring the engine's release for its own Moodle version. The
+field becomes the profile-field adapter of the repeatable-sets engine `local_repeatable`. This
+branch takes `main`'s development in one version step: the versions `20260420XX` named below are
+`main`'s development versions, and the upgrade step is `2025100601` here.
+
+### Security
+- `edit_save_data()` now runs the checks of `edit_validate_field()` (raw caps, required columns, code
+  checks against the stored payload and the current user's dictionary rights) before any write on a web
+  service request or the AJAX call of a logged-in user. Web services (`core_user_create_users`,
+  `core_user_update_users`) skipped them, so a caller with `moodle/user:update` could store a code of a
+  restricted dictionary they cannot read and read its label back. A failing value is refused with
+  `errorsaverejected`, which names only the field. Login-time account creation and updates, auth_oauth2
+  and auth_db/auth_ldap account creation still store the external source's value without the checks, so a
+  value from the identity provider cannot lock a user out or abort a sync; the source is configured by an
+  administrator. auth_db/auth_ldap attribute updates (`profile_save_custom_fields()`) never call the plugin.
+
+### Upgrade notes
+- The field now requires `local_repeatable` (the repeatable-sets engine, `uaiblaine/moodle-local_repeatable`),
+  its release for the same Moodle version (`v5.1-r1`, version 2025100600 or later, on this branch):
+  place `local/repeatable` before upgrading.
+  Core checks the dependency against the version on disk, then upgrades the field before it installs
+  the engine, because local plugins come last; that is safe, because the field's upgrade steps read
+  no engine database state (the engine has none) and `db/upgradelib.php` calls no engine code.
+- Lang strings moved to `local_repeatable` with the same keys: the schema and validation errors
+  (`errorcode*`, `errorcolumnrequired`, `errorcolumnslimit`, `errorcolumnsrequired`, `errordomain*`,
+  `errorinvalidjson`, `errorkey*`, `errorlabel*`, `errormodeinvalid`, `errorparent*`, `errorpattern*`,
+  `errorschemainvalid`, `errorsubline*`, `errortitlecount`, `errortoomanysets`, `errorvaluetoolong`).
+  An administrator's customisation of a moved string (language customisation) must be redone under
+  `local_repeatable`.
+- More lang strings moved to `local_repeatable` with the same keys and the same text:
+  the edit widget's, the column editor's, the profile display's and the Report Builder
+  entity's (`actioncolumn`, `addcolumn`, `addnewset`, `choosefirst`, `column*` except `columns` and
+  `columns_help`, `domain*`, `entityrepeatableset`, `mode*`, `movedown`, `moveup`, `newcode`,
+  `newcolumn`, `nomatchstrict`, `parent*`, `pattern*`, `remove*`, `repeatableset`, `role*`,
+  `searchplaceholder`, `setcolumn`, `setnumber`, `summary*`, `synchronisedat`, `usecode`; 71 keys).
+  Language customisations of these must be redone under `local_repeatable` too.
+- The CSS classes of the edit widget, the column editor and the profile display
+  are renamed from `profilefield-repeatable-*` to `local-repeatable-*` (the stylesheet now ships with
+  `local_repeatable`; the `--pfr-*` custom properties keep their names). A theme that overrides the
+  old classes must follow the rename. The element ids the field builds (`profilefield-repeatable-<id>`
+  for the edit widget, `profilefield-repeatable-display-<id>` for the profile accordion) are unchanged.
+- The AMD modules are `local_repeatable/repeatable`, `local_repeatable/markup`,
+  `local_repeatable/dictionary_transport`, `local_repeatable/columneditor` and
+  `local_repeatable/displayaccordion`; the `profilefield_repeatable/*` modules no longer exist. Nothing
+  stores a module name, and the upgrade's cache purge drops the old ones.
+- The upgrade runs one step (2025100601 on this branch, see "Changed"): on PostgreSQL it removes the
+  r1 index layer and turns the projection's `data` column back into text, and on every database it
+  deletes the queued `reconcile_indexes` ad hoc tasks. Stored values and saved reports are unchanged.
+- Going back to r1 is a version downgrade, which Moodle refuses: the way back is restoring a backup
+  taken before the upgrade.
+
+### Removed
+- The PostgreSQL index layer (owner decision D3, `docs/engine-extraction-design.md` §8). Measured on
+  PostgreSQL 18.6 with 50,000 users and 125,000 projection rows, no Report Builder filter or listing
+  used the per-column partial expression indexes or the GIN index: "contains" is `ILIKE '%v%'`,
+  "is equal to" compares `LOWER()` values while the index held the bare `data->>'key'`, the indexes
+  were partial on `jsonb_exists(data, key)`, which Report Builder never emits, and the GIN
+  `jsonb_path_ops` index serves only `@>`, which nothing in the plugin emits. Gone with it: the
+  `reconcile_indexes` ad hoc task, the install hook that converted the projection's `data` column to
+  `jsonb` and created the GIN index (`db/install.php`, `db/lib.php`), the redundant
+  `db/uninstall.php` (core drops the table and the plugin's ad hoc tasks), the "Index for reports"
+  column role with its limit of 3 and its lang strings, and the mutation gates I1-I7 and SC11. The
+  readers keep `(data)::jsonb ->> 'key'`, which reads the text column.
+- A stored schema's `indexed` flag is dropped when read and omitted on the next save; version 1
+  fields' indexed list (`param2`) is ignored.
+
+### Changed
+- Upgrade step 2025100601 (`db/upgradelib.php`, `profilefield_repeatable_drop_index_layer()`): on
+  PostgreSQL it drops the indexes of the projection table whose names have the layer's exact shapes
+  (`pfrd_f<fieldid>_<16 hex>`, `pfrd_<8 hex>_gin_ix`; never a bare prefix) and turns the `data` column
+  back into `text`, as `install.xml` declares it; on every database it deletes the queued
+  `reconcile_indexes` ad hoc tasks, whose class no longer exists. No DDL on MySQL/MariaDB. Tested by
+  `tests/upgrade_test.php`, held by gates U1-U8; SC16 holds the dropped `indexed` flag.
+- Engine extraction stage A (`docs/engine-extraction-design.md` §6), version 2026042002: the field is
+  rearranged into the shape of the future `local_repeatable` engine behind its own namespace, with
+  output, validation messages, SQL, Report Builder identifiers, lang strings and AMD module names
+  unchanged. Engine side: `local\validator`, `form\widget`, `form\column_editor`,
+  `output\sets_renderer`, `local\projection\{store,source,projector}`,
+  `reportbuilder\local\entities\sets` (abstract) and `privacy\set_exporter`. Profile adapter:
+  `local\field_schema` (the version 1 reader, out of `local\schema` and `helper`), `local\source`,
+  and the trimmed `field.class.php`, `define.class.php`, `display_renderer`, `repeatable_set`,
+  `local\projection` (now only `reproject_user()`) and privacy provider. A new test pins the
+  datasource's column and filter unique identifiers to a list captured before the move, so saved
+  reports keep working across the extraction (§5.2 item 5). Mutation gates repointed to the new
+  files.
+- Engine extraction stage B3, version 2026042003: the field is an adapter of `local_repeatable` for
+  the column schema, payloads, Report Builder SQL, validation, the companion bridges and the privacy
+  export. It calls `\local_repeatable\local\{schema,payload,sql,validator,stored_values}`,
+  `local\bridge\{dictionaries,pattern}` and `privacy\set_exporter`; `local\stored_values` keeps
+  `locked_labels()` and `usage()`, which reads the field's `{user_info_data}` payloads and hands them
+  to the engine. `db/upgradelib.php` keeps its own identifier quoting. Behaviour, messages, Report
+  Builder identifiers and the stored data are unchanged.
+- Engine extraction stage C4, version 2026042004: the edit widget (`\local_repeatable\form\widget`), the
+  column editor (`form\column_editor`), the sets renderer (`output\sets_renderer`), their templates,
+  stylesheet and AMD modules, the projection writer (`local\projection\{store,source,projector}`) and
+  the abstract Report Builder entity (`reportbuilder\local\entities\sets`) now come from
+  `local_repeatable`. The field keeps the adapter: `field.class.php` (form integration, the save
+  transaction, the `can_read_domain()` / `companion_available()` / `pattern_available()` seams),
+  `define.class.php` (locked keys from the stored field), `display_renderer` (layout, accordion id,
+  projection rows), `local\source` (implements the engine's `local\projection\source`),
+  `local\projection::reproject_user()`, the observers and tasks, `repeatable_set` (extends the engine's
+  entity; availability through `\core\user::SUPPORT_USER`) and the `repeatable_sets` datasource, whose
+  saved-report identifiers are unchanged.
+
+### Removed (stage B3)
+- The field's copies of what moved: `classes/helper.php`, `local\schema`, `local\pattern_columns`,
+  `local\validator`, `privacy\set_exporter`, the 29 moved lang strings, the tests that duplicated the
+  engine's unit tests (`helper_test`, `local\schema_test`, `local\pattern_columns_test` and parts of
+  the field, dictionary, pattern and privacy tests; the field keeps the adapter's integration tests,
+  and `local\field_schema_test` keeps the version 1 reader's), and the mutation gates the engine now
+  holds.
+
+### Removed (stage C4)
+- The field's copies of what stages C1-C3 moved: `classes/form/widget.php`,
+  `classes/form/column_editor.php`, `classes/output/sets_renderer.php`,
+  `classes/local/projection/{store,source,projector}.php`,
+  `classes/reportbuilder/local/entities/sets.php`, `templates/` (`edit_form`, `display_accordion`,
+  `display_plain`), `styles.css`, `amd/` (source and build), the 71 moved lang strings,
+  `tests/bootstrap_compat_test.php`, the tests that duplicated the engine's unit tests
+  (`tests/local/projection_test.php` and two entity unit tests of the datasource test) and the
+  mutation gates the engine now holds (ES1-ES5, X1, D1, K1, B10, B11, B18, PT5, PT6, PT12, PT13, J1-J3,
+  J6-J9, E1-E6, R1).
+
 ## [v5.1-r1] - 2026-10-13
 
 Moodle 5.1 branch (`MOODLE_501_STABLE`): version `2025100600`, release `v5.1-r1`,

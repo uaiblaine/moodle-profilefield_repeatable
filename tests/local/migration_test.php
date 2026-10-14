@@ -19,8 +19,8 @@ namespace profilefield_repeatable\local;
 use core_reportbuilder\local\filters\text;
 use core_reportbuilder\local\models\column;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
+use local_repeatable\local\schema;
 use profilefield_repeatable\reportbuilder\datasource\repeatable_sets;
-use profilefield_repeatable\task\reconcile_indexes;
 use profilefield_repeatable\task\rekey_payloads;
 
 defined('MOODLE_INTERNAL') || die();
@@ -111,14 +111,14 @@ final class migration_test extends core_reportbuilder_testcase {
     private function convert(\stdClass $field): schema {
         global $DB;
 
-        $schema = schema::from_v1(
+        $schema = field_schema::from_v1(
             (string)$field->param1,
             (string)$field->param2,
             (string)$field->param3,
             (string)$field->param4
         );
         set_config(
-            schema::legacy_config_name((int)$field->id),
+            field_schema::legacy_config_name((int)$field->id),
             json_encode((object)$schema->legacy_labels(), JSON_UNESCAPED_UNICODE),
             'profilefield_repeatable'
         );
@@ -197,7 +197,7 @@ final class migration_test extends core_reportbuilder_testcase {
 
         // The define form locks the keys holding values through the legacy labels too.
         $stored = $DB->get_record('user_info_field', ['id' => $field->id]);
-        $usage = stored_values::keys_in_use((int)$field->id, schema::from_field($stored));
+        $usage = stored_values::usage((int)$field->id, field_schema::from_field($stored));
         $this->assertSame(['lingua', 'level', 'certificate_number'], $usage['keys']);
 
         // The task finishes the field.
@@ -209,13 +209,8 @@ final class migration_test extends core_reportbuilder_testcase {
             $DB->get_field('user_info_data', 'data', ['id' => $alicedata])
         );
         $this->assertEquals(['lingua' => 'pt', 'level' => 'C2', 'certificate_number' => 'CEL-1'], $this->projected($alicedata)[1]);
-        $this->assertFalse(get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)));
+        $this->assertFalse(get_config('profilefield_repeatable', field_schema::legacy_config_name((int)$field->id)));
         $this->assertSame(0, migration::finish_field((int)$field->id), 'Idempotent');
-
-        // On PostgreSQL the indexes follow the keys.
-        if ($DB->get_dbfamily() === 'postgres') {
-            $this->assertNotEmpty(\core\task\manager::get_adhoc_tasks(reconcile_indexes::class));
-        }
     }
 
     /**
@@ -229,7 +224,7 @@ final class migration_test extends core_reportbuilder_testcase {
         $user = $this->getDataGenerator()->create_user();
         $dataid = $this->v1_payload($field, (int)$user->id, self::ALICE);
         $schema = $this->convert($field);
-        $this->assertNotEmpty(get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)));
+        $this->assertNotEmpty(get_config('profilefield_repeatable', field_schema::legacy_config_name((int)$field->id)));
 
         // A save of the new shape lands between the read and the write: the write leaves it alone.
         $saved = '{"@@ID#1":{"lingua":"fr","level":"","certificate_number":""}}';
@@ -245,7 +240,7 @@ final class migration_test extends core_reportbuilder_testcase {
 
         $DB->delete_records('user_info_field', ['id' => $field->id]);
         $this->assertSame(0, migration::finish_field((int)$field->id));
-        $this->assertFalse(get_config('profilefield_repeatable', schema::legacy_config_name((int)$field->id)));
+        $this->assertFalse(get_config('profilefield_repeatable', field_schema::legacy_config_name((int)$field->id)));
     }
 
     /**
