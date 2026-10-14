@@ -128,7 +128,11 @@ availability flags.
 Each branch numbers itself in its Moodle version's namespace (4.5 `20241007XX`, 5.1 `20251006XX`,
 5.2 `20260420XX`, 5.3 `20261005XX`; fleet rule, `~/dev/CLAUDE.md`), counter per branch. The r1
 releases dropped the pre-release upgrade step (its savepoint 2026101301 is above every branch's
-version); a new step is numbered in its own branch's namespace. `install.xml` keeps
+version); a new step is numbered in its own branch's namespace. r2 has one step, the index-layer
+removal (`db/upgradelib.php`): savepoint 2026042001 on `main`, 2024100701 / 2025100601 / 2026100501 on
+the 4.5 / 5.1 / 5.3 branches, each branch's `version.php` at or above its own; every r1 install has
+the layer, so the step runs on every branch. `dependencies` names the engine release of the same
+branch (2026042004 / 2024100700 / 2025100600 / 2026100500). `install.xml` keeps
 `VERSION="2024100700"` on every branch. The plan: `docs/audit-and-direction-2026-10.md` §3.
 
 ## Architecture gotchas
@@ -248,7 +252,7 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
 - **No index layer** (owner decision D3, measured): Report Builder's filters (`ILIKE '%v%'`,
   `LOWER(expr) = LOWER(v)`) use no expression or GIN index, so the projection is a text column read
   as `(data)::jsonb ->> key`. Do not add indexes back without an `EXPLAIN` that uses them.
-- Upgrade step 2026042001 removes the r1 layer: index ownership is an exact match on the two shapes
+- The r2 upgrade step (see "Versions") removes the r1 layer: index ownership is an exact match on the two shapes
   it built (`pfrd_f<fieldid>_<16 hex>`, `pfrd_<8 hex>_gin_ix`), never a `LIKE` prefix (a bare
   prefix let field 1 claim fields 10-19); indexes go before the column turns text, because neither
   index type accepts a text column. DDL takes no bound parameters: `profilefield_repeatable_quote_identifier()`.
