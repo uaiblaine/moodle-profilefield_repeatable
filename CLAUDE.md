@@ -76,21 +76,30 @@ session was resumed on a container that skipped the setup script: attach `moodle
 ## Code layout
 
 ```
-field.class.php        profile_field_repeatable: edit form, validation, save, display entry
-define.class.php       profile_define_repeatable: admin definition (schema JSON + column editor)
+field.class.php        profile_field_repeatable (adapter): profile hooks, save transaction, seams, ids
+define.class.php       profile_define_repeatable (adapter): stored field, locked keys, v1 conversion
 classes/helper.php     payload normalise/encode, caps, PG helpers, sql_column_value()
-classes/local/schema.php           column schema v2: parse, from_v1(), validate(), keys, accessors
+classes/local/schema.php           column schema v2 (engine): parse, validate(), keys, accessors
+classes/local/field_schema.php     the {user_info_field} reader (adapter): from_field(), from_v1(), legacy config
+classes/local/validator.php        payload checks (engine): raw caps, required, codes, patterns
+classes/local/source.php           profile implementation of local\projection\source (adapter)
+classes/local/projection/          engine: store, source (adapter contract), projector (sync, reprojection)
+classes/local/projection.php       reproject_user() (adapter: joins user_info_data to user_info_field)
 classes/local/migration.php        re-keying of payloads of a field converted from v1 (run by the task)
 classes/local/pattern_columns.php  the one door to customfield_pattern's api (pattern columns), soft dependency
-classes/local/projection.php       per-set rows: sync(), is_current(), reproject_*(), keys_in_use()
+classes/form/                      engine: widget (edit table, labels, JS), column_editor (define textarea)
 classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
-classes/output/display_renderer.php  accordion (profile pages) or plain list, bulk label prefetch
-classes/reportbuilder/             datasource repeatable_sets + entity repeatable_set
+classes/output/        sets_renderer (engine: accordion/plain), display_renderer (adapter: layout, rows)
+classes/reportbuilder/             datasource repeatable_sets; entity sets (engine) + repeatable_set (adapter)
+classes/privacy/       provider (adapter), set_exporter (engine: one payload as exported)
 classes/task/reproject_sets.php    scheduled, daily: repair stale projections
 classes/task/rekey_payloads.php    adhoc: re-keys a field the definition form converted from v1
 amd/src/               repeatable.js (edit widget), dictionary_transport.js (its autocomplete transport),
                        markup.js (shared by both), columneditor.js (define form), displayaccordion.js
 ```
+
+Engine-side classes (stage A of `docs/engine-extraction-design.md`) never call profile-field APIs: the
+adapter passes the stored payload, the can-read callable and the seams' availability flags.
 
 ## Versions
 
@@ -136,7 +145,7 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   pgsql/mysql, PHP comparison elsewhere).
 - Report Builder identifiers: free `<key>`, dictionary `<key>_name` + `<key>_code`, plus
   `setnumber`.
-- **v1-tolerant reads**: a field still on the four lists is read through `schema::from_v1()`; a
+- **v1-tolerant reads**: a field still on the four lists is read through `field_schema::from_v1()`; a
   converted field whose payloads are not re-keyed yet has its key → 2.x label map in the plugin
   config `legacykeys_<fieldid>`. `helper::normalise_payload()` and `helper::sql_column_value()`
   (COALESCE) read either shape until `migration::finish_field()` removes that config. Any new reader
@@ -152,7 +161,7 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   and `display_data()` all decode it, because core's `profile_save_custom_fields()` (auth_db and
   auth_ldap attribute sync) writes it without calling this plugin.
 - `profilefield_repeatable_data` is a projection for Report Builder only: `edit_save_data()` writes
-  the payload and `local\projection::sync()` in one delegated transaction, as must any new writer.
+  the payload and `projection\projector::sync()` in one delegated transaction, as must any new writer.
 - Drift is repaired by the `user_updated`/`user_created` observers and the daily
   `task\reproject_sets`. The observers are non-internal (`'internal' => false`): auth_ldap fires the
   event before `profile_save_custom_fields()` writes, inside one delegated transaction per user, and
@@ -189,7 +198,7 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   the payload is built, so `controlValue()` reads an open column's typed text. Preloaded labels ride
   on the hidden input's `data-labels` (resolver, read in `edit_after_data()` from the element value,
   so a failed validation keeps them).
-- Code checks live in `edit_validate_field()` → `validate_dictionary_codes()` (one `api::lookup()`
+- Code checks live in `edit_validate_field()` → `local\validator` (one `api::lookup()`
   per readable domain); like `required`, web services and sync skip them. A codes-only column accepts
   the code already stored for that user and key (folded), read from `$this->data`, never the submission.
   `companion_available()` is the seam tests override to run without the companion.
@@ -254,7 +263,7 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   `===` after a recursive key sort, never a loose `==`, which reads "1000" as "1e3"), read from
   `pattern_objects()` of the STORED field; values are validated by nothing, stored as typed, shown
   as stored.
-- Present: `edit_validate_field()` → `validate_pattern_values()` (the plugin's message is already safe
+- Present: `edit_validate_field()` → `local\validator` (the plugin's message is already safe
   HTML, passed into `errorpattern` unescaped); `edit_save_data_preprocess()` normalises (raw/masked),
   so web services and sync store the configured shape too; `edit_load_user_data()` formats, so a raw
   value is edited masked; renderer, Report Builder value callback (`s()` after formatting) and privacy

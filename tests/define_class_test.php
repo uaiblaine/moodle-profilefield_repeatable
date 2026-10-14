@@ -33,6 +33,7 @@ require_once($CFG->libdir . '/formslib.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_define_repeatable
+ * @covers     \profilefield_repeatable\form\column_editor
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */

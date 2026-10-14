@@ -33,7 +33,9 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
  * @covers     \profilefield_repeatable\local\validator
+ * @covers     \profilefield_repeatable\form\widget
  * @covers     \profile_define_repeatable
+ * @covers     \profilefield_repeatable\form\column_editor
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */

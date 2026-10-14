@@ -32,6 +32,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\privacy\provider
+ * @covers     \profilefield_repeatable\privacy\set_exporter
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
