@@ -60,13 +60,18 @@ branch per Moodle version (4.5, 5.1, 5.2 = `main`, 5.3).
 
 - **The plugin writes `user_info_data` itself** in `edit_save_data()`, because the JSON there is
   the canonical value and the per-set rows are rebuilt from it.
-- **Every path through `edit_save_data()` runs the form's checks** (raw caps, required columns,
-  code checks with the stored payload and the current user's dictionary rights) before any write, through
-  the one private method `edit_validate_field()` also uses; a failing value throws `errorsaverejected`
-  naming only the field. Web services and the CSV upload skip `edit_validate_field()` (core behaviour)
-  but not this. The residual is auth_db/auth_ldap sync: core's `profile_save_custom_fields()` writes
-  `user_info_data` without calling the plugin; its data comes from the configured external source, not
-  from a user. The payload is still normalised and pattern values are stored normalised.
+- **The form and web-service paths run the checks; login and sync do not.** `edit_save_data()` runs
+  the form's checks (raw caps, required columns, code checks with the stored payload and the current
+  user's dictionary rights) before any write, through the private method `edit_validate_field()` also
+  uses, when `save_checks_apply()` is true (a web service request, or the AJAX call of a logged-in
+  user, `core_user_update_users` being an AJAX service); a failing value throws `errorsaverejected`
+  naming only the field. Documented residual: login-time account creation and updates
+  (`create_user_record()`, `update_user_record_by_id()`, auth_oauth2) and auth_db/auth_ldap account
+  creation reach `edit_save_data()` without the form and store the external source's value, normalised
+  but unchecked, on purpose: refusing would lock the user out or abort the sync, and the source is
+  configured by an administrator, a user cannot choose it. auth_db/auth_ldap attribute updates use
+  core's `profile_save_custom_fields()`, which never calls the plugin. The CSV upload runs
+  `edit_validate_field()` itself.
 - **The optional plugins are soft dependencies.** Every use is guarded by `class_exists()` and
   goes through their public APIs. Stored codes are resolved to labels without a visibility check,
   as the dictionary plugin's contract allows; submitted codes are not.

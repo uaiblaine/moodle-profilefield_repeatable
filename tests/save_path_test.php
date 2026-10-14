@@ -26,11 +26,14 @@ require_once($CFG->dirroot . '/user/lib.php');
 require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
 
 /**
- * Every save path through edit_save_data() runs the form's code checks.
+ * A web service request through edit_save_data() runs the form's code checks; login and sync do not.
  *
  * Core's web services (core_user_create_users, core_user_update_users) call profile_save_data()
  * without edit_validate_field(): an operator with moodle/user:update who cannot read a restricted
  * dictionary must not store one of its codes, or the stored code would resolve to its label.
+ * PHPUnit is not a web service request (WS_SERVER is a constant, false here), so the web service
+ * tests save through a field subclass that answers save_checks_apply() as a web service request
+ * would, and the login and sync tests use core's own profile_save_data() unchanged.
  * Metadata stays in docblocks: the plugin supports Moodle 4.5, whose moodle-cs cannot read
  * PHPUnit attributes.
  *
@@ -113,13 +116,34 @@ final class save_path_test extends \advanced_testcase {
     }
 
     /**
-     * Save a value the way core_user_update_users does after user_update_user().
+     * Save a value the way a web service request does: the field answers that the checks apply.
      *
      * @param int $userid
      * @param string $payload
      * @return void
      */
     private function save(int $userid, string $payload): void {
+        $field = new class ((int)$this->record->id, $userid) extends \profile_field_repeatable {
+            /**
+             * Stands in for a web service request, which a PHPUnit process cannot be.
+             *
+             * @return bool
+             */
+            protected function save_checks_apply(): bool {
+                return true;
+            }
+        };
+        $field->edit_save_data((object)['id' => $userid, 'profile_field_places' => $payload]);
+    }
+
+    /**
+     * Save a value the way login, auth_oauth2 and the auth sync do: core's profile_save_data(), no web service.
+     *
+     * @param int $userid
+     * @param string $payload
+     * @return void
+     */
+    private function save_at_login(int $userid, string $payload): void {
         profile_save_data((object)['id' => $userid, 'profile_field_places' => $payload]);
     }
 
@@ -143,7 +167,7 @@ final class save_path_test extends \advanced_testcase {
     }
 
     /**
-     * An operator cannot store an unstored code of a restricted dictionary through profile_save_data().
+     * An operator cannot store an unstored code of a restricted dictionary on a web service request.
      */
     public function test_operator_cannot_save_an_unreadable_code(): void {
         $user = $this->getDataGenerator()->create_user();
@@ -160,26 +184,45 @@ final class save_path_test extends \advanced_testcase {
     }
 
     /**
-     * The user update web service refuses the same value with a message that leaks nothing, and stores nothing.
+     * The rejection of a web service request names the field and nothing submitted, and stores nothing.
      */
-    public function test_user_update_web_service_refuses_an_unreadable_code(): void {
+    public function test_web_service_save_refuses_without_leaking(): void {
         $user = $this->getDataGenerator()->create_user();
         $this->setUser($this->operator());
-        $_POST['sesskey'] = sesskey();
 
-        $result = \core_external\external_api::call_external_function('core_user_update_users', [
-            'users' => [['id' => $user->id, 'customfields' => [['type' => 'places', 'value' => $this->payload('3304557')]]]],
-        ], false);
-
-        // Like the course web service, the user one reports a failed save as a warning.
-        $this->assertFalse($result['error'], json_encode($result));
-        $this->assertCount(1, $result['data']['warnings']);
-        $warning = $result['data']['warnings'][0];
-        $this->assertSame('errorsaverejected', $warning['warningcode']);
-        $this->assertSame(get_string('errorsaverejected', 'profilefield_repeatable', 'Places'), $warning['message']);
-        $this->assertStringNotContainsString('3304557', json_encode($result));
-        $this->assertStringNotContainsString('Hiddenburg', json_encode($result));
+        $this->assert_rejected(fn() => $this->save((int)$user->id, $this->payload('3304557', '3550308')));
         $this->assertSame([null, 0], $this->stored((int)$user->id));
+    }
+
+    /**
+     * Outside a web service request the save stores what login or a sync hands it, and never throws.
+     *
+     * A first login of an external-auth user (create_user_record()), an on-login update, auth_oauth2 and
+     * the auth_db and auth_ldap account creation call profile_save_data() with the identity provider's
+     * value and never ran the form: refusing it would lock the user out or abort the sync.
+     */
+    public function test_login_and_sync_save_stores_an_unreadable_code(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $field = new class ((int)$this->record->id, (int)$user->id) extends \profile_field_repeatable {
+            /**
+             * Exposes the decision the real field makes in this process.
+             *
+             * @return bool
+             */
+            public function applies(): bool {
+                return $this->save_checks_apply();
+            }
+        };
+        // Neither WS_SERVER nor AJAX_SCRIPT is set here, with a logged-in operator or without a user at all.
+        $this->setUser($this->operator());
+        $this->assertFalse($field->applies());
+        $this->setUser(0);
+        $this->assertFalse($field->applies());
+
+        $this->save_at_login((int)$user->id, $this->payload('3304557'));
+        $stored = $this->stored((int)$user->id);
+        $this->assertSame(1, $stored[1]);
+        $this->assertStringContainsString('3304557', (string)$stored[0]);
     }
 
     /**
