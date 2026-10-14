@@ -49,45 +49,13 @@ class profile_field_repeatable extends profile_field_base {
      * the widget on submit. QuickForm prints no error for a hidden element, so the hidden input
      * is wrapped in a group carrying the field's input name: the group is a visible form row
      * placed under the widget, and a validation error keyed by the input name renders there.
-     * The widget points at that error with aria-describedby.
-     *
-     * The columns reach the AMD module in a data attribute, not in the js_call_amd() arguments,
-     * which core warns about past 1024 characters.
+     * The widget points at that error with aria-describedby. The widget itself is the engine's
+     * ({@see \profilefield_repeatable\form\widget}).
      *
      * @param moodleform $mform
      */
     public function edit_field_add($mform) {
-        global $OUTPUT;
-
-        $context = \core\context\system::instance();
-        $schema = $this->get_schema();
-        $columns = [];
-        foreach ($schema->columns() as $column) {
-            // The template and the module escape: format_string() must hand them the plain spelling.
-            $entry = [
-                'key' => $column['key'],
-                'label' => format_string($schema->label($column['key']), true, ['context' => $context, 'escape' => false]),
-                'mode' => $column['mode'],
-                'required' => !empty($column['required']),
-            ];
-            $columns[] = $entry + $this->dictionary_widget_properties($column) + $this->pattern_widget_properties($column);
-        }
-
-        $html = $OUTPUT->render_from_template('profilefield_repeatable/edit_form', [
-            'fieldlabel' => format_string($this->field->name, true, ['context' => $context, 'escape' => false]),
-            'labelid' => $this->get_wrapper_id() . '-label',
-            'errorid' => $this->get_error_id(),
-            'wrapperid' => $this->get_wrapper_id(),
-            'columns' => $columns,
-            // The hex flags keep markup characters of a label out of the attribute, which the template escapes.
-            'columnsjson' => json_encode(
-                $columns,
-                JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-            ),
-            'setcolumn' => get_string('setcolumn', 'profilefield_repeatable'),
-            'actioncolumn' => get_string('actioncolumn', 'profilefield_repeatable'),
-            'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
-        ]);
+        $html = $this->get_widget()->render((string)$this->field->name, $this->widget_ids());
 
         $mform->addElement('html', $html);
         $mform->addGroup(
@@ -114,25 +82,6 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * What the widget needs to offer a pattern column: the attributes of its text input.
-     *
-     * The attributes ({@see \customfield_pattern\api::input_attributes()}: the mask the
-     * formatter reads, placeholder, inputmode, maxlength) ride in the columns JSON, because the
-     * widget builds its inputs in JavaScript; the formatter listens on the document, so inputs
-     * added with a new set are covered too ({@see self::edit_after_data()}).
-     *
-     * @param array $column Normalised schema column.
-     * @return array Empty for a column of another mode, or without the plugin.
-     */
-    protected function pattern_widget_properties(array $column): array {
-        $config = $this->get_schema()->pattern_config($column['key']);
-        if ($config === null || !$this->pattern_available()) {
-            return [];
-        }
-        return ['inputattributes' => \profilefield_repeatable\local\pattern_columns::input_attributes($config)];
-    }
-
-    /**
      * Whether the companion offers the API dictionary columns need on the edit form.
      *
      * The one seam between this field and {@see \profilefield_repeatable\helper::companion_lookup_available()},
@@ -145,102 +94,17 @@ class profile_field_repeatable extends profile_field_base {
     }
 
     /**
-     * What the widget needs to offer a dictionary column through the companion's autocomplete.
-     *
-     * A dictionary column gets its domain, whether it accepts new codes ('open') and whether it
-     * is searched ('autocomplete'): only when the current user may read the domain, and the
-     * parent column's domain too for a dependent column ({@see self::can_read_domain()}), because
-     * the search service refuses everyone else; the column is then typed as a code, as without
-     * the companion. A column with a parent also gets the parent's key, domain and plain label.
-     *
-     * @param array $column Normalised schema column.
-     * @return array Empty for a free column.
-     */
-    protected function dictionary_widget_properties(array $column): array {
-        $domains = $this->get_schema()->domain_map();
-        if (!isset($domains[$column['key']])) {
-            return [];
-        }
-
-        $domain = $domains[$column['key']];
-        $parent = $column['parent'] ?? '';
-        $hasparent = $parent !== '' && isset($domains[$parent]);
-        $properties = [
-            'domain' => $domain,
-            'open' => $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY_OPEN,
-            'autocomplete' => $this->can_read_domain($domain) && (!$hasparent || $this->can_read_domain($domains[$parent])),
-        ];
-        if ($hasparent) {
-            $properties['parent'] = $parent;
-            $properties['parentdomain'] = $domains[$parent];
-            $properties['parentlabel'] = format_string($this->get_schema()->label($parent), true, [
-                'context' => \core\context\system::instance(),
-                'escape' => false,
-            ]);
-        }
-
-        return $properties;
-    }
-
-    /**
      * Whether the current (editing) user may search a domain, as the companion's search service decides.
      *
      * False without the companion's lookup-era API. Every code check and label that could tell a
-     * user something about a dictionary they cannot read is decided on this.
+     * user something about a dictionary they cannot read is decided on this: the engine's
+     * validator and widget get it as their "can read" callable.
      *
      * @param string $domain
      * @return bool
      */
     protected function can_read_domain(string $domain): bool {
         return $this->companion_available() && \local_dictionaries\api::can_read($domain);
-    }
-
-    /**
-     * Labels of the codes a payload holds in the dictionary columns, for the widget.
-     *
-     * The widget shows each preloaded value as "label (code)", as the search does, without a
-     * request. The payload is the stored one or, after a failed validation, the submitted one:
-     * in a domain the editing user cannot read, only codes stored for the profile owner under
-     * that key get a label, or submitting codes would read a restricted dictionary through the
-     * ungated resolver. Labels are formatted and left unescaped; the widget escapes.
-     *
-     * @param string $payload Raw payload the form holds.
-     * @return array Domain => [code => plain label]; codes without a label are absent.
-     */
-    protected function widget_labels(string $payload): array {
-        if (!$this->companion_available()) {
-            return [];
-        }
-
-        $schema = $this->get_schema();
-        $domains = $schema->domain_map();
-        $readable = [];
-        foreach (array_unique($domains) as $domain) {
-            $readable[$domain] = $this->can_read_domain($domain);
-        }
-        $stored = $this->get_validator()->stored_codes();
-        $codes = [];
-        foreach (\profilefield_repeatable\helper::normalise_payload($payload, $schema) as $set) {
-            foreach ($domains as $key => $domain) {
-                $code = trim((string)($set[$key] ?? ''));
-                if ($code === '') {
-                    continue;
-                }
-                if ($readable[$domain] || isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)])) {
-                    $codes[$domain][$code] = true;
-                }
-            }
-        }
-
-        $context = \core\context\system::instance();
-        $labels = [];
-        foreach ($codes as $domain => $list) {
-            foreach (\local_dictionaries\resolver::resolve_bulk($domain, array_keys($list)) as $code => $label) {
-                $labels[$domain][(string)$code] = format_string($label, true, ['context' => $context, 'escape' => false]);
-            }
-        }
-
-        return $labels;
     }
 
     /**
@@ -274,15 +138,13 @@ class profile_field_repeatable extends profile_field_base {
             return false;
         }
 
-        global $PAGE;
-
         // The labels of the values the form holds (stored, or submitted after a failed validation)
         // ride on the hidden input: js_call_amd() warns past 1024 characters.
         $group = $mform->getElement($this->inputname);
         if ($group instanceof \MoodleQuickForm_group) {
             foreach ($group->getElements() as $element) {
                 if ($element->getName() === $this->inputname) {
-                    $labels = $this->widget_labels((string)$element->getValue());
+                    $labels = $this->get_widget()->labels((string)$element->getValue(), $this->get_validator()->stored_codes());
                     $element->updateAttributes([
                         'data-labels' => json_encode((object)$labels, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
                     ]);
@@ -290,24 +152,8 @@ class profile_field_repeatable extends profile_field_base {
             }
         }
 
-        $config = [
-            'wrapperid' => $this->get_wrapper_id(),
-            'hiddenid' => $this->get_hidden_id(),
-            'readonly' => $this->is_locked() && !has_capability('moodle/user:update', \core\context\system::instance()),
-            'strings' => [
-                'addnewset' => get_string('addnewset', 'profilefield_repeatable'),
-                'removeset' => get_string('removeset', 'profilefield_repeatable'),
-                'repeatableset' => get_string('repeatableset', 'profilefield_repeatable', '{no}'),
-                'newcode' => get_string('newcode', 'profilefield_repeatable'),
-                'searchplaceholder' => get_string('searchplaceholder', 'profilefield_repeatable'),
-            ],
-        ];
-
-        $PAGE->requires->js_call_amd('profilefield_repeatable/repeatable', 'init', [$config]);
-        if (!$config['readonly'] && $this->get_schema()->pattern_objects() && $this->pattern_available()) {
-            // The formatter listens on the document, so it also formats the inputs of sets added later.
-            \profilefield_repeatable\local\pattern_columns::js_init();
-        }
+        $readonly = $this->is_locked() && !has_capability('moodle/user:update', \core\context\system::instance());
+        $this->get_widget()->init_js($this->widget_ids(), $readonly);
 
         return true;
     }
@@ -502,6 +348,33 @@ class profile_field_repeatable extends profile_field_base {
             $this->companion_available(),
             $this->pattern_available()
         );
+    }
+
+    /**
+     * The engine widget of this field, deciding with what the profile adapter knows.
+     *
+     * @return \profilefield_repeatable\form\widget
+     */
+    protected function get_widget(): \profilefield_repeatable\form\widget {
+        return new \profilefield_repeatable\form\widget(
+            $this->get_schema(),
+            fn(string $domain): bool => $this->can_read_domain($domain),
+            $this->companion_available(),
+            $this->pattern_available()
+        );
+    }
+
+    /**
+     * The ids the widget needs: its wrapper, the hidden input and the error region of its group.
+     *
+     * @return array
+     */
+    protected function widget_ids(): array {
+        return [
+            'wrapperid' => $this->get_wrapper_id(),
+            'hiddenid' => $this->get_hidden_id(),
+            'errorid' => $this->get_error_id(),
+        ];
     }
 
     /**

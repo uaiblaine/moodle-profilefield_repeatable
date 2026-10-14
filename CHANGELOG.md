@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - version 2026042001
+## [Unreleased] - version 2026042002
 
 ### Removed
 - The PostgreSQL index layer (owner decision D3, `docs/engine-extraction-design.md` §8). Measured on
@@ -26,6 +26,18 @@ All notable changes to this project will be documented in this file.
   back into `text`, as `install.xml` declares it; on every database it deletes the queued
   `reconcile_indexes` ad hoc tasks, whose class no longer exists. No DDL on MySQL/MariaDB. Tested by
   `tests/upgrade_test.php`, held by gates U1-U8; SC16 holds the dropped `indexed` flag.
+- Engine extraction stage A (`docs/engine-extraction-design.md` §6), version 2026042002: the field is
+  rearranged into the shape of the future `local_repeatable` engine behind its own namespace, with
+  output, validation messages, SQL, Report Builder identifiers, lang strings and AMD module names
+  unchanged. Engine side: `local\validator`, `form\widget`, `form\column_editor`,
+  `output\sets_renderer`, `local\projection\{store,source,projector}`,
+  `reportbuilder\local\entities\sets` (abstract) and `privacy\set_exporter`. Profile adapter:
+  `local\field_schema` (the version 1 reader, out of `local\schema` and `helper`), `local\source`,
+  and the trimmed `field.class.php`, `define.class.php`, `display_renderer`, `repeatable_set`,
+  `local\projection` (now only `reproject_user()`) and privacy provider. A new test pins the
+  datasource's column and filter unique identifiers to a list captured before the move, so saved
+  reports keep working across the extraction (§5.2 item 5). Mutation gates repointed to the new
+  files.
 
 ## [v5.2-r1] - 2026-10-13
 

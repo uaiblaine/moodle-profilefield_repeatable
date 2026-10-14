@@ -37,7 +37,7 @@ Classes used in the tables:
 
 | File | Lines | Class | Seam / note |
 |---|---:|---|---|
-| `classes/helper.php` | 494 | SPLIT | **Engine** (about 440 lines): `MAX_SETS`, `MAX_VALUE_LENGTH` (:28,:31), `normalise_payload()` (:296), `column_value()` (:375), `encode_payload()` (:391), `sql_subitem_value()` (:235), `sql_column_value()` (:263), `is_postgres()` (:133), `quote_identifier()` (:487), `postgres_index_exists()` (:463). The dictionaries probes `DOMAIN_PATTERN`/`domain_pattern()` (:39,:46), `companion_domains()` (:63), `companion_lookup_available()` (:103) and `fold_code()` (:118) go to a bridge class. `ensure_postgres_jsonb_support()` (:409) is parameterised by table name, and its GIN index name is derived from the adapter's prefix. **Adapter**: the v1 parsers `parse_subitems()` (:147) and `parse_subitem_domain_map()` (:177), which only `schema::from_v1()` reads. |
+| `classes/helper.php` | 494 | SPLIT | **Engine** (about 440 lines): `MAX_SETS`, `MAX_VALUE_LENGTH` (:28,:31), `normalise_payload()` (:296), `column_value()` (:375), `encode_payload()` (:391), `sql_subitem_value()` (:235), `sql_column_value()` (:263), `is_postgres()` (:133), `quote_identifier()` (:487). `postgres_index_exists()` (:463) was removed in stage A0. The dictionaries probes `DOMAIN_PATTERN`/`domain_pattern()` (:39,:46), `companion_domains()` (:63), `companion_lookup_available()` (:103) and `fold_code()` (:118) go to a bridge class. `ensure_postgres_jsonb_support()` (:409) was removed in stage A0 with the JSONB column and the GIN index. **Adapter**: the v1 parsers `parse_subitems()` (:147) and `parse_subitem_domain_map()` (:177), which only `schema::from_v1()` reads. |
 | `classes/local/schema.php` | 925 | SPLIT | **Engine** (about 790 lines): constants, `from_columns`, `decode`, `from_json`, `without_unsafe_columns`, `with_legacy_labels`/`legacy_labels` (generic "key aliases" read by the payload and SQL readers), `normalise_column`, `validate*`, `generate_key`, identifiers, accessors, `to_json`. **Adapter** (about 135 lines), into a new `profilefield_repeatable\local\field_schema`: `from_v1()` (:209), `v1_label_set()` (:251), `from_field()` (:281, reads `param1..4` of `{user_info_field}` and `get_config('profilefield_repeatable', 'legacykeys_<id>')` at :293), `legacy_config_name()` (:309), `LEGACY_CONFIG_PREFIX` (:82). The error strings (:528,:576,:664) change component to `local_repeatable`. |
 | `classes/local/stored_values.php` | 84 | SPLIT | **Engine**: the per-payload loop of `keys_in_use()` (:43), taking an iterable of raw payloads. **Adapter**: the recordset over `{user_info_data}` (:48) and `locked_labels()` (:76). |
 | `classes/local/migration.php` | 154 | ADAPTER | v1 → v2 re-keying of `{user_info_data}` (:84,:134). A custom field never has v1 data. |
@@ -47,16 +47,16 @@ Classes used in the tables:
 | `classes/output/display_renderer.php` | 562 | SPLIT | **Engine**: template-context builders, label prefetch and resolution, pattern formatting, the accordion and plain layouts (:89-:320, :392-:556). **Adapter**: `is_profile_page_context()` (:430, profile URLs), `get_projection_records()` (:366, reads `{profilefield_repeatable_data}` by user), and the accordion id prefix (:420). The adapter passes a layout flag, the sync-time rows and an id prefix. |
 | `classes/privacy/provider.php` | 371 | SPLIT | **Engine**: `export_sets()` (:169), `unique_name()` (:223) and `export_value()` (:239), which turn one stored payload into the exported array. **Adapter**: metadata, contexts, users, delete paths and `get_records()` (:354). |
 | `classes/reportbuilder/datasource/repeatable_sets.php` | 137 | ADAPTER | Its class name is persisted in `reportbuilder_report.source` (core52:`lib/db/install.xml:4595` [V]) and must not move. The entity names `repeatable_<shortname>` (:95) are persisted in the column and filter unique identifiers and must not change either. |
-| `classes/reportbuilder/local/entities/repeatable_set.php` | 443 | SPLIT | **Engine**: an abstract `sets` entity holding `get_all_columns()` (:140), `get_all_filters()` (:246), the escaping callbacks, `resolve_label()`/`lookup_label()`/label memo (:335-:390) and `name_filter_options()` (:392, parameterised by table). **Adapter**: a thin subclass with the default tables (:66), the title (:75) and `is_field_visible()` (:111, `profile_get_user_field(... SUPPORT_USER ...)`). The engine applies `set_is_available($available)` (:84-:96) with the boolean the adapter computes. |
-| `classes/task/reconcile_indexes.php` | 365 | SPLIT | **Engine** `local\pg\index_reconciler`: desired/existing diff, the `LIKE` with escaped `_` (:188-:205), `owned_index_fieldid()` (:225), create/drop `CONCURRENTLY` (:243,:275), orphan sweep (:306) and `quote_literal()` (:358). All are parameterised by table, index prefix and an "existing field ids" callback. **Adapter**: the adhoc task class itself (`get_name`, `execute`, `schedule_for_field`), whose class name is persisted in `{task_adhoc}` rows queued by r1 [I]. |
+| `classes/reportbuilder/local/entities/repeatable_set.php` | 443 | SPLIT | **Engine**: an abstract `sets` entity holding `get_all_columns()` (:140), `get_all_filters()` (:246), the escaping callbacks, `resolve_label()`/`lookup_label()`/label memo (:335-:390) and `name_filter_options()` (:392, parameterised by table). **Adapter**: a thin subclass with the default tables (:66), the title (:75) and `is_field_visible()` (:111, `profile_get_user_field(... SUPPORT_USER ...)`). The engine applies `set_is_available()` (:84-:96) from the adapter's abstract `is_available()`. |
+| `classes/task/reconcile_indexes.php` | 365 | REMOVED | Removed in stage A0 with the whole PostgreSQL index layer (see §8 D3). Nothing of it moves to the engine. |
 | `classes/task/rekey_payloads.php` | 60 | ADAPTER | v1 only. Class name persisted in queued adhoc rows. |
 | `classes/task/reproject_sets.php` | 65 | ADAPTER | Thin: loops the profile fields and calls the engine reprojector with the adapter's source. |
 | `define.class.php` | 280 | SPLIT | **Adapter** keeps the `profile_define_base` hooks. **Engine** `form\column_editor` takes over three pieces. (1) The attribute payload of `define_after_data()` (:123-:138): locked keys, users, domains, companion, pattern and presets. (2) The collection of `domainexists`/`parentdomains`/`patternerrors` in `define_validate_specific()` (:166-:209). (3) The canonical JSON of `define_save_preprocess()` (:221). The adapter keeps the v1 conversion in `define_save()` (:243-:266) and `stored_field()` (:60). |
 | `field.class.php` | 890 | SPLIT | **Engine** `form\widget`: the template context and columns JSON of `edit_field_add()` (:59-:91), `dictionary_widget_properties()` (:194), `pattern_widget_properties()` (:127), `widget_labels()` (:245) and the JS config (:329-:346). **Engine** `local\validator`: `validate_payload_limits()` (:485), `validate_required_columns()` (:531), `validate_pattern_values()` (:566), `validate_dictionary_codes()` (:621), `column_code_error()` (:676), `stored_codes()` (:734), `code_error()` (:758), `map_pattern_values()` (:143), `is_valid_json_object()` (:845). **Adapter** keeps the `profile_field_base` hooks: the hidden-in-group transport (:93-:100), the locked guard (:332,:366), the `{user_info_data}` write plus `projection::sync()` transaction (:359-:405), `is_empty`/`show_field_content`/`display_data`, element ids (:855-:889) and the `pattern_available()`/`companion_available()` test seams. |
 | `lib.php` | 79 | ADAPTER | `profilefield_repeatable_myprofile_navigation()` (core calls it through `get_plugins_with_function('myprofile_navigation')`, core52:`user/classes/output/myprofile/manager.php:72` [V]). |
 | `db/install.xml` | 29 | ADAPTER | `profilefield_repeatable_data` (see §3). |
-| `db/install.php`, `db/lib.php` | 39, 42 | ADAPTER | They call the engine's JSONB helper with the table name. Engine classes autoload during install and upgrade (CLAUDE.md:111-113). |
-| `db/upgrade.php`, `db/uninstall.php` | 36, 41 | ADAPTER | No step today (`db/upgrade.php:34`). |
+| `db/install.php`, `db/lib.php` | 39, 42 | REMOVED | Removed in stage A0 (they only called the JSONB helper). `db/uninstall.php` was removed too. |
+| `db/upgrade.php` | 36 | ADAPTER | Step 2026042001 (added in stage A0) drops the old indexes, the `indexed` flag and the JSONB column on r1 sites. |
 | `db/events.php`, `db/tasks.php` | 46, 37 | ADAPTER | |
 | `version.php` | 32 | ADAPTER | Gains `$plugin->dependencies`. |
 
@@ -80,7 +80,7 @@ Classes used in the tables:
   - the 13 `privacy:metadata:*` strings
   - `profilewidgettitle`
   - `datasourcerepeatablesets`, `entityrepeatablesetnamed`
-  - the three task names: `taskreconcileindexes`, `taskrekeypayloads`, `taskreprojectsets`
+  - the task names: `taskrekeypayloads`, `taskreprojectsets` (`taskreconcileindexes` was removed in stage A0)
 - **Move to `local_repeatable` (106)**:
   - the column editor (`addcolumn` … `summarytitle`, `column*`, `mode*`, `pattern*`, `role*`, `move*`, `domain*`, `parent*`, `removecolumn*`, `newcolumn`)
   - every `error*` string
@@ -107,7 +107,7 @@ Upgrade note for r1 sites [I]: a `tool_customlang` customisation of a moved stri
 | `tests/field_class_test.php` | 1152 | 34 | SPLIT | Limits, required columns, widget context and escaping go to the engine. Hooks, the locked guard, the transaction, the error group and canonical reads (F1-F3) stay. |
 | `tests/define_class_test.php` | 354 | 11 | SPLIT | Column-editor attribute and validation-assembly cases go to the engine. The lock source, v1 conversion and seams stay. |
 | `tests/local/projection_test.php` | 208 | 6 | SPLIT | The writer and staleness cases go to the engine, against a fixture store (§6, stage C). `reproject_user` stays. |
-| `tests/task/reconcile_indexes_test.php` | 204 | 4 | SPLIT | The ownership pattern and sweep go to the engine. The task wiring stays. |
+| `tests/task/reconcile_indexes_test.php` | 204 | 4 | REMOVED | Removed in stage A0 with the task. |
 | `tests/reportbuilder/datasource/repeatable_sets_test.php` | 561 | 13 | SPLIT | Escaping (E1-E4, PT6, R1) and availability application (E5, E6) become engine unit tests on column objects through `column::format_value()` (core52:`reportbuilder/classes/local/report/column.php:726`, core45 :648 [V]). The SQL, visibility source (E7), DB allowlist (S1, S2) and saved-report identifiers stay in the adapter. |
 | `tests/local/migration_test.php`, `tests/observer_test.php`, `tests/privacy/provider_test.php`, `tests/task/reproject_sets_test.php` | 270, 326, 338, 114 | 3, 7, 9, 1 | ADAPTER | The privacy export-shape cases (PV1, PV2, PT14) are duplicated as engine exporter tests. |
 | `tests/generator/lib.php` | 84 | — | SPLIT | `schema_json()` (:47) goes to an engine generator. `create_field()` (:73) stays. |
@@ -129,7 +129,7 @@ mutates.
   - `PV1`, `PV2`, `PT14` (export)
   - `K3` (stored values)
   - the pattern bridge gate
-  - the `reconcile_indexes` ownership and sweep gates
+  - (the `reconcile_indexes` ownership and sweep gates, I1-I7, and SC11 were removed in stage A0; U1-U8 and SC16 were added for the upgrade step 2026042001)
 - **Stay in the adapter (about 33)**:
   - `F1`-`F3`, `PT8`-`PT11` (hooks)
   - `B10`, `D1`, `K1`, `K2`, `L2`, `L3`, `PT4`, `PT5`, `V1C`, `V1S` (define hooks)
@@ -157,20 +157,19 @@ decisions where their APIs live (fleet rule: decide on the recorded fact).
 |---|---|---|
 | `local_repeatable\local\schema` | `classes/local/schema.php` minus the v1 reader | Schema v2: `from_columns`, `decode`, `from_json` (drops unsafe columns), `with_legacy_labels` (generic key aliases), `validate(...)` (signature unchanged, `schema.php:420`), `generate_key`, identifiers, accessors, `to_json`/`to_document`. |
 | `local_repeatable\local\payload` | `helper.php` | `MAX_SETS`, `MAX_VALUE_LENGTH`, `normalise()`, `encode()`, `column_value()`. |
-| `local_repeatable\local\sql` | `helper.php` | `is_postgres()`, `subitem_value()`, `column_value()` (COALESCE over a legacy alias), `quote_identifier()`, `quote_literal()`, `pg_index_exists()`. |
+| `local_repeatable\local\sql` | `helper.php` | `is_postgres()`, `subitem_value()`, `column_value()` (COALESCE over a legacy alias), `quote_identifier()`, `quote_literal()`. (`pg_index_exists()` was removed in stage A0.) |
 | `local_repeatable\local\bridge\dictionaries` | `helper.php` plus the dictionary calls scattered in `field.class.php`, `define.class.php`, renderer and entity | Soft dependency on `local_dictionaries`. Every method guards with `class_exists()`/`method_exists()`: `available()`, `lookup_available()`, `domain_pattern()` (`DOMAIN_PATTERN` fallback pinned equal by a test), `domains()`, `domain_exists()`, `can_read(string $domain, ?int $userid)` (companion's `api::can_read`, `local_dictionaries/classes/api.php:59` [V]), `lookup()`, `resolve_bulk()`, `fold_code()`. |
 | `local_repeatable\local\bridge\pattern` | `pattern_columns.php` | Soft dependency on `customfield_pattern` (`classes/api.php:57` `CONFIG_VERSION` [V]); unchanged contract. Always absent on 4.5 (the plugin supports [501, 503]). |
 | `local_repeatable\local\stored_values` | `stored_values.php` | `keys_in_use(iterable $payloads, schema $schema): array`. |
-| `local_repeatable\local\validator` | `field.class.php` | Built from: the schema; the **stored** payload (owner's recorded value, never the submission); a `callable $canread` (fn(string $domain): bool, the editing user); and two availability flags (dictionary lookup, pattern), which are the adapters' test seams. Methods: `raw_error(string $json): ?string` (JSON object + caps on the raw payload), `error(array $payload, bool $fieldrequired): ?string` (required set, required columns, dictionary codes, pattern values, in today's order), `for_storage(array $payload): array` (pattern normalise), `for_editing(array $payload): array` (pattern format). |
-| `local_repeatable\form\widget` | `field.class.php`, `templates/edit_form.mustache` | `render(schema, string $fieldname, array $ids, callable $canread, ?array $labelsfor): string` for the table HTML, `js_config(array $ids, bool $readonly): array`, `labels(string $payload, array $storedcodes, callable $canread): array`. The adapter supplies wrapper, hidden and error ids and adds the hidden input and the group itself. |
-| `local_repeatable\form\column_editor` | `define.class.php` | `attributes(?schema $stored, array $usage): array` (the `data-*` set, so `js_call_amd()` stays under 1024 characters), `errors(array $document, array $lockedlabels, array $storedpatterns): string[]` (assembles `domainexists`/`parentdomains`/`patternerrors` from the bridges and calls `schema::validate()`), `canonical(string $json): ?string`, `init_js()`. |
-| `local_repeatable\output\sets_renderer` | `display_renderer.php` | `render(schema, string $payload, string $layout, string $idprefix, string $fieldname, array $syncrows = []): string` with `$layout` = `accordion` or `plain`. Bulk label prefetch once per domain. |
-| `local_repeatable\local\projection\store` | new | Value object: projection table, owner column (`userid` / `instanceid`), PG index prefix. |
-| `local_repeatable\local\projection\source` | new interface | What an adapter must provide to the projector, reconciler and reprojection task. See §2.2. |
-| `local_repeatable\local\projection\projector` | `projection.php` | `sync(source, dataid, fieldid, ownerid, payload)`, `is_current()`, `canonical_set()`, `reproject_record(source, dataid, schema)`, `reproject_field(source, fieldid)`. |
-| `local_repeatable\local\pg\jsonb` | `helper::ensure_postgres_jsonb_support()` | `ensure(string $table, string $indexprefix)`: column to JSONB, GIN `jsonb_path_ops`. |
-| `local_repeatable\local\pg\index_reconciler` | `reconcile_indexes.php` | `reconcile(source, fieldid)`, `drop_all(source, fieldid)`, `sweep_orphans(source)`, `owned_fieldid(string $prefix, string $indexname)`. Index name `<prefix><fieldid>_<16 hex>`. The ownership pattern is built from the prefix with `preg_quote` and the `LIKE` keeps the escaped `_` (S1 fix). |
-| `local_repeatable\reportbuilder\local\entities\sets` | `repeatable_set.php` | Abstract entity. The constructor takes schema, projection table, field id and `bool $available`. It builds `setnumber`, value / `_name` / `_code` columns and filters with `s()` on every value and option label. Identifiers come from `schema::report_identifiers()`, so they stay as they are today. |
+| `local_repeatable\local\validator` | `field.class.php` | An instance object built per call by the field (`get_validator()`). Built from: the schema; the **stored** payload (owner's recorded value, never the submission); a `callable $canread` (fn(string $domain): bool, the editing user); and two availability flags (dictionary lookup, pattern), which are the adapters' test seams. Methods: `raw_error(string $json): ?string` (JSON object + caps on the raw payload), `error(array $payload, bool $fieldrequired): ?string` (required set, required columns, dictionary codes, pattern values, in today's order), `for_storage(array $payload): array` (pattern normalise), `for_editing(array $payload): array` (pattern format). |
+| `local_repeatable\form\widget` | `field.class.php`, `templates/edit_form.mustache` | An instance object built per call by the field (`get_widget()`). `render(schema, string $fieldname, array $ids, callable $canread, ?array $labelsfor): string` for the table HTML, `js_config(array $ids, bool $readonly): array`, `labels(string $payload, array $storedcodes, callable $canread): array`. The adapter supplies wrapper, hidden and error ids and adds the hidden input and the group itself. |
+| `local_repeatable\form\column_editor` | `define.class.php` | `attributes(usage, patternavailable)` (the `data-*` set, so `js_call_amd()` stays under 1024 characters), `errors(array $document, array $lockedlabels, array $storedpatterns): string[]` (assembles `domainexists`/`parentdomains`/`patternerrors` from the bridges and calls `schema::validate()`), `canonical(string $json): ?string`, `init_js()`. |
+| `local_repeatable\output\sets_renderer` | `display_renderer.php` | `render(schema, string $payload, string $layout, string $idprefix, string $fieldname, callable $syncrows): string` with `$layout` = `accordion` or `plain`. `$syncrows` is a callable so the projection query runs only when a set is shown. Bulk label prefetch once per domain. |
+| `local_repeatable\local\projection\store` | new | Value object: projection table and owner column (`userid` / `instanceid`). The PG index prefix was removed in stage A0. |
+| `local_repeatable\local\projection\source` | new interface | What an adapter must provide to the projector. See §2.2. |
+| `local_repeatable\local\projection\projector` | `projection.php` | `sync(source, dataid, fieldid, ownerid, payload)`, `is_current()`, `canonical_set()`, `reproject_record(source, dataid, schema)`, `reproject_field(source, fieldid, ?schema)` (the optional schema avoids a second read; read counts unchanged). |
+| `local_repeatable\local\pg\jsonb`, `local_repeatable\local\pg\index_reconciler` | removed | Removed in stage A0 with the PostgreSQL index layer; the projection is a text column read as `(data)::jsonb ->> key`. |
+| `local_repeatable\reportbuilder\local\entities\sets` | `repeatable_set.php` | Abstract entity. The constructor takes the projection table and field id; the abstract `get_schema()` and `is_available()` supply the schema and availability. It builds `setnumber`, value / `_name` / `_code` columns and filters with `s()` on every value and option label. Identifiers come from `schema::report_identifiers()`, so they stay as they are today. |
 | `local_repeatable\privacy\set_exporter` | `privacy/provider.php` | `export(schema, string $rawpayload): array` (labels, collisions, leftovers, pattern format, plain text). |
 | `local_repeatable\privacy\provider` | new | `null_provider`: the engine stores nothing. |
 
@@ -178,19 +177,16 @@ The engine has **no tables, capabilities, settings, web services, events, tasks 
 
 ### 2.2 What an adapter provides
 
-The `projection\source` interface [I] has nine methods:
+The `projection\source` interface [I] has six methods (`field_ids()`, `existing_field_ids()` and `indexed_columns_enabled()` were dropped; the reprojection task is adapter code and reads its own field records):
 
 | Method | Answers | Profile adapter | Customfield adapter |
 |---|---|---|---|
 | `component(): string` | Which plugin owns the data | `profilefield_repeatable` | `customfield_repeatable` |
-| `store(): store` | Where the projection lives | `profilefield_repeatable_data`, `userid`, `pfrd_f` | `customfield_repeatable_set`, `instanceid`, `cfrs_f` |
+| `store(): store` | Where the projection lives | `profilefield_repeatable_data`, `userid` | `customfield_repeatable_set`, `instanceid` |
 | `schema(int $fieldid): ?schema` | Schema source | `field_schema::from_field()` (v1-tolerant, legacy config) | `field_controller` `configdata['schema']` |
-| `canonical(int $dataid): ?stdClass` | Payload read `{id, fieldid, ownerid, payload}` | `{user_info_data}` | `{customfield_data}`.`value` |
+| `canonical(int $dataid): ?stdClass` | Payload read `{id, fieldid, ownerid, data}` | `{user_info_data}` | `{customfield_data}`, aliasing `value AS data` |
 | `canonical_recordset(int $fieldid)` | All payloads of a field, id order | `{user_info_data}` | `{customfield_data}` |
-| `field_ids(): int[]` | Fields of this type (reprojection task) | `user_info_field.datatype = repeatable` | `customfield_field.type = repeatable` |
-| `existing_field_ids(array $ids): int[]` | Orphan-index sweep | same table | same table |
 | `projection_rows(int $fieldid, int $ownerid): array` | Sync timestamps for display | by `userid` | by `instanceid` |
-| `indexed_columns_enabled(): bool` | Whether the PG expression layer runs | true (r1 behaviour) | owner decision, §8 |
 
 The adapter's own classes provide everything else, as decisions passed into engine calls:
 
@@ -227,18 +223,18 @@ component only and `git log --follow` works.
 The two options:
 
 - **(E) Engine table**: `local_repeatable_set (component, area, fieldid, instanceid, setnumber, dataid, data, ...)`.
-- **(P) Per adapter**: the field keeps `profilefield_repeatable_data` with its JSONB, GIN and expression
-  indexes; the custom field gets `customfield_repeatable_set`.
+- **(P) Per adapter**: the field keeps `profilefield_repeatable_data` as a text projection
+  (the JSONB, GIN and expression indexes were removed in stage A0); the custom field gets `customfield_repeatable_set`.
 
 | Criterion | (E) one engine table | (P) table per adapter |
 |---|---|---|
 | Report Builder SQL sharing | Shared entity joins on `component`/`fieldid`. | Shared entity takes the table name as a parameter; the SQL is identical. Even. |
-| PG index ownership | Every partial index needs `WHERE component = ... AND fieldid = ...`. The name must encode the adapter. The orphan sweep must ask every adapter which field ids exist, so the engine must discover adapters, which is a registry or callback the engine does not need otherwise. | Each table's indexes belong to one adapter's prefix (`pfrd_f`, `cfrs_f`). The reconciler is the same code with another prefix, and the r1 index names stay owned without renaming. |
+| PG index ownership | Every partial index needs `WHERE component = ... AND fieldid = ...`. The name must encode the adapter. The orphan sweep must ask every adapter which field ids exist, so the engine must discover adapters, which is a registry or callback the engine does not need otherwise. | Moot since stage A0 removed the PG indexes: nothing is left to own. |
 | Privacy | Profile rows are user data (`userid`); custom-field rows usually are not. One table forces a nullable `userid` and an engine provider that must know which rows are personal data. The adapters' providers would delete from the engine's table. | Each adapter declares and deletes its own rows: the profile provider is unchanged, and the custom field follows core's `customfield_provider` shape (§4.6). |
-| Upgrade cost for r1 sites | **High, and ordered against us.** Core upgrades plugin types in `get_plugin_types()` order with `local` always last (core52:`lib/classes/component.php:842-843`; core45 :687; core53 :845; loop core52:`lib/upgradelib.php:1952-1955`, core45 :1937 [V]). So `profilefield_repeatable`'s upgrade step runs **before** `local_repeatable` is installed and cannot copy rows into the engine's table. The copy would have to live in `local_repeatable/db/install.php`, which would then know the field's table. Dropping the old table needs a later release. The JSONB conversion and indexes are rebuilt from zero. | **None.** The table, its JSONB column, GIN and expression indexes and their names stay. r2 needs no upgrade step (§5). |
+| Upgrade cost for r1 sites | **High, and ordered against us.** Core upgrades plugin types in `get_plugin_types()` order with `local` always last (core52:`lib/classes/component.php:842-843`; core45 :687; core53 :845; loop core52:`lib/upgradelib.php:1952-1955`, core45 :1937 [V]). So `profilefield_repeatable`'s upgrade step runs **before** `local_repeatable` is installed and cannot copy rows into the engine's table. The copy would have to live in `local_repeatable/db/install.php`, which would then know the field's table. Dropping the old table needs a later release.  | **None.** The table stays. r2 needs no upgrade step of its own (§5). |
 | Uninstall | Uninstalling a consumer must delete its rows from another plugin's table. | `db/uninstall.php` drops its own table, as today. |
 | Engine scope | The engine gains install, upgrade, uninstall, privacy and tables. | The engine stays a library with no DB state. Its install order relative to the consumers is irrelevant. |
-| Duplication | One `install.xml`. | Two 8-column table definitions, plus one `jsonb::ensure()` call in each install hook. |
+| Duplication | One `install.xml`. | Two 8-column table definitions, . |
 
 **Recommendation: (P), one table per adapter.** The decisive facts are the upgrade order (`local`
 last), r1 being published, and privacy staying with the API that knows whose data it is. The
@@ -247,7 +243,7 @@ duplication is two short XMLDB tables.
 Shape of `customfield_repeatable_set` [I]:
 
 - Fields: `id`, `dataid` (FK `customfield_data.id`), `fieldid`, `instanceid`, `set_id`, `data`
-  (text, JSONB on PG), `timecreated`, `timemodified`.
+  (text), `timecreated`, `timemodified`.
 - Indexes: unique `(dataid, set_id)`, and `(fieldid, instanceid)`.
 - No `component`/`area` columns. In 5.1+ a shared-category field can hold data for several areas
   under one `fieldid`. `customfield_data` tells the rows apart with `component`, `area` and
@@ -304,12 +300,11 @@ Shape of `customfield_repeatable_set` [I]:
   `define_after_data()` does today (`define.class.php:114-121`).
 - `save()` (:193 [R]):
   - Rewrites `configdata['schema']` to `schema::to_json()` before `parent::save()`. `configdata` is stored JSON-encoded (core52:`customfield/classes/api.php:166-172` [R]).
-  - On PG it queues the adapter's `reconcile_indexes` task when the indexed layer is enabled (§8).
   - The schema is stored as a **string** inside `configdata`. That keeps `from_json()` and the strict `===` comparison of stored pattern objects (`schema.php:591`) unchanged.
 - `delete()`: core deletes `customfield_data` directly in `field_controller::delete()` (core52:
   `customfield/classes/field_controller.php:182-186` [R]) and does not call `data_controller::delete()`.
-  The override therefore deletes `customfield_repeatable_set` rows by `fieldid` and queues the index
-  sweep. There is no data save or delete event in `core_customfield` [R].
+  The override therefore deletes `customfield_repeatable_set` rows by `fieldid`. (The index sweep was
+  removed in stage A0.) There is no data save or delete event in `core_customfield` [R].
 - Field types are filtered only site-wide, through the enabled-plugins list
   (`handler::get_available_field_types()` → `api::get_available_field_types()`, core52:
   `customfield/classes/handler.php:813-815`, `api.php:148-158` [R]). No core handler overrides it,
@@ -449,11 +444,11 @@ provider [I: confirm in D1].
    `upgrade.php` nor `customfield_repeatable`'s `install.php` may depend on engine DB state. With (P)
    there is none. Engine **classes** autoload because they are on disk (CLAUDE.md:111-113).
    Without the engine on disk the upgrade stops on the missing dependency.
-2. **Data.** `{user_info_data}`, `{profilefield_repeatable_data}`, the JSONB column, the GIN index and the
-   `pfrd_f<id>_<hash>` expression indexes are untouched, and their names stay owned by the same prefix.
+2. **Data.** `{user_info_data}`, `{profilefield_repeatable_data}` and its rows are untouched. The JSONB column, the GIN index
+   and the `pfrd_f<id>_<hash>` expression indexes are gone: r2 sites already ran step 2026042001 of the field, which removed them.
 3. **Config.** `legacykeys_<fieldid>` (plugin `profilefield_repeatable`) is unchanged and still read by
-   the adapter's `field_schema::from_field()`. Queued `rekey_payloads` and `reconcile_indexes` adhoc
-   tasks keep their class names. The scheduled `reproject_sets` keeps its name.
+   the adapter's `field_schema::from_field()`. A queued `rekey_payloads` adhoc
+   task keeps its class name (`reconcile_indexes` was removed in stage A0). The scheduled `reproject_sets` keeps its name.
 4. **AMD.** The old modules disappear with the version bump's cache purge, and nothing stored names
    them. CSS class names change (§1.2), so the upgrade notes mention theme overrides.
 5. **Saved Report Builder reports keep working.**
@@ -504,22 +499,40 @@ code the field's r1 review already covered (§8 D5).
 - **Goal.** The field is rearranged into the engine's shape behind its own namespace. Behaviour is
   identical, and the later stages become moves.
 - **New classes**, all under `profilefield_repeatable\`:
-  - `local\validator`, `form\widget`, `form\column_editor`, `local\projection\{store,source,projector}`, `local\pg\index_reconciler`, `reportbuilder\local\entities\sets` (abstract), `privacy\set_exporter`;
+  - `local\validator`, `form\widget`, `form\column_editor`, `local\projection\{store,source,projector}`, `reportbuilder\local\entities\sets` (abstract), `privacy\set_exporter`;
   - `local\field_schema` (v1 reader);
   - `local\source` (the profile implementation of `source`).
 - **Trimmed**: `field.class.php`, `define.class.php`, `display_renderer.php`, `repeatable_set.php`,
-  `projection.php`, `reconcile_indexes.php`, `helper.php`, `privacy/provider.php`.
+  `projection.php`, `helper.php`, `privacy/provider.php`.
 - **Tests and gates**: tests are retargeted at the new classes, keeping the counts. `gates.conf` and
   its `.pl` scripts are repointed to the new files, and the sweep runs before the commit that edits
   the gates.
-- **Measurement**: S7, `EXPLAIN` of the Report Builder filters on m502 with seeded data. It decides
-  §8 D3 before code moves.
+- **Measurement**: S7 (`EXPLAIN` of the Report Builder filters) is done; it removed the index layer in stage A0 (§8 D3).
 - **Size**: about 1,800-2,200 effective lines.
 - **Security-sensitive**: yes. It touches the restricted-dictionary oracle rules (B11-B18), Report
   Builder availability and escaping, and SQL. Run `security-diff-read`, then `!mdlshield review full`
   (owner's command).
 - **Before merge**: all existing tests green with the same counts; every gate reddens its named test
   on pgsql and MariaDB; the new saved-report identifier test exists.
+
+### As built in stage A (2026-10-14)
+
+Stage A was split into A1 (validator, `field_schema`, `source`, projection classes; PR #22) and A2
+(widget, `column_editor`, `sets_renderer`, `sets` entity, `set_exporter`) because together they were
+5,070 effective lines. Deviations from §2 and the list above:
+
+- `projection\source` has no `field_ids()`; the reprojection task stays adapter code and reads its own field records.
+- `projector::reproject_field(source, fieldid, ?schema)` takes an optional schema; read counts are unchanged.
+- `source::canonical()` returns `{id, fieldid, ownerid, data}`; a custom-field adapter aliases `value AS data`.
+- The PostgreSQL upsert binds `:ownerid`; the projector's debugging message says "owner N".
+- The widget and the validator are instance objects built per call by the field (`get_widget()`, `get_validator()`); the validator holds the stored payload.
+- `column_editor::attributes(usage, patternavailable)`; the v1 display stays in the adapter.
+- `sets_renderer` takes a sync-rows callable (the projection query runs only when a set is shown), and was created in stage A, not C1.
+- The `sets` entity uses abstract `get_schema()` and `is_available()` instead of a constructor boolean. Every adapter must implement and TEST `is_available()` (the profile one uses `\core\user::SUPPORT_USER`). `name_filter_options()` gained a leading `$table` parameter.
+- `stored_values` and the payload, SQL and dictionaries helpers in `helper.php` are unchanged: they are B1 moves.
+- The class `local\projection` (adapter, `reproject_user`) and the namespace `local\projection\...` (engine) coexist.
+- The saved-report pin test is `repeatable_sets_test::test_column_and_filter_identifiers_are_stable`, with the literal list `repeatable_langs:{cpf, lang_code, lang_name, level_code, level_name, name, setnumber}` (`cpf` only with `customfield_pattern`).
+
 
 ### Stage B: `local_repeatable` library half, and the field switches to it
 
@@ -548,7 +561,7 @@ code the field's r1 review already covered (§8 D5).
 ### Stage C: UI, projection and Report Builder move
 
 - **C1 (engine)**:
-  - `form\widget`, `form\column_editor`, `output\sets_renderer`; the three templates; `styles.css` renamed to `local-repeatable-*`; `bootstrap_compat_test`.
+  - `form\widget`, `form\column_editor`, `output\sets_renderer` (created in stage A); the three templates; `styles.css` renamed to `local-repeatable-*`; `bootstrap_compat_test`.
   - The widget, editor and display lang strings; gates ES1-ES5, PT12, PT13, X1.
   - Size: about 1,000 PHP + 667 templates/CSS + 600 tests ≈ 2,300.
 - **C2 (engine)**:
@@ -556,9 +569,9 @@ code the field's r1 review already covered (§8 D5).
   - A Behat-free JS check: `mdl grunt` and eslint at zero warnings.
   - Size: about 1,850, with `amd/build` excluded from the estimate.
 - **C3 (engine)**:
-  - `projection\{store,source,projector}`, `pg\jsonb`, `pg\index_reconciler`, `reportbuilder\local\entities\sets`.
-  - Tests, with gates J1-J3, J6-J9, E1-E6, PT6, R1 and the reconcile ownership gates:
-    - Projector and reconciler tests run against a **temporary table**, `$dbman->create_temp_table()` (core52:`lib/ddl/database_manager.php:459` [V]), built from a fixture XMLDB definition.
+  - `projection\{store,source,projector}`, `reportbuilder\local\entities\sets` (`pg\jsonb` and `pg\index_reconciler` were removed in stage A0).
+  - Tests, with gates J1-J3, J6-J9, E1-E6, PT6 and R1 (the reconcile ownership gates were removed in stage A0):
+    - Projector tests run against a **temporary table**, `$dbman->create_temp_table()` (core52:`lib/ddl/database_manager.php:459` [V]), built from a fixture XMLDB definition.
     - The first test of C3 must prove that the upsert branches and `{table}` placeholders work on a temp table on both families. If they do not, the projector tests stay in the adapters and their gates stay there too [I].
     - Entity gates are held by unit tests on column and filter objects (`format_value`, `get_is_available`); no SQL is needed.
   - Size: about 1,100 + 700 ≈ 1,800.
@@ -573,9 +586,8 @@ code the field's r1 review already covered (§8 D5).
 
 - **D1 (type)**:
   - `field_controller` (§4.2), `data_controller` (§4.3), `local\source`.
-  - `db/install.xml` (`customfield_repeatable_set`), `db/install.php` (`jsonb::ensure`), `db/uninstall.php`.
+  - `db/install.xml` (`customfield_repeatable_set`), `db/uninstall.php`.
   - Course-area observers (`course_created`, `course_updated`, `course_restored` → reproject the instance [I: confirm which fire after the data write]) and the daily `reproject_sets` task.
-  - `reconcile_indexes` adhoc task if D3 keeps the layer.
   - Privacy (§4.6), lang en and pt_br, generator, tests, Behat (course edit form: add sets, a failed validation keeps the labels, and a course listing shows the summary), gates.
   - Size: about 1,200 source + 1,300 tests ≈ 2,500.
   - Security: **yes**. It touches privacy, SQL, restore, the handler's capability decisions and the validation oracle. Run `security-diff-read`, then `!mdlshield review full`.
@@ -629,7 +641,7 @@ code the field's r1 review already covered (§8 D5).
 |---|---|---|---|
 | D1 | Projection storage (§3) | One table per adapter. The field keeps `profilefield_repeatable_data`, and r2 needs no data migration. | Engine table: copy code in `local_repeatable/db/install.php`, because `local` installs after the field upgrades; the old table can be dropped only a release later; a privacy split inside one table; adapter discovery for the index sweep. |
 | D2 | Report Builder scope of `customfield_repeatable` r1 | Course area only (one datasource, §4.5). Other areas still store, edit and display the type, and show the `export_value()` summary in core datasources. | Each further area is about 300 lines plus tests: cohort, group/grouping, content bank, and later report and shared (5.1+, which also needs the component/area join). |
-| D3 | Keep the PostgreSQL expression-index layer (S7) | Measure in stage A. If the filters do not use the indexes, drop the adhoc task, expression indexes and REINDEX **before** the move. Then the engine and the custom field carry about 400 fewer lines and one task fewer each. Keep JSONB and GIN only if `EXPLAIN` shows the GIN index used. | Keeping it unmeasured moves the largest complexity-for-nothing candidate into two plugins and an engine API (`indexed_columns_enabled`). |
+| D3 | Keep the PostgreSQL expression-index layer (S7) | Measure in stage A. If the filters do not use the indexes, drop the adhoc task, expression indexes and REINDEX **before** the move. Then the engine and the custom field carry about 400 fewer lines and one task fewer each. Keep JSONB and GIN only if `EXPLAIN` shows the GIN index used. | Keeping it unmeasured moves the largest complexity-for-nothing candidate into two plugins and an engine API (`indexed_columns_enabled`). Done: removed in stage A0. |
 | D4 | What `export_value()` shows for the custom field: course listings, the core Report Builder column, web services `value` | A compact escaped list: one line per set, the title value plus the subline values. Web-service clients still get the raw JSON as `valueraw` [I]. | Full plain layout: heavier course listings. A count only ("3 sets"): useless in core reports. |
 | D5 | MDL Shield on pure-move PRs (B1, C1-C3) | Skip them when the move-identity check is clean. Review A, D1 (+D2), and any move PR that changes behaviour. That is about three reviews of the 100/month. | Reviewing every PR costs about seven reviews and re-reads code the r1 review already covered. |
 | D6 | `customfield_repeatable` on 4.5 | Ship all four branches. No API blocker was found: the 4.5 data and handler hooks used are present [R/V]. The 4.5 Report Builder column is not sortable (core behaviour). | 5.1+ only: one branch fewer to maintain, and 4.5 sites get the profile field only. |

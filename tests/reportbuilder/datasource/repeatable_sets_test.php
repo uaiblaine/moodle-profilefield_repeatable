@@ -37,6 +37,7 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\reportbuilder\datasource\repeatable_sets
  * @covers     \profilefield_repeatable\reportbuilder\local\entities\repeatable_set
+ * @covers     \profilefield_repeatable\reportbuilder\local\entities\sets
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -421,7 +422,7 @@ final class repeatable_sets_test extends core_reportbuilder_testcase {
 
         $method = new \ReflectionMethod(repeatable_set::class, 'name_filter_options');
         $schema = \profilefield_repeatable\local\field_schema::from_field($fielddef);
-        $options = $method->invoke(null, (int)$fielddef->id, $schema, 'diretoria', 'diretorias');
+        $options = $method->invoke(null, 'profilefield_repeatable_data', (int)$fielddef->id, $schema, 'diretoria', 'diretorias');
 
         $this->assertSame([$code => s($code)], $options);
     }
