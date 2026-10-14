@@ -76,9 +76,6 @@ class observer {
     /**
      * Remove storage rows belonging to a deleted repeatable profile field.
      *
-     * Also queues index reconciliation on PostgreSQL so the per-field
-     * expression indexes are dropped without waiting for the orphan sweep.
-     *
      * @param \core\event\user_info_field_deleted $event
      */
     public static function user_info_field_deleted(\core\event\user_info_field_deleted $event): void {
@@ -94,9 +91,5 @@ class observer {
         }
 
         $DB->delete_records('profilefield_repeatable_data', ['fieldid' => $fieldid]);
-
-        if ($DB->get_dbfamily() === 'postgres') {
-            task\reconcile_indexes::schedule_for_field($fieldid);
-        }
     }
 }

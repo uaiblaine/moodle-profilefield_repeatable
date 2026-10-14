@@ -89,7 +89,7 @@ final class define_class_test extends \advanced_testcase {
         $define = new \profile_define_repeatable();
 
         $this->assertSame([], $define->define_validate_specific((object)[
-            'param1' => $this->generator()->schema_json(['Name', ['label' => 'Role', 'required' => true, 'indexed' => true]]),
+            'param1' => $this->generator()->schema_json(['Name', ['label' => 'Role', 'required' => true]]),
         ], []));
     }
 

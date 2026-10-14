@@ -22,12 +22,14 @@ use profilefield_repeatable\helper;
  * Column schema of a repeatable field (version 2), stored as JSON in {user_info_field}.param1.
  *
  * Shape: {"version": 2, "columns": [{"key", "label", "mode", "domain"?, "parent"?, "pattern"?,
- * "title"?, "subline"?, "required"?, "indexed"?}, ...]}. Payload sets are keyed by column key, so a
+ * "title"?, "subline"?, "required"?}, ...]}. Payload sets are keyed by column key, so a
  * label can change without orphaning stored values; the key is generated once from the label.
+ * A stored "indexed" flag (the r1 releases wrote one) is not one of {@see self::FLAGS}: reading
+ * drops it, and the next save writes the schema without it.
  *
- * Fields still on the version 1 parameters (param1 lists the labels, param2 the indexed ones,
- * param3 "label|domain" mappings, param4 the subline) are read through {@see self::from_v1()},
- * whose payloads are keyed by label: {@see self::legacy_labels()} tells the payload readers which
+ * Fields still on the version 1 parameters (param1 lists the labels, param2 indexed ones that
+ * nothing reads, param3 "label|domain" mappings, param4 the subline) are read through
+ * {@see self::from_v1()}, whose payloads are keyed by label: {@see self::legacy_labels()} tells the payload readers which
  * label each key used to be stored under, until the payloads are re-keyed
  * ({@see \profilefield_repeatable\local\migration}).
  *
@@ -47,9 +49,6 @@ final class schema {
 
     /** @var int Maximum number of subline columns; the title is never one of them. */
     public const MAX_SUBLINE = 3;
-
-    /** @var int Maximum number of indexed columns (PostgreSQL expression indexes). */
-    public const MAX_INDEXED = 3;
 
     /** @var int Maximum length of a key. */
     public const KEY_MAXLENGTH = 40;
@@ -82,7 +81,7 @@ final class schema {
     public const LEGACY_CONFIG_PREFIX = 'legacykeys_';
 
     /** @var string[] Boolean column flags, in output order. */
-    private const FLAGS = ['title', 'subline', 'required', 'indexed'];
+    private const FLAGS = ['title', 'subline', 'required'];
 
     /** @var array[] Normalised columns, in display order. */
     private array $columns;
@@ -151,7 +150,7 @@ final class schema {
      * The definition form validates before saving, but param1 can be written behind it (a
      * restore, a direct update). A column whose key breaks {@see self::KEY_PATTERN}, repeats an
      * earlier key or produces a Report Builder identifier an earlier column already has is
-     * dropped, so no reader, SQL expression or index name ever sees it; debugging() reports
+     * dropped, so no reader or SQL expression ever sees it; debugging() reports
      * each dropped column once per request.
      *
      * @return self
@@ -193,15 +192,15 @@ final class schema {
      *
      * Keys come from the labels ({@see self::generate_key()}); mapped columns become strict
      * dictionaries, the others free text; the first column is the title, as version 1 displayed
-     * it. Unknown, duplicate and surplus entries of param2 and param4 are dropped, as version 1
-     * reads them. Every key remembers its label as a legacy label.
+     * it. Unknown, duplicate and surplus entries of param4 are dropped, as version 1 reads them.
+     * Every key remembers its label as a legacy label.
      *
      * A key never equals another column's label (or that label's "_name"/"_code" form): a
      * version 1 set holds values under the labels, and a key matching another column's label
      * would read that column's value ({@see helper::column_value()}).
      *
      * @param string $param1 Labels, one per line.
-     * @param string $param2 Indexed labels, one per line.
+     * @param string $param2 Indexed labels, one per line; ignored, because nothing is indexed.
      * @param string $param3 "label|domain" mappings, one per line.
      * @param string $param4 Subline labels, one per line.
      * @return self
@@ -209,7 +208,6 @@ final class schema {
     public static function from_v1(string $param1, string $param2 = '', string $param3 = '', string $param4 = ''): self {
         $labels = helper::parse_subitems($param1);
         $domains = helper::parse_subitem_domain_map($param3, $labels);
-        $indexed = self::v1_label_set($param2, $labels, self::MAX_INDEXED, null);
         $subline = self::v1_label_set($param4, $labels, self::MAX_SUBLINE, $labels[0] ?? null);
 
         $columns = [];
@@ -231,7 +229,6 @@ final class schema {
             }
             $column['title'] = $position === 0;
             $column['subline'] = isset($subline[$label]);
-            $column['indexed'] = isset($indexed[$label]);
             $columns[] = $column;
             $legacy[$key] = $label;
         }
@@ -600,7 +597,7 @@ final class schema {
     }
 
     /**
-     * Role rules: exactly one title, the subline and index limits.
+     * Role rules: exactly one title, the subline limit.
      *
      * @param array[] $columns Normalised columns.
      * @return string[]
@@ -620,11 +617,6 @@ final class schema {
         }
         if (count($subline) > self::MAX_SUBLINE) {
             $errors[] = self::error('errorsublinelimit', self::MAX_SUBLINE);
-        }
-
-        $indexed = array_filter($columns, static fn(array $column): bool => !empty($column['indexed']));
-        if (count($indexed) > self::MAX_INDEXED) {
-            $errors[] = self::error('errorindexedlimit', self::MAX_INDEXED);
         }
 
         return $errors;
@@ -817,15 +809,6 @@ final class schema {
             }
         }
         return array_slice($keys, 0, self::MAX_SUBLINE);
-    }
-
-    /**
-     * Indexed keys, at most {@see self::MAX_INDEXED}.
-     *
-     * @return string[]
-     */
-    public function indexed_keys(): array {
-        return array_slice($this->flagged_keys('indexed'), 0, self::MAX_INDEXED);
     }
 
     /**

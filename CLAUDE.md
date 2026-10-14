@@ -9,8 +9,8 @@ gotcha goes to `docs/` (export-ignored) with a pointer from the rule.
 Plugin context: a Moodle **user profile field** plugin ("Repeatable", `datatype = repeatable`)
 that stores repeatable sets of sub-items per user. The canonical value is a JSON payload in core's
 `user_info_data.data`; the plugin's own table `profilefield_repeatable_data` holds one row per set
-as a projection for Report Builder (JSONB on PostgreSQL, with a GIN index and per-sub-item
-expression indexes). Optional code→label resolution comes from the companion dictionary plugin
+as a projection for Report Builder (a JSON text column on every database, no index on its
+values). Optional code→label resolution comes from the companion dictionary plugin
 (soft dependency, see below). **One branch per Moodle version**: `MOODLE_405_STABLE`,
 `MOODLE_501_STABLE`, `MOODLE_502_STABLE` (= `main`) and `MOODLE_503_STABLE`, MATURITY_STABLE,
 releases `v<major>.<minor>-r<N>`. Each branch's `version.php` sets `requires` and `supported` to
@@ -86,7 +86,6 @@ classes/local/projection.php       per-set rows: sync(), is_current(), reproject
 classes/observer.php   cleanup on user/field deletion; reprojection on user_updated/user_created
 classes/output/display_renderer.php  accordion (profile pages) or plain list, bulk label prefetch
 classes/reportbuilder/             datasource repeatable_sets + entity repeatable_set
-classes/task/reconcile_indexes.php adhoc: PG expression indexes
 classes/task/reproject_sets.php    scheduled, daily: repair stale projections
 classes/task/rekey_payloads.php    adhoc: re-keys a field the definition form converted from v1
 amd/src/               repeatable.js (edit widget), dictionary_transport.js (its autocomplete transport),
@@ -109,14 +108,14 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   `require_once`: tests require `user/profile/lib.php` and the file explicitly. New code goes under
   `classes/`, which is autoloaded.
 - Plugin classes autoload during install and upgrade (`CACHE_DISABLE_ALL` makes core rescan the
-  class map). `db/lib.php` stays only as the install hook's procedural entry point to
-  `helper::ensure_postgres_jsonb_support()`; it is not needed to avoid the autoloader.
+  class map). Upgrade-step logic lives in `db/upgradelib.php` functions, so tests call it.
 
 ### Column schema (v2)
 
 - `param1` holds `{"version":2,"columns":[{key,label,mode,domain?,parent?,pattern?,title?,subline?,
-  required?,indexed?}]}`; `param2`..`param4` are cleared on save; `defaultdata` is forced to `'{}'`.
-  `local\schema::validate()` is the only gate (exactly one title, subline/indexed ≤ 3, ≤ 20 columns,
+  required?}]}`; `param2`..`param4` are cleared on save; `defaultdata` is forced to `'{}'`. An r1
+  `indexed` flag is not in `schema::FLAGS`: dropped on read, omitted on save (`schema_test` pins it).
+  `local\schema::validate()` is the only gate (exactly one title, subline ≤ 3, ≤ 20 columns,
   parent = an earlier dictionary column, no two columns producing one Report Builder identifier);
   the constructor normalises and never rejects. A `pattern` column is checked by customfield_pattern
   (see below) and keeps its `pattern` object verbatim.
@@ -200,18 +199,16 @@ version); a new step is numbered in its own branch's namespace. `install.xml` ke
   of a codes-only column, no lookup and no parent check (also when only the parent's domain is
   unreadable), and no autocomplete.
 
-### PostgreSQL layer
+### PostgreSQL
 
 - Everything PG-specific sits behind `helper::is_postgres()` and no-ops on MariaDB (CI runs both).
-- `CREATE/DROP INDEX CONCURRENTLY` cannot run inside a transaction, so index work lives in the
-  `reconcile_indexes` adhoc task, never in a web request or an upgrade step. The one synchronous
-  caller is `drop_all_for_field()` via `define_after_delete()`, which core never calls.
-- Index ownership is decided by an exact match on `INDEX_NAME_PATTERN`
-  (`pfrd_f<fieldid>_<16 hex>`), after a `LIKE` prefix whose `_` is escaped: a bare prefix let
-  field 1 claim the indexes of fields 10-19 and 100-199. Every reconcile run also sweeps orphaned
-  indexes, because core calls nothing on field deletion.
-- DDL takes no bound parameters, so `helper::quote_identifier()` / `quote_literal()` quote it; DML
-  stays on placeholders. `db/uninstall.php` drops the PG artefacts XMLDB does not know about.
+- **No index layer** (owner decision D3, measured): Report Builder's filters (`ILIKE '%v%'`,
+  `LOWER(expr) = LOWER(v)`) use no expression or GIN index, so the projection is a text column read
+  as `(data)::jsonb ->> key`. Do not add indexes back without an `EXPLAIN` that uses them.
+- Upgrade step 2026042001 removes the r1 layer: index ownership is an exact match on the two shapes
+  it built (`pfrd_f<fieldid>_<16 hex>`, `pfrd_<8 hex>_gin_ix`), never a `LIKE` prefix (a bare
+  prefix let field 1 claim fields 10-19); indexes go before the column turns text, because neither
+  index type accepts a text column. DDL takes no bound parameters: `helper::quote_identifier()`.
 
 ### Report Builder
 

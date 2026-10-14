@@ -75,6 +75,28 @@ final class schema_test extends \advanced_testcase {
     }
 
     /**
+     * A stored "indexed" flag still parses: reading drops it, saving omits it and no limit applies to it.
+     */
+    public function test_stored_indexed_flag_is_dropped_on_read(): void {
+        $columns = [
+            ['key' => 'a', 'label' => 'A', 'mode' => 'free', 'title' => true, 'indexed' => true],
+            ['key' => 'b', 'label' => 'B', 'mode' => 'free', 'indexed' => true],
+            ['key' => 'c', 'label' => 'C', 'mode' => 'free', 'indexed' => true, 'required' => true],
+            ['key' => 'd', 'label' => 'D', 'mode' => 'free', 'indexed' => true],
+        ];
+        $schema = schema::from_json(json_encode(['version' => 2, 'columns' => $columns]));
+
+        $this->assertSame([
+            ['key' => 'a', 'label' => 'A', 'mode' => 'free', 'title' => true],
+            ['key' => 'b', 'label' => 'B', 'mode' => 'free'],
+            ['key' => 'c', 'label' => 'C', 'mode' => 'free', 'required' => true],
+            ['key' => 'd', 'label' => 'D', 'mode' => 'free'],
+        ], $schema->columns());
+        $this->assertStringNotContainsString('indexed', $schema->to_json());
+        $this->assertSame([], schema::validate(['version' => 2, 'columns' => $columns]));
+    }
+
+    /**
      * Text that is not a version 2 document is no schema.
      */
     public function test_from_json_rejects_other_text(): void {
@@ -87,7 +109,7 @@ final class schema_test extends \advanced_testcase {
     }
 
     /**
-     * Version 1 parameters become the equivalent schema, remembering each label.
+     * Version 1 parameters become the equivalent schema, remembering each label; the indexed list is ignored.
      */
     public function test_from_v1_converts_the_four_lists(): void {
         $schema = schema::from_v1(
@@ -98,13 +120,11 @@ final class schema_test extends \advanced_testcase {
         );
 
         $this->assertSame([
-            ['key' => 'lingua', 'label' => 'Língua', 'mode' => 'dictionary', 'domain' => 'iso639', 'title' => true,
-                'indexed' => true],
-            ['key' => 'nivel', 'label' => 'Nível', 'mode' => 'dictionary', 'domain' => 'cefr_levels', 'subline' => true,
-                'indexed' => true],
+            ['key' => 'lingua', 'label' => 'Língua', 'mode' => 'dictionary', 'domain' => 'iso639', 'title' => true],
+            ['key' => 'nivel', 'label' => 'Nível', 'mode' => 'dictionary', 'domain' => 'cefr_levels', 'subline' => true],
             ['key' => 'certificate_number', 'label' => 'Certificate number', 'mode' => 'free'],
             ['key' => 'orgao_emissor', 'label' => 'Órgão emissor', 'mode' => 'free', 'subline' => true],
-            ['key' => 'cidade', 'label' => 'Cidade', 'mode' => 'free', 'subline' => true, 'indexed' => true],
+            ['key' => 'cidade', 'label' => 'Cidade', 'mode' => 'free', 'subline' => true],
         ], $schema->columns());
         $this->assertSame([
             'lingua' => 'Língua',
@@ -169,7 +189,7 @@ final class schema_test extends \advanced_testcase {
         $this->resetAfterTest();
         $columns = $this->valid_columns();
         $columns[] = ['key' => 'city', 'label' => 'City', 'mode' => 'dictionary_open', 'domain' => 'cities',
-            'parent' => 'language', 'indexed' => true, 'required' => true];
+            'parent' => 'language', 'required' => true];
 
         $this->assertSame([], schema::validate($this->document($columns), static fn(string $domain): bool => true));
     }
@@ -252,12 +272,6 @@ final class schema_test extends \advanced_testcase {
                 'errorsublinelimit',
                 3,
             ],
-            'indexed limit' => [
-                [$title + ['indexed' => true], $free('a', ['indexed' => true]), $free('b', ['indexed' => true]),
-                    $free('c', ['indexed' => true])],
-                'errorindexedlimit',
-                3,
-            ],
             'report name taken' => [[$title, $dictionary('lang'), $free('lang_name')], 'errorkeyconflict', 'lang_name'],
             'report code taken' => [[$title, $free('lang_code'), $dictionary('lang')], 'errorkeyconflict', 'lang_code'],
             'set number taken' => [[$title, $free('setnumber')], 'errorkeyconflict', 'setnumber'],
@@ -314,19 +328,17 @@ final class schema_test extends \advanced_testcase {
      */
     public function test_accessors(): void {
         $schema = schema::from_columns([
-            ['key' => 'a', 'label' => 'A', 'mode' => 'free', 'subline' => true, 'indexed' => true],
+            ['key' => 'a', 'label' => 'A', 'mode' => 'free', 'subline' => true],
             ['key' => 'b', 'label' => '', 'mode' => 'dictionary', 'domain' => 'dom', 'title' => true, 'subline' => true,
                 'required' => true],
-            ['key' => 'c', 'label' => 'C', 'mode' => 'dictionary_open', 'domain' => 'bad domain', 'subline' => true,
-                'indexed' => true],
-            ['key' => 'd', 'label' => 'D', 'mode' => 'free', 'subline' => true, 'indexed' => true, 'required' => true],
-            ['key' => 'e', 'label' => 'E', 'mode' => 'free', 'subline' => true, 'indexed' => true],
+            ['key' => 'c', 'label' => 'C', 'mode' => 'dictionary_open', 'domain' => 'bad domain', 'subline' => true],
+            ['key' => 'd', 'label' => 'D', 'mode' => 'free', 'subline' => true, 'required' => true],
+            ['key' => 'e', 'label' => 'E', 'mode' => 'free', 'subline' => true],
         ]);
 
         $this->assertSame(['a', 'b', 'c', 'd', 'e'], $schema->keys());
         $this->assertSame('b', $schema->title_key());
         $this->assertSame(['a', 'c', 'd'], $schema->subline_keys());
-        $this->assertSame(['a', 'c', 'd'], $schema->indexed_keys());
         $this->assertSame(['b', 'd'], $schema->required_keys());
         $this->assertSame(['b' => 'dom'], $schema->domain_map());
         $this->assertSame('b', $schema->label('b'));

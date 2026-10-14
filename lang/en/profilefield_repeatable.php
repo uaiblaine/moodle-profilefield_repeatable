@@ -42,7 +42,7 @@ $string['columnparenthint'] = 'An earlier dictionary column whose code narrows t
 $string['columnrole'] = 'Role in the set';
 $string['columns'] = 'Columns';
 $string['columns_help'] =
-    'The columns each set has, as a JSON schema: {"version": 2, "columns": [{"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. With JavaScript the column editor writes it. Modes: free, dictionary (codes of a local_dictionaries domain only), dictionary_open (any code), pattern (a mask and/or regular expression from customfield_pattern, Moodle 5.1 or later; a "pattern" object with preset, mask, regex, regexerror and storeformat). Exactly one column is the title; up to 3 are shown in the subline and up to 3 are indexed. A column whose key holds stored values can be neither removed nor re-keyed; rename its label instead.';
+    'The columns each set has, as a JSON schema: {"version": 2, "columns": [{"key": "language", "label": "Language", "mode": "dictionary", "domain": "iso639", "title": true}, ...]}. With JavaScript the column editor writes it. Modes: free, dictionary (codes of a local_dictionaries domain only), dictionary_open (any code), pattern (a mask and/or regular expression from customfield_pattern, Moodle 5.1 or later; a "pattern" object with preset, mask, regex, regexerror and storeformat). Exactly one column is the title; up to 3 are shown in the subline. A column whose key holds stored values can be neither removed nor re-keyed; rename its label instead.';
 $string['columnsindata'] =
     '{$a} users have data in this field. Columns holding stored values cannot be removed and their keys are locked: renaming such a column changes only its name.';
 $string['columnsubitem'] = '{$a}';
@@ -64,7 +64,6 @@ $string['errorcolumnslimit'] = 'A field can have at most {$a} columns.';
 $string['errorcolumnsrequired'] = 'Add at least one column.';
 $string['errordomaininvalid'] = 'Column "{$a}": choose a dictionary (lowercase letters, digits and underscore).';
 $string['errordomainmissing'] = 'Dictionary not found in local_dictionaries: {$a}.';
-$string['errorindexedlimit'] = 'At most {$a} columns can be indexed.';
 $string['errorinvalidjson'] = 'Invalid repeatable payload; expected a JSON object.';
 $string['errorkeyconflict'] = 'Two columns produce the report column "{$a}": change one of the keys.';
 $string['errorkeyduplicate'] = 'Key used by two columns: {$a}.';
@@ -138,8 +137,6 @@ $string['removecolumn'] = 'Remove column';
 $string['removecolumnlocked'] = 'Users have values in this column, so it cannot be removed.';
 $string['removeset'] = 'Remove set';
 $string['repeatableset'] = 'Set {$a}';
-$string['roleindexed'] = 'Indexed';
-$string['roleindexedlabel'] = 'Index for reports (PostgreSQL)';
 $string['rolerequired'] = 'Required';
 $string['rolerequiredlabel'] = 'Required in every set';
 $string['rolesubline'] = 'Subline';
@@ -149,11 +146,9 @@ $string['roletitlelabel'] = 'Title of the set';
 $string['searchplaceholder'] = 'Type a name or a code';
 $string['setcolumn'] = 'SET';
 $string['setnumber'] = 'Set number';
-$string['summaryindexed'] = 'Indexed {$a->count}/{$a->max}';
 $string['summarysubline'] = 'Subline {$a->count}/{$a->max}';
 $string['summarytitle'] = 'Title: {$a}';
 $string['synchronisedat'] = 'Synchronised at: {$a}';
-$string['taskreconcileindexes'] = 'Reconcile repeatable profile field JSON indexes';
 $string['taskrekeypayloads'] = 'Re-key repeatable profile field values by column key';
 $string['taskreprojectsets'] = 'Rebuild repeatable profile field sets for reports';
 $string['usecode'] = 'Use code "{$a}"';
