@@ -18,7 +18,7 @@
  *
  * Enhances the schema textarea (param1) of profile_define_repeatable: the textarea is hidden and
  * rewritten from the editor on every change, so the form posts the JSON the server validates
- * ({@see \profilefield_repeatable\local\schema::validate()}). The error region of the textarea's
+ * ({@see \local_repeatable\local\schema::validate()}). The error region of the textarea's
  * form row stays visible and describes the editor. Without JavaScript the textarea is edited as
  * text.
  *
@@ -30,7 +30,7 @@
 import {getStrings} from 'core/str';
 import Notification from 'core/notification';
 
-/** Limits, in step with \profilefield_repeatable\local\schema. */
+/** Limits, in step with \local_repeatable\local\schema. */
 const LIMITS = {columns: 20, subline: 3, keylength: 40};
 
 /** Modes; "pattern" is offered only when the server says customfield_pattern is installed. */
@@ -73,7 +73,7 @@ const fill = (template, a) => {
 };
 
 /**
- * Generate a key from a label; mirrors \profilefield_repeatable\local\schema::generate_key().
+ * Generate a key from a label; mirrors \local_repeatable\local\schema::generate_key().
  *
  * @param {String} label
  * @param {Set} taken Identifiers reserved by the other columns.

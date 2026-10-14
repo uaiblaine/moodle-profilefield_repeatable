@@ -16,7 +16,7 @@
 
 namespace profilefield_repeatable\form;
 
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\schema;
 
 /**
  * The column editor of a field's definition: its textarea, the data it needs and its validation.
@@ -94,12 +94,12 @@ final class column_editor {
      * The data attributes of the textarea: locked keys, users, the companion's domains and patterns.
      *
      * @param array $usage ['users' => int, 'keys' => string[]], read by the adapter from the STORED
-     *                     field's payloads ({@see \profilefield_repeatable\local\stored_values::keys_in_use()}).
+     *                     field's payloads ({@see \profilefield_repeatable\local\stored_values::usage()}).
      * @param bool $patternavailable Whether pattern columns can be configured.
      * @return array
      */
     public static function attributes(array $usage, bool $patternavailable): array {
-        $domains = \profilefield_repeatable\helper::companion_domains();
+        $domains = \local_repeatable\local\bridge\dictionaries::domains();
         return [
             'data-lockedkeys' => json_encode($usage['keys']),
             'data-users' => $usage['users'],
@@ -108,7 +108,7 @@ final class column_editor {
             // The pattern mode is offered only with customfield_pattern; its presets come from there.
             'data-pattern' => $patternavailable ? 1 : 0,
             'data-presets' => json_encode(
-                $patternavailable ? \profilefield_repeatable\local\pattern_columns::presets() : [],
+                $patternavailable ? \local_repeatable\local\bridge\pattern::presets() : [],
                 JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
             ),
         ];
@@ -151,12 +151,12 @@ final class column_editor {
         }
         $patternerrors = null;
         if ($patternavailable) {
-            $patternerrors = [\profilefield_repeatable\local\pattern_columns::class, 'config_errors'];
+            $patternerrors = [\local_repeatable\local\bridge\pattern::class, 'config_errors'];
         }
 
         // Domain => the domain holding its parents, where the companion knows it.
         $parentdomains = [];
-        foreach (\profilefield_repeatable\helper::companion_domains() ?? [] as $domain) {
+        foreach (\local_repeatable\local\bridge\dictionaries::domains() ?? [] as $domain) {
             if ($domain['parentdomain'] !== null && $domain['parentdomain'] !== '') {
                 $parentdomains[$domain['shortname']] = $domain['parentdomain'];
             }

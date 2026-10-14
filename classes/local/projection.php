@@ -16,7 +16,7 @@
 
 namespace profilefield_repeatable\local;
 
-use profilefield_repeatable\helper;
+use local_repeatable\local\payload;
 use profilefield_repeatable\local\projection\projector;
 
 /**
@@ -76,7 +76,7 @@ class projection {
                 'param3' => $datarecord->param3,
                 'param4' => $datarecord->param4,
             ]);
-            $payload = helper::normalise_payload($datarecord->data, $schema);
+            $payload = payload::normalise($datarecord->data, $schema);
             if (!projector::is_current($payload, $rowsbydataid[(int)$datarecord->id] ?? [])) {
                 $stale[] = [(int)$datarecord->id, $schema];
             }

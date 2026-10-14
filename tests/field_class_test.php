@@ -16,6 +16,9 @@
 
 namespace profilefield_repeatable;
 
+use local_repeatable\local\bridge\dictionaries;
+use local_repeatable\local\payload;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -29,7 +32,6 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
- * @covers     \profilefield_repeatable\local\validator
  * @covers     \profilefield_repeatable\form\widget
  * @covers     \profilefield_repeatable\output\sets_renderer
  * @copyright  2026 Anderson Blaine
@@ -79,24 +81,6 @@ final class field_class_test extends \advanced_testcase {
         ], $extradata));
 
         return new \profile_field_repeatable(0, 0, $fielddata);
-    }
-
-    /**
-     * Validate strict JSON object requirement.
-     */
-    public function test_edit_validate_field_invalid_json(): void {
-        $this->resetAfterTest();
-
-        $field = $this->create_field();
-        $inputname = $field->inputname;
-
-        $errors = $field->edit_validate_field((object) [
-            'id' => 0,
-            $inputname => '[]',
-        ]);
-
-        $this->assertArrayHasKey($inputname, $errors);
-        $this->assertSame(get_string('errorinvalidjson', 'profilefield_repeatable'), $errors[$inputname]);
     }
 
     /**
@@ -180,28 +164,6 @@ final class field_class_test extends \advanced_testcase {
             '{"@@ID#1":{"diretoria":"16154","escola":"45","turma":"3","disciplina":"654"}}',
             $processed
         );
-    }
-
-    /**
-     * Ensure normalisation removes empty sets after completing missing sub-items.
-     */
-    public function test_normalise_payload_discards_empty_sets_after_completion(): void {
-        $this->resetAfterTest();
-
-        $payload = helper::normalise_payload(
-            '{"@@ID#10":{"diretoria":"","escola":"","turma":"","disciplina":""},' .
-            '"@@ID#20":{"diretoria":"16154","escola":"45","turma":"3"}}',
-            local\schema::from_json($this->schema(['diretoria', 'escola', 'turma', 'disciplina']))
-        );
-
-        $this->assertSame([
-            '@@ID#1' => [
-                'diretoria' => '16154',
-                'escola' => '45',
-                'turma' => '3',
-                'disciplina' => '',
-            ],
-        ], $payload);
     }
 
     /**
@@ -712,84 +674,6 @@ final class field_class_test extends \advanced_testcase {
     }
 
     /**
-     * Build a JSON payload with the requested number of sets.
-     *
-     * @param int $count
-     * @return string
-     */
-    private function build_payload_with_sets(int $count): string {
-        $sets = [];
-        for ($i = 1; $i <= $count; $i++) {
-            $sets['@@ID#' . $i] = ['name' => 'N' . $i, 'role' => 'R' . $i];
-        }
-
-        return json_encode($sets);
-    }
-
-    /**
-     * Validation must reject payloads with more sets than the configured maximum.
-     */
-    public function test_edit_validate_field_rejects_too_many_sets(): void {
-        $this->resetAfterTest();
-
-        $field = $this->create_field();
-        $inputname = $field->inputname;
-
-        $errors = $field->edit_validate_field((object) [
-            'id' => 0,
-            $inputname => $this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 1),
-        ]);
-
-        $this->assertArrayHasKey($inputname, $errors);
-        $this->assertSame(
-            get_string('errortoomanysets', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_SETS),
-            $errors[$inputname]
-        );
-    }
-
-    /**
-     * Validation must reject sub-item values longer than the configured maximum.
-     */
-    public function test_edit_validate_field_rejects_oversized_value(): void {
-        $this->resetAfterTest();
-
-        $field = $this->create_field();
-        $inputname = $field->inputname;
-
-        $oversized = str_repeat('a', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 1);
-        $errors = $field->edit_validate_field((object) [
-            'id' => 0,
-            $inputname => json_encode(['@@ID#1' => ['name' => $oversized, 'role' => 'X']]),
-        ]);
-
-        $this->assertArrayHasKey($inputname, $errors);
-        $this->assertSame(
-            get_string('errorvaluetoolong', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_VALUE_LENGTH),
-            $errors[$inputname]
-        );
-    }
-
-    /**
-     * Normalisation must defensively cap set count and value length on non-form paths.
-     */
-    public function test_normalise_payload_enforces_caps(): void {
-        $this->resetAfterTest();
-        $subitems = local\schema::from_json($this->schema(['name', 'role']));
-
-        $payload = json_decode($this->build_payload_with_sets(\profilefield_repeatable\helper::MAX_SETS + 5), true);
-        $normalised = \profilefield_repeatable\helper::normalise_payload($payload, $subitems);
-        $this->assertCount(\profilefield_repeatable\helper::MAX_SETS, $normalised);
-
-        $oversized = str_repeat('b', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 50);
-        $normalised = \profilefield_repeatable\helper::normalise_payload(
-            ['@@ID#1' => ['name' => $oversized, 'role' => '']],
-            $subitems
-        );
-        $first = reset($normalised);
-        $this->assertSame(\profilefield_repeatable\helper::MAX_VALUE_LENGTH, \core_text::strlen($first['name']));
-    }
-
-    /**
      * is_empty() decides from the loaded payload and never queries the projection.
      */
     public function test_is_empty_reads_no_storage(): void {
@@ -942,14 +826,14 @@ final class field_class_test extends \advanced_testcase {
         $this->setAdminUser();
 
         $field = $this->create_field();
-        $oversized = str_repeat('x', \profilefield_repeatable\helper::MAX_VALUE_LENGTH + 1);
+        $oversized = str_repeat('x', payload::MAX_VALUE_LENGTH + 1);
         $form = $this->submit_edit_form($field, json_encode(['@@ID#1' => ['name' => $oversized, 'role' => '']]));
 
         $this->assertNull($form->get_data());
         $html = $form->render();
 
         $errorid = 'fgroup_id_error_' . $field->inputname;
-        $message = get_string('errorvaluetoolong', 'profilefield_repeatable', \profilefield_repeatable\helper::MAX_VALUE_LENGTH);
+        $message = get_string('errorvaluetoolong', 'local_repeatable', payload::MAX_VALUE_LENGTH);
         $this->assertMatchesRegularExpression(
             '~<div[^>]*id="' . preg_quote($errorid, '~') . '"[^>]*>\s*' . preg_quote($message, '~') . '\s*</div>~',
             $html
@@ -1010,7 +894,7 @@ final class field_class_test extends \advanced_testcase {
         $errors = $validate('{"@@ID#1":{"name":"Alice","role":"Lead"},"@@ID#2":{"name":"","role":""},'
             . '"@@ID#3":{"name":"Bob","role":"  "}}');
         $this->assertSame(
-            [$inputname => get_string('errorcolumnrequired', 'profilefield_repeatable', (object)['set' => 2, 'column' => 'Role'])],
+            [$inputname => get_string('errorcolumnrequired', 'local_repeatable', (object)['set' => 2, 'column' => 'Role'])],
             $errors,
             'The emptied set is dropped, so Bob is set 2'
         );
@@ -1027,7 +911,7 @@ final class field_class_test extends \advanced_testcase {
         $form = $this->submit_edit_form($field, '{"@@ID#1":{"name":"Alice","r_d":""}}');
 
         $this->assertNull($form->get_data());
-        $message = get_string('errorcolumnrequired', 'profilefield_repeatable', (object)['set' => 1, 'column' => 'R&amp;D']);
+        $message = get_string('errorcolumnrequired', 'local_repeatable', (object)['set' => 1, 'column' => 'R&amp;D']);
         $this->assertMatchesRegularExpression(
             '~id="' . preg_quote('fgroup_id_error_' . $field->inputname, '~') . '"[^>]*>\s*' . preg_quote($message, '~') . '~',
             $form->render()
@@ -1053,7 +937,7 @@ final class field_class_test extends \advanced_testcase {
             [
                 'key' => 'lang', 'label' => 'Language', 'mode' => 'dictionary', 'required' => true,
                 // The admin may search any domain, so the column is searched whenever the companion can.
-                'domain' => 'iso639', 'open' => false, 'autocomplete' => helper::companion_lookup_available(),
+                'domain' => 'iso639', 'open' => false, 'autocomplete' => dictionaries::lookup_available(),
             ],
             ['key' => 'notes', 'label' => 'Notes', 'mode' => 'free', 'required' => false],
         ], json_decode(html_entity_decode($matches[1]), true));
@@ -1104,13 +988,13 @@ final class field_class_test extends \advanced_testcase {
         $this->assertStringNotContainsString('ignored', $output);
 
         // The raw caps see a value under its legacy label too.
-        $oversized = str_repeat('a', helper::MAX_VALUE_LENGTH + 1);
+        $oversized = str_repeat('a', payload::MAX_VALUE_LENGTH + 1);
         $errors = $field->edit_validate_field((object)[
             'id' => 0,
             $field->inputname => json_encode(['@@ID#1' => ['Req' => $oversized]]),
         ]);
         $this->assertSame(
-            get_string('errorvaluetoolong', 'profilefield_repeatable', helper::MAX_VALUE_LENGTH),
+            get_string('errorvaluetoolong', 'local_repeatable', payload::MAX_VALUE_LENGTH),
             $errors[$field->inputname]
         );
 

@@ -16,7 +16,7 @@
 
 namespace profilefield_repeatable;
 
-use profilefield_repeatable\local\pattern_columns;
+use local_repeatable\local\bridge\pattern;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -36,7 +36,6 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/define.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profile_field_repeatable
- * @covers     \profilefield_repeatable\local\validator
  * @covers     \profilefield_repeatable\form\widget
  * @covers     \profile_define_repeatable
  * @covers     \profilefield_repeatable\form\column_editor
@@ -58,7 +57,7 @@ final class pattern_field_test extends \advanced_testcase {
      * @return void
      */
     private function require_plugin(): void {
-        if (!pattern_columns::available()) {
+        if (!pattern::available()) {
             $this->markTestSkipped('customfield_pattern with its public API is not installed (Moodle 5.1 or later).');
         }
     }
@@ -181,41 +180,6 @@ final class pattern_field_test extends \advanced_testcase {
     }
 
     /**
-     * A wrong check digit is refused under the widget, naming the set and the column.
-     */
-    public function test_wrong_check_digit_is_refused(): void {
-        $this->require_plugin();
-        $this->resetAfterTest();
-        $field = new \profile_field_repeatable((int)$this->create_field_record()->id, 0);
-
-        $this->assertSame([], $this->validate($field, [['cpf' => self::CPF_RAW], ['cpfmasked' => self::CPF, 'code' => 'ABC']]));
-        $this->assertSame([$field->inputname => get_string('errorpattern', 'profilefield_repeatable', (object)[
-            'set' => 2,
-            'column' => 'CPF',
-            'error' => get_string('errorcpf', 'customfield_pattern'),
-        ])], $this->validate($field, [['cpf' => self::CPF_RAW], ['cpf' => '529.982.247-24']]));
-        $this->assertSame([$field->inputname => get_string('errorpattern', 'profilefield_repeatable', (object)[
-            'set' => 1,
-            'column' => 'Masked CPF',
-            'error' => get_string('errormask', 'customfield_pattern', '999.999.999-99'),
-        ])], $this->validate($field, [['cpfmasked' => '1234']]));
-    }
-
-    /**
-     * The plugin's message is already escaped: it reaches the form once escaped, never twice.
-     */
-    public function test_plugin_message_is_escaped_once(): void {
-        $this->require_plugin();
-        $this->resetAfterTest();
-        $field = new \profile_field_repeatable((int)$this->create_field_record()->id, 0);
-
-        $errors = $this->validate($field, [['code' => 'abc']]);
-
-        $this->assertStringContainsString('Three capitals &amp; nothing else', $errors[$field->inputname]);
-        $this->assertStringNotContainsString('&amp;amp;', $errors[$field->inputname]);
-    }
-
-    /**
      * Values are stored as the column's "Store as" says, and edited with their mask.
      */
     public function test_values_are_stored_raw_or_masked(): void {
@@ -327,7 +291,7 @@ final class pattern_field_test extends \advanced_testcase {
      */
     public function test_display_without_the_plugin_shows_the_stored_value(): void {
         global $SCRIPT;
-        if (pattern_columns::available()) {
+        if (pattern::available()) {
             $this->markTestSkipped('customfield_pattern is installed; its absence is tested on Moodle 4.5 and 5.0.');
         }
         $this->resetAfterTest();
@@ -359,7 +323,7 @@ final class pattern_field_test extends \advanced_testcase {
             ->schema_json(['Name', ['label' => 'Doc', 'mode' => 'pattern', 'pattern' => $pattern]]);
 
         $this->assertSame([], $define->define_validate_specific((object)['param1' => $schema(['preset' => 'cpf'])], []));
-        $this->assertSame(['param1' => get_string('errorpatternconfig', 'profilefield_repeatable', (object)[
+        $this->assertSame(['param1' => get_string('errorpatternconfig', 'local_repeatable', (object)[
             'column' => 'Doc',
             'error' => get_string('errorconfigmaskrequired', 'customfield_pattern'),
         ])], $define->define_validate_specific((object)['param1' => $schema(['preset' => 'custom'])], []));
@@ -391,12 +355,12 @@ final class pattern_field_test extends \advanced_testcase {
 
         $columns[] = ['key' => 'cep', 'label' => 'CEP', 'mode' => 'pattern', 'pattern' => ['preset' => 'cep']];
         $this->assertSame(
-            ['param1' => get_string('errorpatternunavailable', 'profilefield_repeatable', 'CEP')],
+            ['param1' => get_string('errorpatternunavailable', 'local_repeatable', 'CEP')],
             $validate($columns, (int)$record->id),
             'A new pattern column'
         );
         $unavailable = array_map(
-            static fn(string $name): string => get_string('errorpatternunavailable', 'profilefield_repeatable', $name),
+            static fn(string $name): string => get_string('errorpatternunavailable', 'local_repeatable', $name),
             ['CPF', 'Masked CPF', 'Code', 'CEP']
         );
         $this->assertSame(['param1' => implode('<br>', $unavailable)], $validate($columns, 0), 'A new field has no stored column');
@@ -404,7 +368,7 @@ final class pattern_field_test extends \advanced_testcase {
         $changed = $this->columns();
         $changed[1]['pattern']['storeformat'] = 'masked';
         $this->assertSame(
-            ['param1' => get_string('errorpatternunavailable', 'profilefield_repeatable', 'CPF')],
+            ['param1' => get_string('errorpatternunavailable', 'local_repeatable', 'CPF')],
             $validate($changed, (int)$record->id),
             'A changed configuration'
         );
@@ -425,10 +389,10 @@ final class pattern_field_test extends \advanced_testcase {
         $define->define_after_data($mform);
         $element = $mform->getElement('param1');
 
-        $available = pattern_columns::available();
+        $available = pattern::available();
         $this->assertSame($available ? '1' : '0', (string)$element->getAttribute('data-pattern'));
         $presets = json_decode($element->getAttribute('data-presets'), true);
-        $this->assertSame($available ? pattern_columns::presets() : [], $presets);
+        $this->assertSame($available ? pattern::presets() : [], $presets);
         // The stored configuration reaches the editor as it is.
         $this->assertSame(
             ['preset' => 'cpf', 'storeformat' => 'raw'],

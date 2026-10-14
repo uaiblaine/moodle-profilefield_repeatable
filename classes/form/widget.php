@@ -16,7 +16,7 @@
 
 namespace profilefield_repeatable\form;
 
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\schema;
 
 /**
  * The repeatable-sets edit widget: its table, the labels of the codes it holds and its JavaScript.
@@ -131,7 +131,7 @@ final class widget {
         $PAGE->requires->js_call_amd('profilefield_repeatable/repeatable', 'init', [$config]);
         if (!$readonly && $this->schema->pattern_objects() && $this->patternavailable) {
             // The formatter listens on the document, so it also formats the inputs of sets added later.
-            \profilefield_repeatable\local\pattern_columns::js_init();
+            \local_repeatable\local\bridge\pattern::js_init();
         }
     }
 
@@ -173,7 +173,7 @@ final class widget {
         if ($config === null || !$this->patternavailable) {
             return [];
         }
-        return ['inputattributes' => \profilefield_repeatable\local\pattern_columns::input_attributes($config)];
+        return ['inputattributes' => \local_repeatable\local\bridge\pattern::input_attributes($config)];
     }
 
     /**
@@ -199,7 +199,7 @@ final class widget {
         $hasparent = $parent !== '' && isset($domains[$parent]);
         $properties = [
             'domain' => $domain,
-            'open' => $column['mode'] === \profilefield_repeatable\local\schema::MODE_DICTIONARY_OPEN,
+            'open' => $column['mode'] === \local_repeatable\local\schema::MODE_DICTIONARY_OPEN,
             'autocomplete' => $this->can_read_domain($domain) && (!$hasparent || $this->can_read_domain($domains[$parent])),
         ];
         if ($hasparent) {
@@ -235,7 +235,7 @@ final class widget {
      *
      * @param string $payload Raw payload the form holds.
      * @param array $stored Key => [folded code => true] stored for the owner
-     *                      ({@see \profilefield_repeatable\local\validator::stored_codes()}).
+     *                      ({@see \local_repeatable\local\validator::stored_codes()}).
      * @return array Domain => [code => plain label]; codes without a label are absent.
      */
     public function labels(string $payload, array $stored): array {
@@ -250,13 +250,13 @@ final class widget {
             $readable[$domain] = $this->can_read_domain($domain);
         }
         $codes = [];
-        foreach (\profilefield_repeatable\helper::normalise_payload($payload, $schema) as $set) {
+        foreach (\local_repeatable\local\payload::normalise($payload, $schema) as $set) {
             foreach ($domains as $key => $domain) {
                 $code = trim((string)($set[$key] ?? ''));
                 if ($code === '') {
                     continue;
                 }
-                if ($readable[$domain] || isset($stored[$key][\profilefield_repeatable\helper::fold_code($code)])) {
+                if ($readable[$domain] || isset($stored[$key][\local_repeatable\local\bridge\dictionaries::fold_code($code)])) {
                     $codes[$domain][$code] = true;
                 }
             }

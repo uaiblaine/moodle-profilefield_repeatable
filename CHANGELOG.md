@@ -2,7 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - version 2026042002
+## [Unreleased] - version 2026042003
+
+### Upgrade notes
+- The field now requires `local_repeatable` (the repeatable-sets engine, `uaiblaine/moodle-local_repeatable`,
+  version 2026042001 or later): place `local/repeatable` before upgrading. Core checks the dependency
+  against the version on disk, then upgrades the field before it installs the engine, because local
+  plugins come last; that is safe, because the field's upgrade steps read no engine database state
+  (the engine has none) and `db/upgradelib.php` calls no engine code.
+- Lang strings moved to `local_repeatable` with the same keys: the schema and validation errors
+  (`errorcode*`, `errorcolumnrequired`, `errorcolumnslimit`, `errorcolumnsrequired`, `errordomain*`,
+  `errorinvalidjson`, `errorkey*`, `errorlabel*`, `errormodeinvalid`, `errorparent*`, `errorpattern*`,
+  `errorschemainvalid`, `errorsubline*`, `errortitlecount`, `errortoomanysets`, `errorvaluetoolong`).
+  `repeatableset` is now in both: the engine's names a set in the privacy export, the field's in the
+  edit form and the profile. An administrator's customisation of a moved string (language
+  customisation) must be redone under `local_repeatable`.
 
 ### Removed
 - The PostgreSQL index layer (owner decision D3, `docs/engine-extraction-design.md` §8). Measured on
@@ -38,6 +52,21 @@ All notable changes to this project will be documented in this file.
   datasource's column and filter unique identifiers to a list captured before the move, so saved
   reports keep working across the extraction (§5.2 item 5). Mutation gates repointed to the new
   files.
+- Engine extraction stage B3, version 2026042003: the field is an adapter of `local_repeatable` for
+  the column schema, payloads, Report Builder SQL, validation, the companion bridges and the privacy
+  export. It calls `\local_repeatable\local\{schema,payload,sql,validator,stored_values}`,
+  `local\bridge\{dictionaries,pattern}` and `privacy\set_exporter`; `local\stored_values` keeps
+  `locked_labels()` and `usage()`, which reads the field's `{user_info_data}` payloads and hands them
+  to the engine. `db/upgradelib.php` keeps its own identifier quoting. Behaviour, messages, Report
+  Builder identifiers and the stored data are unchanged.
+
+### Removed (stage B3)
+- The field's copies of what moved: `classes/helper.php`, `local\schema`, `local\pattern_columns`,
+  `local\validator`, `privacy\set_exporter`, the 29 moved lang strings, the tests that duplicated the
+  engine's unit tests (`helper_test`, `local\schema_test`, `local\pattern_columns_test` and parts of
+  the field, dictionary, pattern and privacy tests; the field keeps the adapter's integration tests,
+  and `local\field_schema_test` keeps the version 1 reader's), and the mutation gates the engine now
+  holds.
 
 ## [v5.2-r1] - 2026-10-13
 

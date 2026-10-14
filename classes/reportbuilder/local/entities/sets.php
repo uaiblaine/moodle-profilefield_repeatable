@@ -24,9 +24,9 @@ use core_reportbuilder\local\helpers\database;
 use core_reportbuilder\local\report\column;
 use core_reportbuilder\local\report\filter;
 use lang_string;
-use profilefield_repeatable\helper;
-use profilefield_repeatable\local\pattern_columns;
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\bridge\pattern;
+use local_repeatable\local\schema;
+use local_repeatable\local\sql;
 
 /**
  * Report Builder entity exposing one repeatable field as one row per set.
@@ -160,7 +160,7 @@ abstract class sets extends base {
         foreach ($schema->keys() as $index => $key) {
             $label = $this->column_label($schema, $key);
             $identifiers = $schema->report_identifiers($key);
-            [$valuesql, $valueparams] = helper::sql_column_value(
+            [$valuesql, $valueparams] = sql::column_value(
                 $DB,
                 "{$tablealias}.data",
                 $schema,
@@ -185,7 +185,7 @@ abstract class sets extends base {
                         return s($domain === '' ? (string)$value : self::resolve_label($domain, $value));
                     });
 
-                [$codesql, $codeparams] = helper::sql_column_value(
+                [$codesql, $codeparams] = sql::column_value(
                     $DB,
                     "{$tablealias}.data",
                     $schema,
@@ -219,7 +219,7 @@ abstract class sets extends base {
                     ->add_field($valuesql, 'val' . $index, $valueparams)
                     ->set_is_sortable(true)
                     ->add_callback(static function (?string $value) use ($patternconfig): string {
-                        return s(pattern_columns::format($patternconfig, (string)$value));
+                        return s(pattern::format($patternconfig, (string)$value));
                     });
             } else {
                 $columns[] = (new column(
@@ -267,7 +267,7 @@ abstract class sets extends base {
         foreach ($schema->keys() as $key) {
             $label = $this->column_label($schema, $key);
             $identifiers = $schema->report_identifiers($key);
-            [$valuesql, $valueparams] = helper::sql_column_value(
+            [$valuesql, $valueparams] = sql::column_value(
                 $DB,
                 "{$tablealias}.data",
                 $schema,
@@ -292,7 +292,7 @@ abstract class sets extends base {
                         return self::name_filter_options($table, $fieldid, $schema, $key, $domain);
                     });
 
-                [$codesql, $codeparams] = helper::sql_column_value(
+                [$codesql, $codeparams] = sql::column_value(
                     $DB,
                     "{$tablealias}.data",
                     $schema,
@@ -397,7 +397,7 @@ abstract class sets extends base {
     protected static function name_filter_options(string $table, int $fieldid, schema $schema, string $key, string $domain): array {
         global $DB;
 
-        [$valuesql, $params] = helper::sql_column_value(
+        [$valuesql, $params] = sql::column_value(
             $DB,
             'data',
             $schema,

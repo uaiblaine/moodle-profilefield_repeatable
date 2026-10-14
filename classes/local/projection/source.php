@@ -16,7 +16,7 @@
 
 namespace profilefield_repeatable\local\projection;
 
-use profilefield_repeatable\local\schema;
+use local_repeatable\local\schema;
 
 /**
  * What an adapter provides to the engine about its canonical payloads and projection rows.

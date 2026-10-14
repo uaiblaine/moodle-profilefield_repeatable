@@ -32,7 +32,6 @@ require_once($CFG->dirroot . '/user/profile/field/repeatable/field.class.php');
  *
  * @package    profilefield_repeatable
  * @covers     \profilefield_repeatable\privacy\provider
- * @covers     \profilefield_repeatable\privacy\set_exporter
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -122,7 +121,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
         $this->assertNotEmpty((array)$dataa, 'Field "Repeatable A" must be exported under its own subcontext.');
         $this->assertNotEmpty((array)$datab, 'Field "Repeatable B" must be exported under its own subcontext.');
-        $set = get_string('repeatableset', 'profilefield_repeatable', 1);
+        $set = get_string('repeatableset', 'local_repeatable', 1);
         $this->assertSame([$set => ['Full name' => 'Alice', 'Role' => 'Manager']], $dataa->sets);
         $this->assertSame([$set => ['Full name' => 'Bob', 'Role' => 'Teacher']], $datab->sets);
         $this->assertObjectNotHasProperty('data', $dataa);
@@ -151,7 +150,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         provider::export_user_data(new approved_contextlist($user, 'profilefield_repeatable', [$context->id]));
 
         $data = writer::with_context($context)->get_data([get_string('pluginname', 'profilefield_repeatable'), 'Repeatable V1']);
-        $set = get_string('repeatableset', 'profilefield_repeatable', 1);
+        $set = get_string('repeatableset', 'local_repeatable', 1);
         $this->assertSame([$set => ['Full name' => 'Alice', 'Role' => 'Lead']], $data->sets);
     }
 
@@ -246,94 +245,9 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             get_string('pluginname', 'profilefield_repeatable'),
             'Repeatable Types',
         ]);
-        $this->assertSame('Alice', $data->sets[get_string('repeatableset', 'profilefield_repeatable', 1)]['Full name'] ?? null);
+        $this->assertSame('Alice', $data->sets[get_string('repeatableset', 'local_repeatable', 1)]['Full name'] ?? null);
 
         provider::delete_data_for_user(new approved_contextlist($requester, 'profilefield_repeatable', [$context->id]));
         $this->assertFalse($DB->record_exists('profilefield_repeatable_data', ['userid' => $user->id]));
-    }
-
-    /**
-     * Names that format to the same text stay apart, and values under no current column are exported raw.
-     */
-    public function test_export_keeps_colliding_names_and_leftover_values(): void {
-        global $DB;
-
-        $this->resetAfterTest();
-        $user = $this->getDataGenerator()->create_user();
-        $field = $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field([
-            ['key' => 'name', 'label' => 'Name'],
-            ['key' => 'name_tagged', 'label' => '<b>Name</b>'],
-        ], ['shortname' => 'collide', 'name' => 'Collide']);
-        $DB->insert_record('user_info_data', (object)[
-            'userid' => $user->id,
-            'fieldid' => $field->id,
-            'data' => '{"@@ID#1":{"name":"one","name_tagged":"two","removed":"three","Name":"four"}}',
-            'dataformat' => 0,
-        ]);
-
-        $context = \context_user::instance($user->id);
-        provider::export_user_data(new approved_contextlist($user, 'profilefield_repeatable', [$context->id]));
-
-        $data = writer::with_context($context)->get_data([get_string('pluginname', 'profilefield_repeatable'), 'Collide']);
-        $this->assertSame([get_string('repeatableset', 'profilefield_repeatable', 1) => [
-            'Name' => 'one',
-            'Name (name_tagged)' => 'two',
-            'removed' => 'three',
-            'Name (Name)' => 'four',
-        ]], $data->sets);
-    }
-
-    /**
-     * Export one user's pattern column: a CPF stored raw, then text the mask does not fit.
-     *
-     * @return array The exported sets.
-     */
-    private function export_pattern_values(): array {
-        global $DB;
-
-        $user = $this->getDataGenerator()->create_user();
-        $field = $this->getDataGenerator()->get_plugin_generator('profilefield_repeatable')->create_field([
-            ['key' => 'cpf', 'label' => 'CPF', 'mode' => 'pattern', 'pattern' => ['preset' => 'cpf', 'storeformat' => 'raw']],
-        ], ['shortname' => 'docs', 'name' => 'Docs']);
-        $DB->insert_record('user_info_data', (object)[
-            'userid' => $user->id,
-            'fieldid' => $field->id,
-            'data' => '{"@@ID#1":{"cpf":"52998224725"},"@@ID#2":{"cpf":"<b>1</b>"}}',
-            'dataformat' => 0,
-        ]);
-
-        $context = \context_user::instance($user->id);
-        provider::export_user_data(new approved_contextlist($user, 'profilefield_repeatable', [$context->id]));
-        return writer::with_context($context)->get_data([get_string('pluginname', 'profilefield_repeatable'), 'Docs'])->sets;
-    }
-
-    /**
-     * A pattern value is exported as it is shown, as plain text.
-     */
-    public function test_export_formats_pattern_values(): void {
-        if (!\profilefield_repeatable\local\pattern_columns::available()) {
-            $this->markTestSkipped('customfield_pattern with its public API is not installed (Moodle 5.1 or later).');
-        }
-        $this->resetAfterTest();
-
-        $this->assertSame([
-            get_string('repeatableset', 'profilefield_repeatable', 1) => ['CPF' => '529.982.247-25'],
-            get_string('repeatableset', 'profilefield_repeatable', 2) => ['CPF' => '<b>1</b>'],
-        ], $this->export_pattern_values());
-    }
-
-    /**
-     * Without customfield_pattern a pattern value is exported as stored.
-     */
-    public function test_export_without_the_plugin_keeps_pattern_values(): void {
-        if (\profilefield_repeatable\local\pattern_columns::available()) {
-            $this->markTestSkipped('customfield_pattern is installed; its absence is tested on Moodle 4.5 and 5.0.');
-        }
-        $this->resetAfterTest();
-
-        $this->assertSame([
-            get_string('repeatableset', 'profilefield_repeatable', 1) => ['CPF' => '52998224725'],
-            get_string('repeatableset', 'profilefield_repeatable', 2) => ['CPF' => '<b>1</b>'],
-        ], $this->export_pattern_values());
     }
 }

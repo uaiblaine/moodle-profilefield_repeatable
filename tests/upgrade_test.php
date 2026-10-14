@@ -85,7 +85,8 @@ final class upgrade_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         $table = $DB->get_prefix() . 'profilefield_repeatable_data';
-        $quotedtable = helper::quote_identifier($table);
+        $quote = static fn(string $identifier): string => \profilefield_repeatable_quote_identifier($identifier);
+        $quotedtable = $quote($table);
         $declared = $this->table_indexes($table);
         $sets = [
             1 => ['language' => 'pt', 'level' => 'C2'],
@@ -122,20 +123,20 @@ final class upgrade_test extends \advanced_testcase {
             );
             $DB->reset_caches(['profilefield_repeatable_data']);
             $DB->execute(
-                'CREATE INDEX ' . helper::quote_identifier($layer[3]) . " ON {$quotedtable} USING gin (data jsonb_path_ops)"
+                'CREATE INDEX ' . $quote($layer[3]) . " ON {$quotedtable} USING gin (data jsonb_path_ops)"
             );
             $expressions = [[$layer[0], 1, 'language'], [$layer[1], 1, 'level'], [$layer[2], 10, 'language']];
             foreach ($expressions as [$name, $fieldid, $key]) {
                 $DB->execute(
-                    'CREATE INDEX ' . helper::quote_identifier($name) . " ON {$quotedtable} (fieldid, ((data ->> '{$key}')))"
+                    'CREATE INDEX ' . $quote($name) . " ON {$quotedtable} (fieldid, ((data ->> '{$key}')))"
                         . " WHERE fieldid = {$fieldid} AND jsonb_exists(data, '{$key}')"
                 );
             }
             foreach ($controls as $name) {
-                $DB->execute('CREATE INDEX ' . helper::quote_identifier($name) . " ON {$quotedtable} (userid)");
+                $DB->execute('CREATE INDEX ' . $quote($name) . " ON {$quotedtable} (userid)");
             }
-            $DB->execute('CREATE INDEX ' . helper::quote_identifier($elsewhere) . ' ON '
-                . helper::quote_identifier($othertable) . ' (fieldid)');
+            $DB->execute('CREATE INDEX ' . $quote($elsewhere) . ' ON '
+                . $quote($othertable) . ' (fieldid)');
             $this->assertSame('jsonb', $this->column_type($table));
             $this->assertEqualsCanonicalizing(array_merge($declared, $layer, $controls), $this->table_indexes($table));
             $removed = $this->queue_raw_task(self::REMOVED_TASK);
@@ -157,7 +158,7 @@ final class upgrade_test extends \advanced_testcase {
             $this->assertEqualsCanonicalizing(array_merge($declared, $controls), $this->table_indexes($table));
         } finally {
             foreach (array_merge($layer, $controls, [$elsewhere]) as $name) {
-                $DB->execute('DROP INDEX IF EXISTS ' . helper::quote_identifier($name));
+                $DB->execute('DROP INDEX IF EXISTS ' . $quote($name));
             }
             if ($this->column_type($table) !== 'text') {
                 $DB->execute("ALTER TABLE {$quotedtable} ALTER COLUMN data TYPE text USING data::text");

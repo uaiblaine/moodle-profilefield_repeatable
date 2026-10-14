@@ -26,7 +26,7 @@
  * Profile field holding repeatable sets of sub-item values.
  *
  * The canonical value is one JSON object in user_info_data.data, keyed by column key
- * ({@see \profilefield_repeatable\local\schema}), e.g. {"@@ID#1": {"language": "pt", "level": "B2"}};
+ * ({@see \local_repeatable\local\schema}), e.g. {"@@ID#1": {"language": "pt", "level": "B2"}};
  * the per-set rows in profilefield_repeatable_data are a projection for Report Builder
  * ({@see \profilefield_repeatable\local\projection\projector}).
  *
@@ -39,7 +39,7 @@ class profile_field_repeatable extends profile_field_base {
     /** @var string Hidden element identifier used by AMD init. */
     protected $hiddenid = '';
 
-    /** @var \profilefield_repeatable\local\schema|null Column schema, read once from the field record. */
+    /** @var \local_repeatable\local\schema|null Column schema, read once from the field record. */
     protected $schema = null;
 
     /**
@@ -71,26 +71,26 @@ class profile_field_repeatable extends profile_field_base {
     /**
      * Whether customfield_pattern offers the API pattern columns need.
      *
-     * The one seam between this field and {@see \profilefield_repeatable\local\pattern_columns::available()},
+     * The one seam between this field and {@see \local_repeatable\local\bridge\pattern::available()},
      * so tests can run the field as if the plugin were absent: a pattern column is then plain text,
      * validated by nothing and stored as typed.
      *
      * @return bool
      */
     protected function pattern_available(): bool {
-        return \profilefield_repeatable\local\pattern_columns::available();
+        return \local_repeatable\local\bridge\pattern::available();
     }
 
     /**
      * Whether the companion offers the API dictionary columns need on the edit form.
      *
-     * The one seam between this field and {@see \profilefield_repeatable\helper::companion_lookup_available()},
+     * The one seam between this field and {@see \local_repeatable\local\bridge\dictionaries::lookup_available()},
      * so tests can run the field as if the companion were absent.
      *
      * @return bool
      */
     protected function companion_available(): bool {
-        return \profilefield_repeatable\helper::companion_lookup_available();
+        return \local_repeatable\local\bridge\dictionaries::lookup_available();
     }
 
     /**
@@ -117,10 +117,10 @@ class profile_field_repeatable extends profile_field_base {
      * @param stdClass $user
      */
     public function edit_load_user_data($user) {
-        $payload = \profilefield_repeatable\helper::normalise_payload($this->data, $this->get_schema());
+        $payload = \local_repeatable\local\payload::normalise($this->data, $this->get_schema());
         $payload = $this->get_validator()->for_editing($payload);
 
-        $user->{$this->inputname} = \profilefield_repeatable\helper::encode_payload($payload);
+        $user->{$this->inputname} = \local_repeatable\local\payload::encode($payload);
     }
 
     /**
@@ -184,8 +184,8 @@ class profile_field_repeatable extends profile_field_base {
             $processed = $this->field->defaultdata ?? '{}';
         }
 
-        $payload = \profilefield_repeatable\helper::normalise_payload($processed, $this->get_schema());
-        $fallbackjson = \profilefield_repeatable\helper::encode_payload($payload);
+        $payload = \local_repeatable\local\payload::normalise($processed, $this->get_schema());
+        $fallbackjson = \local_repeatable\local\payload::encode($payload);
 
         $data->userid = (int)$usernew->id;
         $data->fieldid = (int)$this->field->id;
@@ -232,9 +232,9 @@ class profile_field_repeatable extends profile_field_base {
      * @return string
      */
     public function edit_save_data_preprocess($data, $datarecord) {
-        $payload = \profilefield_repeatable\helper::normalise_payload($data, $this->get_schema());
+        $payload = \local_repeatable\local\payload::normalise($data, $this->get_schema());
         $payload = $this->get_validator()->for_storage($payload);
-        return \profilefield_repeatable\helper::encode_payload($payload);
+        return \local_repeatable\local\payload::encode($payload);
     }
 
     /**
@@ -257,7 +257,7 @@ class profile_field_repeatable extends profile_field_base {
             }
         }
 
-        $payload = \profilefield_repeatable\helper::normalise_payload($rawpayload, $this->get_schema());
+        $payload = \local_repeatable\local\payload::normalise($rawpayload, $this->get_schema());
         $error = $validator->error($payload, (bool)$this->is_required());
         if ($error !== null) {
             return [$this->inputname => $error];
@@ -266,7 +266,7 @@ class profile_field_repeatable extends profile_field_base {
         // The parent's uniqueness check compares this value with stored data: give it the canonical
         // JSON as it would be stored, or '' so that an empty optional value is not checked.
         $payload = $validator->for_storage($payload);
-        $usernew->{$this->inputname} = empty($payload) ? '' : \profilefield_repeatable\helper::encode_payload($payload);
+        $usernew->{$this->inputname} = empty($payload) ? '' : \local_repeatable\local\payload::encode($payload);
 
         return parent::edit_validate_field($usernew);
     }
@@ -277,7 +277,7 @@ class profile_field_repeatable extends profile_field_base {
      * @return bool
      */
     public function is_empty() {
-        return empty(\profilefield_repeatable\helper::normalise_payload($this->data, $this->get_schema()));
+        return empty(\local_repeatable\local\payload::normalise($this->data, $this->get_schema()));
     }
 
     /**
@@ -320,9 +320,9 @@ class profile_field_repeatable extends profile_field_base {
     /**
      * The field's column schema, version 2 or a version 1 field read through its labels.
      *
-     * @return \profilefield_repeatable\local\schema
+     * @return \local_repeatable\local\schema
      */
-    protected function get_schema(): \profilefield_repeatable\local\schema {
+    protected function get_schema(): \local_repeatable\local\schema {
         if ($this->schema === null) {
             $this->schema = \profilefield_repeatable\local\field_schema::from_field($this->field ?? new stdClass());
         }
@@ -338,10 +338,10 @@ class profile_field_repeatable extends profile_field_base {
      * is {@see self::can_read_domain()}; the companion and customfield_pattern count as present
      * per the test seams {@see self::companion_available()} and {@see self::pattern_available()}.
      *
-     * @return \profilefield_repeatable\local\validator
+     * @return \local_repeatable\local\validator
      */
-    protected function get_validator(): \profilefield_repeatable\local\validator {
-        return new \profilefield_repeatable\local\validator(
+    protected function get_validator(): \local_repeatable\local\validator {
+        return new \local_repeatable\local\validator(
             $this->get_schema(),
             (string)($this->data ?? ''),
             fn(string $domain): bool => $this->can_read_domain($domain),

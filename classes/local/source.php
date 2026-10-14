@@ -16,6 +16,8 @@
 
 namespace profilefield_repeatable\local;
 
+use local_repeatable\local\schema;
+
 /**
  * The profile field's canonical payloads and projection rows, as the engine reads them.
  *
