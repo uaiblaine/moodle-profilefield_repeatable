@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v5.1-r3] - 2026-10-23
+
+Moodle 5.1 branch (`MOODLE_501_STABLE`): version `2025100602`, release `v5.1-r3`. The plugins
+directory's submission guidelines applied to the package; no code path of the field changes. The same
+changes ship as `v4.5-r3`, `v5.2-r3` and `v5.3-r3`.
+
+### Fixed
+- The release package now carries a licence file: `LICENSE` (the GPL v3 text, a copy of `COPYING.txt`),
+  which the plugins directory looks for.
+- The README said required columns are checked by the profile form only and that web services and CSV
+  upload skip the checks; since r2 they run the checks, and only login-time account creation and updates
+  and auth_db/auth_ldap sync store a value unchecked. It also said profile-field visibility is controlled
+  by `moodle/user:editownprofile`, and carried a PostgreSQL version table that contradicted the branch's
+  database requirements: both are corrected or removed.
+
+### Added
+- README sections "Data stored" (each table and config entry, how long it is kept, what removes it, and
+  what a data request exports and a deletion removes), "Settings", "Translations" and a rewritten
+  "Capabilities".
+- `tests/marketplace_readiness_test.php`, the fleet's file-reading test of the directory's rules
+  (licence files, English-only package, data-only lang files, a README naming every table and dependency,
+  boilerplate, the privacy cover of stamped core rows).
+- `tests/lib_test.php`: the profile page's callback shows a value only to the viewers the field's
+  visibility setting admits, in both directions; the field's `show_field_content()` is false, so this
+  callback is the only place the profile page prints it.
+
+### Changed
+- `lang/pt_br` leaves the release package (`export-ignore`): the package ships English only, and the
+  Brazilian Portuguese translation reaches sites through AMOS. It stays in the repository.
+
 ## [v5.1-r2] - 2026-10-14
 
 Moodle 5.1 branch (`MOODLE_501_STABLE`): version `2025100601`, release `v5.1-r2`, `MATURITY_STABLE`,

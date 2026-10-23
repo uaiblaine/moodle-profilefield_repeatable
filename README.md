@@ -43,8 +43,9 @@ Standard Moodle profile fields support only simple text values. This plugin prov
 1. **Repeatable sets** — Store multiple related data values as structured records (e.g., language proficiencies, certifications, work experience)
 2. **Reporting** — One Report Builder row per set, with a column and filter per set column
 3. **Reference resolution** — Optional mapping to external domains (via local_dictionaries) for rich display values
-4. **Backward compatibility** — Falls back to JSON storage in user_info_data when storage table unavailable
-5. **Privacy compliance** — Full GDPR export/delete support
+4. **One source of truth** — The value is kept in core's `user_info_data`, so every core path that
+   writes profile fields (forms, web services, CSV upload, auth sync) keeps working
+5. **Privacy compliance** — Privacy API export and deletion of every stored value (see "Data stored")
 
 
 Installation
@@ -91,10 +92,12 @@ After installing, navigate to **Site Administration > Plugins > Moodle plugins >
    "Remove column". A column whose key holds stored values cannot be removed, and its key cannot
    change: the form rejects such a schema, whatever was submitted.
 
-   **Required columns are checked by the profile form only.** Web services
-   (`core_user_create_users`, `core_user_update_users`), CSV upload and auth plugin sync save
-   through the field without its form validation, so a set they write may leave a required
-   column empty.
+   **Required columns and the dictionary and pattern checks** run on the profile form, on CSV
+   upload and on web service requests (`core_user_create_users`, `core_user_update_users`), which
+   refuse a failing value. Login-time account creation and updates (auth_oauth2 among them) and
+   auth_db/auth_ldap account creation store the external source's value without them, so that a
+   value from the identity provider cannot lock a user out or abort a sync; auth_db/auth_ldap
+   attribute updates write `user_info_data` through core without calling the field.
 
 Without JavaScript the columns are edited as the JSON schema the editor writes to `param1`:
 
@@ -195,7 +198,8 @@ The edit form formats the value while the user types (the plugin's typing aid al
 inputs of a set added later). On save every non-empty value is checked (mask, CPF and CNPJ check
 digits, regular expression): a wrong one is refused under the widget, naming the set and the
 column. Values are stored as "Store as" says, also when a web service, CSV upload or sync writes
-them (those skip the check, like the required and code checks). The profile page, Report Builder
+them (login-time account creation and auth sync skip the check, like the required and code
+checks). The profile page, Report Builder
 and the privacy export show them masked; Report Builder filters match the stored shape. Changing a
 column's mask or storage does not rewrite stored values: a value that does not fit is shown as
 stored.
@@ -220,17 +224,6 @@ these expressions: Report Builder's "contains" is `ILIKE '%v%'` and "is equal to
 Releases up to r1 created such indexes and a `jsonb` column on PostgreSQL; the r2 upgrade step
 drops them (only names of their exact shapes, `pfrd_f<fieldid>_<16 hex>` and
 `pfrd_<8 hex>_gin_ix`), turns the column back into text and deletes their queued ad hoc tasks.
-
-### PostgreSQL Version Matrix
-
-| PostgreSQL Version | Status | Notes |
-|--------------------|--------|-------|
-| 13+ | Active baseline | Fully supported by Moodle 4.5+ and by this plugin |
-| 14+ | Optional enhancements | SQL/JSON path queries can be used in custom reporting |
-| 15+ | Optional enhancements | Additional SQL features available, no plugin requirement change |
-| 17+ | Optional enhancements | Recommended for newest planner/runtime improvements |
-
-This release keeps compatibility with the Moodle baseline while documenting newer PostgreSQL opportunities.
 
 ### Reference Resolution
 
@@ -297,10 +290,54 @@ set differs (see "Report Builder storage").
 3. Check that the column is a dictionary column naming that domain
 
 
+Data stored
+-----------
+
+- **`user_info_data`** (core's table): the field's value, one row per user and repeatable field,
+  holding the user's sets as one JSON object keyed by column key. It is kept while the user and the
+  field exist; deleting the user or the field removes it (core), and so does a privacy deletion.
+- **`profilefield_repeatable_data`**: one row per set (`dataid`, `fieldid`, `userid`, `set_id`, the
+  set's values as JSON text, `timecreated`, `timemodified`), a copy of the value above for the
+  "Repeatable profile field sets" Report Builder source. It is rewritten on every save, repaired
+  by the `user_updated`/`user_created` observers and the daily "Rebuild repeatable profile field
+  sets for reports" task, and removed when the user or the field is deleted (event observers), by a privacy
+  deletion, and with the table when the plugin is uninstalled.
+- **`config_plugins`**: `profilefield_repeatable/legacykeys_<fieldid>`, only for a field converted
+  from 2.x until the "Re-key repeatable profile field values by column key" ad hoc task has moved
+  its values; it maps column keys to the 2.x labels and holds no user data.
+
+A data request exports, in the user's context, each repeatable field's name, description and sets,
+each set's values under the column names (dictionary columns as their stored codes, pattern values
+masked, values of a removed column under their stored name); the projection rows are a copy and
+are not exported. A deletion removes the user's
+`user_info_data` rows of repeatable fields and their projection rows. The plugin sends nothing to
+an external service.
+
+
+Settings
+--------
+
+The plugin has no site settings. Each field is configured in its definition form (Site
+administration > Users > Accounts > User profile fields): the common profile-field settings and the columns.
+
+
 Capabilities
 ------------
 
-This plugin does not introduce new capabilities. Profile field visibility is controlled by existing user/editownprofile and user/editprofile capabilities.
+This plugin defines no capabilities. Core's rules apply: users edit their own value with
+`moodle/user:editownprofile`, and others' with `moodle/user:update`. Who sees a value follows the
+field's **Visible** setting (`profile_field_base::is_visible()`, with `moodle/user:viewalldetails`
+and, for fields visible to teachers, `moodle/site:viewuseridentity`), on the profile page and in
+Report Builder alike.
+
+
+Translations
+------------
+
+The package ships English only. Translations are contributed through AMOS, the Moodle
+translation portal (https://lang.moodle.org), and reach sites as language packs; the Brazilian
+Portuguese strings kept in this repository are its source for that and are left out of the
+release zip.
 
 
 License
