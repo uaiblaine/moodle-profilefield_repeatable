@@ -37,7 +37,7 @@ jobs:
   #
   # The companion local_dictionaries comes from its branch for the same Moodle version, so a
   # contract change in either repo turns the other's CI red.
-  # customfield_pattern (Moodle 5.1 and later) has one branch, main.
+  # customfield_pattern (Moodle 5.1 and later) comes from its branch for the same Moodle version.
   # local_repeatable is a hard dependency (version.php): the engine the field adapts, from its
   # branch for the same Moodle version.
   ci-502:
@@ -48,5 +48,5 @@ jobs:
       moodle-core-branch: MOODLE_502_STABLE
       plugin-dependencies: |
         uaiblaine/moodle-local_dictionaries,MOODLE_502_STABLE
-        uaiblaine/moodle-customfield_pattern,main
+        uaiblaine/moodle-customfield_pattern,MOODLE_502_STABLE
         uaiblaine/moodle-local_repeatable,MOODLE_502_STABLE
